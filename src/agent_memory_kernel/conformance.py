@@ -70,6 +70,14 @@ def conformance_spec() -> dict[str, Any]:
                     "candidate ids are auditable from the runtime result",
                 ],
             },
+            {
+                "id": "keeper_retry_is_idempotent",
+                "requires": [
+                    "repeating the same post-turn Keeper call reuses the prior job",
+                    "retry does not duplicate turns, events, candidates, or graph writes",
+                    "runtime result marks the replay as idempotent",
+                ],
+            },
         ],
     }
 
@@ -245,6 +253,16 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         assistant_text="Noted.",
         auto_approve=False,
     )
+    keeper_retry = store.after_saved_turn(
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        user_id="conformance-user",
+        agent_id="conformance-agent",
+        model_id="conformance-model",
+        user_text="Decision: project conformance-site robots policy is noindex staging only.",
+        assistant_text="Noted.",
+        auto_approve=False,
+    )
     candidate_ids = set(keeper.get("candidate_ids", []))
     pending_ids = {
         candidate["candidate_id"]
@@ -258,6 +276,28 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         {
             "candidate_ids": sorted(candidate_ids),
             "pending_candidate_ids": sorted(pending_ids),
+        },
+    )
+    idempotency_key = str(keeper.get("idempotency_key", ""))
+    duplicate_jobs = store.conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM keeper_jobs
+        WHERE idempotency_key = ?
+        """,
+        (idempotency_key,),
+    ).fetchone()["count"]
+    _append_result(
+        results,
+        "keeper_retry_is_idempotent",
+        bool(keeper_retry.get("idempotent_replay"))
+        and keeper_retry.get("keeper_job_id") == keeper.get("keeper_job_id")
+        and keeper_retry.get("candidate_ids") == keeper.get("candidate_ids")
+        and int(duplicate_jobs or 0) == 1,
+        {
+            "keeper_job_id": keeper.get("keeper_job_id", ""),
+            "idempotency_key": idempotency_key,
+            "duplicate_jobs": duplicate_jobs,
         },
     )
 
@@ -290,6 +330,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "deleted_memory_absent",
         "unsafe_memory_absent",
         "keeper_write_is_reviewable",
+        "keeper_retry_is_idempotent",
     }
     checks = {
         "version_present": bool(data.get("version")),

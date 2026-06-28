@@ -140,6 +140,7 @@ ACCEPTANCE_GATES = [
             "Keeper proposes typed candidates with source evidence",
             "assistant/tool/external claims are not trusted facts by default",
             "unsafe or secret-like content is quarantined",
+            "post-turn Keeper retries are idempotent for the same runtime payload",
         ],
     },
     {

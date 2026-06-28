@@ -148,7 +148,7 @@ spec/seed/run/assert` and `/conformance/spec`, `/conformance/seed`,
 `/conformance/run`, `/conformance/assert`. It defines named adapter scenarios
 for professional memory injection, personal-lane isolation, current-best
 conflict suppression, deleted-memory absence, unsafe-memory absence, and
-reviewable Keeper writes.
+reviewable/idempotent Keeper writes.
 
 ## v0.3: Adapters
 

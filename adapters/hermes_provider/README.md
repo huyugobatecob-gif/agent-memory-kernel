@@ -69,7 +69,8 @@ reviewable, and write policy blocks unauthorized approval.
 The conformance commands are the public adapter-compatibility gate. They verify
 professional memory injection, personal-lane isolation, resolved conflict
 suppression, deleted-memory absence, unsafe-memory absence, and reviewable
-Keeper writes through the same runtime surfaces external adapters use.
+Keeper writes through the same runtime surfaces external adapters use. The gate
+also checks that repeated post-turn Keeper calls are idempotent.
 
 Hermes can pass a configured extractor into the provider:
 

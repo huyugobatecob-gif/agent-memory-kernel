@@ -412,6 +412,18 @@ class MemoryStore:
             "status",
             "TEXT NOT NULL DEFAULT 'active'",
         )
+        self._ensure_column(
+            "keeper_jobs",
+            "idempotency_key",
+            "TEXT NOT NULL DEFAULT ''",
+        )
+        self.conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_keeper_jobs_idempotency
+            ON keeper_jobs(idempotency_key)
+            WHERE idempotency_key != ''
+            """
+        )
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.commit()
 
@@ -2287,6 +2299,24 @@ class MemoryStore:
         assistant_text = (assistant_text or "").strip()
         if not user_text and not assistant_text and not turn_id:
             raise ValueError("user_text, assistant_text, or turn_id is required")
+        metadata = dict(metadata or {})
+        keeper_mode = (keeper_mode or "sync").strip().lower()
+        idempotency_key = self._keeper_idempotency_key(
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            turn_id=turn_id,
+            auto_approve=auto_approve,
+            keeper_mode=keeper_mode,
+            metadata=metadata,
+        )
+        existing_job = self._keeper_job_by_idempotency(idempotency_key)
+        if existing_job is not None:
+            return self._keeper_job_result(existing_job, idempotent_replay=True)
 
         saved_turn_ids: list[str] = []
         if user_text:
@@ -2297,10 +2327,11 @@ class MemoryStore:
                 actor=user_id,
                 scope=scope,
                 metadata={
-                    **(metadata or {}),
+                    **metadata,
                     "source_kind": "after_saved_turn",
                     "model_id": model_id,
                     "agent_id": agent_id,
+                    "keeper_idempotency_key": idempotency_key,
                 },
             )
             saved_turn_ids.append(user_turn["turn_id"])
@@ -2312,10 +2343,11 @@ class MemoryStore:
                 actor=agent_id,
                 scope=scope,
                 metadata={
-                    **(metadata or {}),
+                    **metadata,
                     "source_kind": "after_saved_turn",
                     "model_id": model_id,
                     "user_id": user_id,
+                    "keeper_idempotency_key": idempotency_key,
                 },
             )
             saved_turn_ids.append(assistant_turn["turn_id"])
@@ -2323,12 +2355,12 @@ class MemoryStore:
             saved_turn_ids.append(turn_id)
 
         source_ref = turn_id or (saved_turn_ids[-1] if saved_turn_ids else "")
-        keeper_mode = (keeper_mode or "sync").strip().lower()
         if keeper_mode in {"queue", "queued", "async"}:
             keeper_job_id = new_id("kjob")
             job_metadata = {
-                **(metadata or {}),
+                **metadata,
                 "auto_approve": bool(auto_approve),
+                "keeper_mode": "queued",
                 "source_ref": source_ref,
             }
             self.conn.execute(
@@ -2336,8 +2368,8 @@ class MemoryStore:
                 INSERT INTO keeper_jobs
                   (keeper_job_id, created_at, thread_id, scope, user_id, agent_id,
                    model_id, turn_ids_json, event_id, candidate_ids_json, status,
-                   warnings_json, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 'queued', '[]', ?)
+                   warnings_json, idempotency_key, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 'queued', '[]', ?, ?)
                 """,
                 (
                     keeper_job_id,
@@ -2348,6 +2380,7 @@ class MemoryStore:
                     agent_id,
                     model_id,
                     json.dumps(saved_turn_ids, sort_keys=True),
+                    idempotency_key,
                     json.dumps(job_metadata, sort_keys=True),
                 ),
             )
@@ -2373,6 +2406,8 @@ class MemoryStore:
                 "candidate_ids": [],
                 "memory": None,
                 "warnings": [],
+                "idempotent_replay": False,
+                "idempotency_key": idempotency_key,
             }
 
         keeper_text = self._keeper_exchange_text(user_text, assistant_text, turn_id=turn_id)
@@ -2389,12 +2424,13 @@ class MemoryStore:
                 source_ref=source_ref,
                 auto_approve=auto_approve,
                 metadata={
-                    **(metadata or {}),
+                    **metadata,
                     "source_kind": "after_saved_turn_keeper",
                     "thread_id": thread_id,
                     "turn_ids": saved_turn_ids,
                     "model_id": model_id,
                     "user_id": user_id,
+                    "keeper_idempotency_key": idempotency_key,
                 },
             )
             event_id = memory_result["event_id"]
@@ -2414,8 +2450,8 @@ class MemoryStore:
             INSERT INTO keeper_jobs
               (keeper_job_id, created_at, thread_id, scope, user_id, agent_id,
                model_id, turn_ids_json, event_id, candidate_ids_json, status,
-               warnings_json, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               warnings_json, idempotency_key, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 keeper_job_id,
@@ -2430,7 +2466,8 @@ class MemoryStore:
                 json.dumps(candidate_ids, sort_keys=True),
                 status,
                 json.dumps(sorted(set(warnings)), sort_keys=True),
-                json.dumps(metadata or {}, sort_keys=True),
+                idempotency_key,
+                json.dumps({**metadata, "keeper_mode": "sync"}, sort_keys=True),
             ),
         )
         self._audit(
@@ -2456,6 +2493,8 @@ class MemoryStore:
             "candidate_ids": candidate_ids,
             "memory": memory_result,
             "warnings": sorted(set(warnings)),
+            "idempotent_replay": False,
+            "idempotency_key": idempotency_key,
         }
 
     def shadow_turn(
@@ -3309,6 +3348,75 @@ class MemoryStore:
             )
         self.conn.commit()
         return {"processed": len(jobs), "jobs": jobs}
+
+    def _keeper_idempotency_key(
+        self,
+        *,
+        thread_id: str,
+        scope: str,
+        user_id: str,
+        agent_id: str,
+        model_id: str,
+        user_text: str,
+        assistant_text: str,
+        turn_id: str,
+        auto_approve: bool,
+        keeper_mode: str,
+        metadata: dict[str, Any],
+    ) -> str:
+        explicit = str(metadata.get("idempotency_key", "") or "").strip()
+        payload = {
+            "explicit": explicit,
+            "thread_id": thread_id,
+            "scope": scope,
+            "user_id": user_id,
+            "agent_id": agent_id,
+            "model_id": model_id,
+            "user_text": user_text,
+            "assistant_text": assistant_text,
+            "turn_id": turn_id,
+            "auto_approve": bool(auto_approve),
+            "keeper_mode": "queued" if keeper_mode in {"queue", "queued", "async"} else "sync",
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        return f"keeper:{digest[:40]}"
+
+    def _keeper_job_by_idempotency(self, idempotency_key: str) -> sqlite3.Row | None:
+        if not idempotency_key:
+            return None
+        return self.conn.execute(
+            """
+            SELECT keeper_job_id, thread_id, scope, user_id, agent_id, model_id,
+                   turn_ids_json, event_id, candidate_ids_json, status,
+                   warnings_json, idempotency_key, metadata_json
+            FROM keeper_jobs
+            WHERE idempotency_key = ?
+            LIMIT 1
+            """,
+            (idempotency_key,),
+        ).fetchone()
+
+    def _keeper_job_result(
+        self,
+        row: sqlite3.Row,
+        *,
+        idempotent_replay: bool,
+    ) -> dict[str, Any]:
+        metadata = self._loads_json(row["metadata_json"], {})
+        return {
+            "keeper_job_id": row["keeper_job_id"],
+            "mode": metadata.get("keeper_mode", "sync"),
+            "status": row["status"],
+            "saved_turn_ids": self._loads_json(row["turn_ids_json"], []),
+            "event_id": row["event_id"],
+            "candidate_ids": self._loads_json(row["candidate_ids_json"], []),
+            "memory": None,
+            "warnings": self._loads_json(row["warnings_json"], []),
+            "idempotent_replay": bool(idempotent_replay),
+            "idempotency_key": row["idempotency_key"],
+        }
 
     def correct_memory(
         self,

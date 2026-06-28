@@ -369,6 +369,7 @@ CREATE TABLE IF NOT EXISTS keeper_jobs (
     candidate_ids_json TEXT NOT NULL DEFAULT '[]',
     status             TEXT NOT NULL DEFAULT 'completed',
     warnings_json      TEXT NOT NULL DEFAULT '[]',
+    idempotency_key    TEXT NOT NULL DEFAULT '',
     metadata_json      TEXT NOT NULL DEFAULT '{}'
 );
 
@@ -515,5 +516,8 @@ CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_router_feedback_run ON router_feedback(router_run_id);
 CREATE INDEX IF NOT EXISTS idx_router_feedback_memory ON router_feedback(memory_id);
 CREATE INDEX IF NOT EXISTS idx_keeper_jobs_thread ON keeper_jobs(thread_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_keeper_jobs_idempotency
+    ON keeper_jobs(idempotency_key)
+    WHERE idempotency_key != '';
 CREATE INDEX IF NOT EXISTS idx_shadow_traces_thread ON shadow_traces(thread_id);
 CREATE INDEX IF NOT EXISTS idx_shadow_trace_evals_trace ON shadow_trace_evals(shadow_trace_id);

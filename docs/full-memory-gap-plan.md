@@ -67,6 +67,9 @@ Must-have before claiming full memory:
 8. **Idempotent Keeper and consolidation loop.** Retries must not duplicate
    facts, edges, outcomes, or evidence; periodic merge/split/decay/compaction
    should be first-class.
+   Baseline implemented for `after_saved_turn`: repeated sync or queued Keeper
+   calls with the same runtime payload reuse the existing Keeper job and do not
+   duplicate turns, events, candidates, or graph writes.
 9. **Prompt-boundary red-team fixtures.** Prove hostile stored evidence, tool
    output, assistant guesses, and cross-lane content cannot become hidden
    instructions.
@@ -210,7 +213,8 @@ Remaining for full memory:
   beyond the baseline Router explain endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
-- Idempotent Keeper write tests and graph consolidation/compaction behavior.
+- Graph consolidation/compaction behavior beyond the baseline idempotent
+  post-turn Keeper retry guard.
 - Production LLM-backed Keeper eval suite, managed model configuration, and
   reviewed extraction prompts for natural-language graph updates.
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.

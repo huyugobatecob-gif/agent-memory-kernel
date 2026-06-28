@@ -1026,6 +1026,56 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("concise memory review updates", allowed_content)
             store.close()
 
+    def test_after_saved_turn_is_idempotent_for_sync_keeper_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            first = store.after_saved_turn(
+                thread_id="retry-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="keeper-agent",
+                model_id="gpt-test",
+                user_text="Decision: project retry-site canonical CMS is Statamic.",
+                assistant_text="Noted for future planning.",
+                keeper_mode="sync",
+            )
+            second = store.after_saved_turn(
+                thread_id="retry-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="keeper-agent",
+                model_id="gpt-test",
+                user_text="Decision: project retry-site canonical CMS is Statamic.",
+                assistant_text="Noted for future planning.",
+                keeper_mode="sync",
+            )
+
+            self.assertFalse(first["idempotent_replay"])
+            self.assertTrue(second["idempotent_replay"])
+            self.assertEqual(second["keeper_job_id"], first["keeper_job_id"])
+            self.assertEqual(second["event_id"], first["event_id"])
+            self.assertEqual(second["candidate_ids"], first["candidate_ids"])
+            self.assertEqual(second["saved_turn_ids"], first["saved_turn_ids"])
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM keeper_jobs").fetchone()["count"],
+                1,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM conversation_turns").fetchone()["count"],
+                2,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()["count"],
+                1,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM candidate_memories").fetchone()["count"],
+                1,
+            )
+            store.close()
+
     def test_queued_keeper_worker_processes_saved_turn_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -1062,6 +1112,77 @@ class MemoryStoreTests(unittest.TestCase):
 
             second = store.process_keeper_jobs(limit=1, actor="test-worker")
             self.assertEqual(second["processed"], 0)
+            store.close()
+
+    def test_after_saved_turn_is_idempotent_for_queued_keeper_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            first = store.after_saved_turn(
+                thread_id="queued-retry-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="worker-agent",
+                model_id="gpt-test",
+                user_text="Decision: project queue-retry-site uses queued Keeper retries.",
+                assistant_text="I will queue this for Keeper processing.",
+                keeper_mode="queued",
+            )
+            replay_before_worker = store.after_saved_turn(
+                thread_id="queued-retry-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="worker-agent",
+                model_id="gpt-test",
+                user_text="Decision: project queue-retry-site uses queued Keeper retries.",
+                assistant_text="I will queue this for Keeper processing.",
+                keeper_mode="queued",
+            )
+
+            self.assertEqual(first["status"], "queued")
+            self.assertTrue(replay_before_worker["idempotent_replay"])
+            self.assertEqual(replay_before_worker["keeper_job_id"], first["keeper_job_id"])
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM keeper_jobs").fetchone()["count"],
+                1,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM conversation_turns").fetchone()["count"],
+                2,
+            )
+
+            processed = store.process_keeper_jobs(limit=1, actor="test-worker")
+            self.assertEqual(processed["processed"], 1)
+            replay_after_worker = store.after_saved_turn(
+                thread_id="queued-retry-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="worker-agent",
+                model_id="gpt-test",
+                user_text="Decision: project queue-retry-site uses queued Keeper retries.",
+                assistant_text="I will queue this for Keeper processing.",
+                keeper_mode="queued",
+            )
+
+            self.assertTrue(replay_after_worker["idempotent_replay"])
+            self.assertEqual(replay_after_worker["status"], "completed")
+            self.assertEqual(
+                replay_after_worker["candidate_ids"],
+                processed["jobs"][0]["candidate_ids"],
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM keeper_jobs").fetchone()["count"],
+                1,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()["count"],
+                1,
+            )
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) AS count FROM candidate_memories").fetchone()["count"],
+                1,
+            )
             store.close()
 
     def test_hermes_policy_review_e2e_promotes_queued_keeper_memory(self) -> None:
