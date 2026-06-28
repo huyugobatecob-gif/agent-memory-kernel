@@ -620,6 +620,77 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("rollback", audit_actions)
             store.close()
 
+    def test_batch_memory_lifecycle_dry_run_and_http_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            first = store.remember(
+                "Decision: batch-site CMS is WordPress.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            second = store.remember(
+                "Decision: batch-site obsolete plugin is OldSEO.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            preview = store.batch_memory_lifecycle(
+                [
+                    {
+                        "action": "correct",
+                        "memory_id": first,
+                        "text": "Decision: batch-site CMS is Statamic.",
+                    },
+                    {"action": "delete", "memory_id": second},
+                ],
+                actor="reviewer",
+                reason="batch correction preview",
+                dry_run=True,
+            )
+
+            self.assertEqual(preview["version"], "memory-lifecycle-batch-v0.1")
+            self.assertTrue(preview["dry_run"])
+            self.assertEqual(preview["planned_count"], 2)
+            self.assertEqual(preview["changed_count"], 0)
+            self.assertTrue(store.search("WordPress", scope="professional"))
+            self.assertTrue(store.search("OldSEO", scope="professional"))
+
+            applied = handle_api_request(
+                store,
+                "/memory/lifecycle-batch",
+                {
+                    "operations": [
+                        {
+                            "action": "correct",
+                            "memory_id": first,
+                            "text": "Decision: batch-site CMS is Statamic.",
+                            "reason": "new source",
+                        },
+                        {
+                            "action": "delete",
+                            "memory_id": second,
+                            "reason": "obsolete plugin",
+                        },
+                    ],
+                    "actor": "reviewer",
+                    "reason": "batch correction",
+                },
+            )
+
+            self.assertFalse(applied["dry_run"])
+            self.assertEqual(applied["changed_count"], 2)
+            self.assertEqual(applied["error_count"], 0)
+            self.assertEqual(
+                [item["status"] for item in applied["results"]],
+                ["corrected", "deleted"],
+            )
+            self.assertTrue(store.search("Statamic", scope="professional"))
+            self.assertEqual(store.search("WordPress", scope="professional"), [])
+            self.assertEqual(store.search("OldSEO", scope="professional"), [])
+            store.close()
+
     def test_derived_invalidations_are_recorded_for_correction_and_delete(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

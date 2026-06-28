@@ -97,6 +97,7 @@ HTTP endpoints:
 - `POST /review/approve`
 - `POST /review/reject`
 - `POST /memory/correct`
+- `POST /memory/lifecycle-batch`
 - `POST /memory/delete`
 - `POST /memory/distrust`
 - `POST /memory/expire`
@@ -112,6 +113,7 @@ MCP tools:
 - `memory_review_approve`
 - `memory_review_reject`
 - `memory_correct`
+- `memory_lifecycle_batch`
 - `memory_delete`
 - `memory_distrust`
 - `memory_expire`
@@ -137,7 +139,9 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
    approve/reject policy before mutating memory.
 7. Approve only candidates that are safe, scoped correctly, and useful.
 8. Reject quarantined or low-quality candidates.
-9. Use correct/delete/distrust/expire on already active memories when the
+9. Use `lifecycle-batch --dry-run` or `memory_lifecycle_batch` dry-run when
+   several active memories need correction, deletion, distrust, or expiry.
+10. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -149,7 +153,7 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 
 - browser-based review UI;
 - graph browser with source previews;
-- browser-assisted batch approve/reject;
+- browser-assisted batch approve/reject and lifecycle correction;
 - conflict warnings inline with candidates;
 - hosted key-management and export custody controls;
 - push/email/web notification transports and escalation policies.

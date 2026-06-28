@@ -179,6 +179,10 @@ or resolved.
 Baseline batch review is implemented through `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
+Baseline active-memory lifecycle batch is implemented through `agent-memory
+lifecycle-batch`, `/memory/lifecycle-batch`, Hermes
+`batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch`.
+Correct/delete/distrust/expire batches support dry-run and per-item results.
 Baseline export governance is implemented through `agent-memory export-control`,
 `/export/control`, Hermes `export_control_report()`, and MCP
 `memory_export_control`. Export previews return matched policy, aggregate

@@ -127,6 +127,9 @@ class HermesMemoryProvider:
     def correct_memory(self, memory_id: str, text: str, actor: str = "reviewer", reason: str = "") -> dict:
         ...
 
+    def batch_memory_lifecycle(self, operations: list[dict], actor: str = "reviewer", reason: str = "", dry_run: bool = False) -> dict:
+        ...
+
     def delete_memory(self, memory_id: str, actor: str = "reviewer", reason: str = "") -> dict:
         ...
 
@@ -262,7 +265,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_graph_edges`, `memory_export_control`, `memory_export_profile`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,
-`memory_notification_ack`, `memory_notification_resolve`, and
+`memory_notification_ack`, `memory_notification_resolve`,
+`memory_lifecycle_batch`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
 `memory_export_retention_list`, `memory_export_retention_enforce`,
@@ -301,6 +305,7 @@ Useful endpoints:
 - `POST /observability`
 - `POST /current-best`
 - `POST /memory-changes`
+- `POST /memory/lifecycle-batch`
 - `POST /notifications/list`
 - `POST /notifications/assign`
 - `POST /notifications/ack`
@@ -481,6 +486,9 @@ should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP
 `memory_review_batch` with `dry_run=true` first, then run the approve/reject
 batch after the operator confirms the item-level results.
+For active memories, Hermes can call `batch_memory_lifecycle()` or MCP
+`memory_lifecycle_batch` with `dry_run=true` before correcting, deleting,
+distrusting, or expiring several records.
 
 Lower-level context builder call:
 

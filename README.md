@@ -83,6 +83,8 @@ Included now:
 - Operator review inbox with source previews, risk flags, graph previews, audit
   trail, and CLI/HTTP/MCP action handles.
 - Batch review for approve/reject with dry-run and per-candidate results.
+- Batch lifecycle correction for active memories with dry-run and per-item
+  results.
 - Operator notification queue, reviewer assignment, and SLA status filtering
   for review candidates, export approvals, and expired export artifacts.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
@@ -687,7 +689,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_notifications_list`, `memory_notification_assign`, `memory_notification_ack`,
 `memory_notification_resolve`,
-`memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
+`memory_correct`, `memory_lifecycle_batch`, `memory_delete`, `memory_distrust`,
+`memory_expire`,
 `memory_export_control`, `memory_export_profile`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`,
 `memory_export_approval_request`, `memory_export_approval_list`,

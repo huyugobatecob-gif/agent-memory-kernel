@@ -471,6 +471,22 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(acknowledged["status"], "acknowledged")
             approved = provider.approve_candidate(candidate_id, actor="reviewer")
             self.assertEqual(provider.notifications(status="open")["count"], 0)
+            lifecycle_preview = provider.batch_memory_lifecycle(
+                [
+                    {
+                        "action": "correct",
+                        "memory_id": approved["memory_id"],
+                        "text": "Decision: inbox-site provider wrapper batch preview.",
+                    }
+                ],
+                actor="reviewer",
+                dry_run=True,
+            )
+            self.assertEqual(lifecycle_preview["planned_count"], 1)
+            self.assertEqual(
+                lifecycle_preview["results"][0]["status"],
+                "would_correct",
+            )
             corrected = provider.correct_memory(
                 approved["memory_id"],
                 "Decision: inbox-site provider wrapper is corrected.",

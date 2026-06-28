@@ -52,6 +52,10 @@ def _boolean(description: str, default: bool | None = None) -> dict[str, Any]:
     return schema
 
 
+def _array(description: str, items: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "array", "description": description, "items": items}
+
+
 MCP_TOOLS: dict[str, dict[str, Any]] = {
     "memory_before_model_call": {
         "endpoint": "/before-model-call",
@@ -450,6 +454,23 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "reason": _string("Correction reason.", ""),
             },
             ["memory_id", "text"],
+        ),
+    },
+    "memory_lifecycle_batch": {
+        "endpoint": "/memory/lifecycle-batch",
+        "description": "Batch correct, delete, distrust, or expire active memories with optional dry-run.",
+        "inputSchema": _schema(
+            {
+                "operations": _array(
+                    "Lifecycle operations: {action, memory_id, text?, reason?}.",
+                    {"type": "object"},
+                ),
+                "actor": _string("Batch actor.", "mcp"),
+                "reason": _string("Default reason.", ""),
+                "dry_run": _boolean("Preview without mutating memory.", False),
+                "stop_on_error": _boolean("Stop after the first item error.", False),
+            },
+            ["operations"],
         ),
     },
     "memory_delete": {

@@ -684,6 +684,23 @@ class HermesMemoryProvider:
         self.store.correct_memory(memory_id, text, actor=actor, reason=reason)
         return {"memory_id": memory_id, "status": "corrected"}
 
+    def batch_memory_lifecycle(
+        self,
+        operations: list[dict[str, Any]],
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+        dry_run: bool = False,
+        stop_on_error: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.batch_memory_lifecycle(
+            operations,
+            actor=actor,
+            reason=reason,
+            dry_run=dry_run,
+            stop_on_error=stop_on_error,
+        )
+
     def delete_memory(
         self,
         memory_id: str,

@@ -413,6 +413,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         text = str(payload.pop("text"))
         store.correct_memory(memory_id, text, **payload)
         return {"memory_id": memory_id, "status": "corrected"}
+    if path == "/memory/lifecycle-batch":
+        return store.batch_memory_lifecycle(
+            payload.get("operations", []),
+            actor=str(payload.get("actor", "api")),
+            reason=str(payload.get("reason", "")),
+            dry_run=bool(payload.get("dry_run", False)),
+            stop_on_error=bool(payload.get("stop_on_error", False)),
+        )
     if path == "/memory/delete":
         memory_id = str(payload.pop("memory_id"))
         store.delete_memory(memory_id, **payload)

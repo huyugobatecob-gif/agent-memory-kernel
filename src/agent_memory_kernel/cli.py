@@ -1079,6 +1079,28 @@ def cmd_correct(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lifecycle_batch(args: argparse.Namespace) -> int:
+    if bool(args.operations_json) == bool(args.operations_file):
+        raise SystemExit("provide exactly one of --operations-json or --operations-file")
+    raw = args.operations_json
+    if args.operations_file:
+        raw = Path(args.operations_file).read_text(encoding="utf-8")
+    operations = json.loads(raw)
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.batch_memory_lifecycle(
+            operations,
+            actor=args.actor,
+            reason=args.reason,
+            dry_run=args.dry_run,
+            stop_on_error=args.stop_on_error,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_revisions(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1969,6 +1991,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="user")
     p.add_argument("--reason", default="")
     p.set_defaults(func=cmd_correct)
+
+    p = sub.add_parser("lifecycle-batch", help="Batch correct/delete/distrust/expire active memories")
+    add_common_db(p)
+    p.add_argument("--operations-json", default="")
+    p.add_argument("--operations-file", default="")
+    p.add_argument("--actor", default="reviewer")
+    p.add_argument("--reason", default="")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--stop-on-error", action="store_true")
+    p.set_defaults(func=cmd_lifecycle_batch)
 
     p = sub.add_parser("revisions", help="List correction and rollback history for memory")
     add_common_db(p)

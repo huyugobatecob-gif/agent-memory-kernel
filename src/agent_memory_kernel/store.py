@@ -104,6 +104,7 @@ MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
+MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -5911,6 +5912,132 @@ class MemoryStore:
 
     def expire_memory(self, memory_id: str, *, actor: str = "system", reason: str = "") -> None:
         self._deactivate_memory(memory_id, status="expired", actor=actor, reason=reason)
+
+    def batch_memory_lifecycle(
+        self,
+        operations: list[dict[str, Any]],
+        *,
+        actor: str = "user",
+        reason: str = "",
+        dry_run: bool = False,
+        stop_on_error: bool = False,
+    ) -> dict[str, Any]:
+        """Apply or preview lifecycle actions for active memories."""
+        ops = list(operations or [])
+        if not ops:
+            raise ValueError("operations must not be empty")
+        if len(ops) > 100:
+            raise ValueError("memory lifecycle batch supports at most 100 operations")
+        results: list[dict[str, Any]] = []
+        for index, operation in enumerate(ops):
+            try:
+                result = self._memory_lifecycle_batch_item(
+                    index,
+                    operation,
+                    actor=actor,
+                    default_reason=reason,
+                    dry_run=dry_run,
+                )
+            except Exception as exc:  # Keep batch errors machine-readable per item.
+                op_dict = operation if isinstance(operation, dict) else {}
+                result = {
+                    "index": index,
+                    "memory_id": str(op_dict.get("memory_id", "")),
+                    "action": str(op_dict.get("action", "")),
+                    "status": "error",
+                    "error": str(exc),
+                }
+                results.append(result)
+                if stop_on_error:
+                    break
+                continue
+            results.append(result)
+        error_count = sum(1 for item in results if item["status"] == "error")
+        planned_count = sum(1 for item in results if str(item["status"]).startswith("would_"))
+        changed_count = sum(
+            1
+            for item in results
+            if item["status"]
+            not in {"error", "unchanged", "would_skip_unchanged"}
+            and not str(item["status"]).startswith("would_")
+        )
+        return {
+            "version": MEMORY_LIFECYCLE_BATCH_VERSION,
+            "dry_run": bool(dry_run),
+            "stop_on_error": bool(stop_on_error),
+            "actor": actor,
+            "operation_count": len(ops),
+            "processed_count": len(results),
+            "planned_count": planned_count,
+            "changed_count": changed_count,
+            "error_count": error_count,
+            "results": results,
+        }
+
+    def _memory_lifecycle_batch_item(
+        self,
+        index: int,
+        operation: dict[str, Any],
+        *,
+        actor: str,
+        default_reason: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if not isinstance(operation, dict):
+            raise ValueError("operation must be an object")
+        action = str(operation.get("action", "")).strip().lower()
+        if action not in {"correct", "delete", "distrust", "expire"}:
+            raise ValueError("action must be correct, delete, distrust, or expire")
+        memory_id = str(operation.get("memory_id", "")).strip()
+        if not memory_id:
+            raise ValueError("memory_id must not be empty")
+        row = self._memory_row(memory_id)
+        if row is None:
+            raise KeyError(f"memory not found: {memory_id}")
+        self._enforce_write_policy(actor, row["scope"], action)
+        reason = str(operation.get("reason", default_reason) or default_reason)
+        result = {
+            "index": index,
+            "memory_id": memory_id,
+            "action": action,
+            "scope": row["scope"],
+            "previous_status": row["status"],
+            "reason": reason,
+        }
+        if action == "correct":
+            text = str(operation.get("text", "")).strip()
+            if not text:
+                raise ValueError("text must not be empty for correct action")
+            result["text"] = text
+            if text == row["text"]:
+                result["status"] = "would_skip_unchanged" if dry_run else "unchanged"
+                return result
+            if dry_run:
+                result["status"] = "would_correct"
+                return result
+            self.correct_memory(memory_id, text, actor=actor, reason=reason)
+            result["status"] = "corrected"
+            result["new_status"] = self._memory_row(memory_id)["status"]
+            return result
+        target_status_by_action = {
+            "delete": "deleted",
+            "distrust": "distrusted",
+            "expire": "expired",
+        }
+        if dry_run:
+            result["status"] = f"would_{action}"
+            result["new_status"] = target_status_by_action[action]
+            return result
+        if action == "delete":
+            self.delete_memory(memory_id, actor=actor, reason=reason)
+        elif action == "distrust":
+            self.distrust_memory(memory_id, actor=actor, reason=reason)
+        else:
+            self.expire_memory(memory_id, actor=actor, reason=reason)
+        row_after = self._memory_row(memory_id)
+        result["status"] = target_status_by_action[action]
+        result["new_status"] = row_after["status"] if row_after is not None else ""
+        return result
 
     def record_memory_conflict(
         self,

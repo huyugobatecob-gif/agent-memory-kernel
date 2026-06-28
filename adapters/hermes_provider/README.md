@@ -42,6 +42,8 @@ The adapter should:
   review, export approval, and retention cleanup;
 - expose `review_batch()` so Hermes can approve or reject multiple candidates
   with dry-run and per-item results;
+- expose `batch_memory_lifecycle()` so Hermes can dry-run and apply batch
+  correct/delete/distrust/expire operations for active memories;
 - expose `capability_report()` so Hermes can inspect read/write/export/delete
   permissions before delegating work to an agent;
 - expose `export_control_report()` so Hermes can preview export policy,
@@ -216,6 +218,11 @@ provider.notifications(status="open", scope="professional")
 provider.notifications(status="open", sla_status="overdue")
 provider.assign_notification("ntf_xxxxxxxxxxxxxxxx", assigned_to="reviewer-a", actor="lead")
 provider.review_batch(action="approve", candidate_ids=["cand_a", "cand_b"], actor="reviewer", dry_run=True)
+provider.batch_memory_lifecycle(
+    [{"action": "delete", "memory_id": "mem_xxxxxxxxxxxxxxxx"}],
+    actor="reviewer",
+    dry_run=True,
+)
 provider.approve_candidate("cand_xxxxxxxxxxxxxxxx", actor="reviewer")
 provider.correct_memory("mem_xxxxxxxxxxxxxxxx", "Corrected memory text", actor="reviewer")
 
