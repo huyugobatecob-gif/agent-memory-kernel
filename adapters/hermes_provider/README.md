@@ -22,6 +22,8 @@ The adapter should:
 - inspect graph nodes and Keeper runs while debugging retrieval;
 - record conflicts or supersede stale memory when newer user/project truth wins;
 - record structured loop outcomes and retrieve outcome packs before planning;
+- configure write policies so agents can propose memory without auto-approving
+  or mutating durable memory outside their authority;
 - leave durable promotion to policy or review;
 - expose pending memory review to the user or operator.
 
@@ -51,6 +53,18 @@ trace = provider.shadow_turn(
 Use shadow traces first. They connect a Router run and Keeper proposal with
 `write_policy=propose_only`, so Hermes can review real traffic without
 auto-approving new active memory.
+
+Before production writes, set explicit authority for each agent role:
+
+```python
+provider.set_write_policy(
+    agent_id="writer",
+    scope="professional",
+    action="auto_approve",
+    decision="deny",
+    reason="writer proposes memory; reviewer approves",
+)
+```
 
 After review, preserve the expected behavior:
 

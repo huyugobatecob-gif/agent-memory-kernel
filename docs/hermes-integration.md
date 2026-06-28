@@ -90,6 +90,12 @@ class HermesMemoryProvider:
     def remember(self, text: str, scope: str = "professional", source_ref: str = "") -> dict:
         ...
 
+    def set_write_policy(self, agent_id: str, scope: str, action: str, decision: str) -> dict:
+        ...
+
+    def write_policies(self, agent_id: str | None = None, scope: str | None = None) -> list[dict]:
+        ...
+
     def review_pending(self) -> list[dict]:
         ...
 ```
@@ -116,6 +122,8 @@ Useful endpoints:
 - `POST /shadow-eval`
 - `POST /shadow-evals`
 - `POST /remember`
+- `POST /write-policy/set`
+- `POST /write-policy/list`
 - `POST /search`
 - `POST /review/list`
 - `POST /conflict/record`

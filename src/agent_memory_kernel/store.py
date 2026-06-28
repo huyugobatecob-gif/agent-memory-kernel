@@ -220,6 +220,146 @@ class MemoryStore:
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.commit()
 
+    def set_write_policy(
+        self,
+        *,
+        agent_id: str = "*",
+        scope: str = "*",
+        action: str = "*",
+        decision: str = "allow",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        """Set an optional write authority rule for agents.
+
+        Policies are opt-in: when no matching policy exists, local writes remain
+        allowed. Matching deny policies block the write path before mutation.
+        """
+        agent_id = (agent_id or "*").strip() or "*"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        action = (action or "*").strip().lower() or "*"
+        decision = (decision or "allow").strip().lower()
+        if decision not in {"allow", "deny"}:
+            raise ValueError("decision must be allow or deny")
+        ts = now_iso()
+        existing = self.conn.execute(
+            """
+            SELECT policy_id
+            FROM memory_write_policies
+            WHERE agent_id = ? AND scope = ? AND action = ?
+            """,
+            (agent_id, scope, action),
+        ).fetchone()
+        policy_id = existing["policy_id"] if existing else new_id("wpol")
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE memory_write_policies
+                SET updated_at = ?, decision = ?, reason = ?, metadata_json = ?
+                WHERE policy_id = ?
+                """,
+                (
+                    ts,
+                    decision,
+                    reason,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    policy_id,
+                ),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO memory_write_policies
+                  (policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    policy_id,
+                    ts,
+                    ts,
+                    agent_id,
+                    scope,
+                    action,
+                    decision,
+                    reason,
+                    json.dumps(metadata or {}, sort_keys=True),
+                ),
+            )
+        self._audit(
+            "set_write_policy",
+            "memory_write_policy",
+            policy_id,
+            actor=actor,
+            details={
+                "agent_id": agent_id,
+                "scope": scope,
+                "action": action,
+                "decision": decision,
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        return {
+            "policy_id": policy_id,
+            "agent_id": agent_id,
+            "scope": scope,
+            "action": action,
+            "decision": decision,
+            "reason": reason,
+        }
+
+    def list_write_policies(
+        self,
+        *,
+        agent_id: str | None = None,
+        scope: str | None = None,
+        action: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses = []
+        params: list[Any] = []
+        if agent_id:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if scope:
+            clauses.append("scope = ?")
+            params.append("*" if scope == "*" else normalize_scope(scope))
+        if action:
+            clauses.append("action = ?")
+            params.append(action.strip().lower())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json
+            FROM memory_write_policies
+            {where}
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 100), 500))),
+        ).fetchall()
+        return [
+            {
+                "policy_id": row["policy_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "agent_id": row["agent_id"],
+                "scope": row["scope"],
+                "action": row["action"],
+                "decision": row["decision"],
+                "reason": row["reason"],
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for row in rows
+        ]
+
+    def resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        """Return the most-specific write policy decision for an actor/scope/action."""
+        return self._resolve_write_policy(actor, scope, action)
+
     def remember(
         self,
         text: str,
@@ -237,6 +377,20 @@ class MemoryStore:
         text = (text or "").strip()
         if not text:
             raise ValueError("text must not be empty")
+
+        self._enforce_write_policy(actor, scope, "record")
+        warnings: list[str] = []
+        effective_auto_approve = auto_approve
+        auto_approve_policy = self._resolve_write_policy(actor, scope, "auto_approve")
+        if auto_approve and auto_approve_policy["decision"] == "deny":
+            effective_auto_approve = False
+            warnings.append("auto_approve denied by write policy; candidate requires review")
+            self._audit_write_denied(
+                actor,
+                scope,
+                "auto_approve",
+                auto_approve_policy,
+            )
 
         ts = now_iso()
         event_id = new_id("evt")
@@ -266,7 +420,7 @@ class MemoryStore:
                 extracted.text,
                 source_type=source_type,
                 sensitivity=sensitivity,
-                auto_approve=auto_approve,
+                auto_approve=effective_auto_approve,
             )
             candidate_id = new_id("cand")
             confidence = normalize_confidence(extracted.confidence)
@@ -323,7 +477,7 @@ class MemoryStore:
             )
 
         self.conn.commit()
-        return {"event_id": event_id, "candidates": candidates}
+        return {"event_id": event_id, "candidates": candidates, "warnings": warnings}
 
     def record_outcome(
         self,
@@ -354,6 +508,7 @@ class MemoryStore:
         if not any((hypothesis, action, result, cause, lesson, next_recommendation)):
             raise ValueError("at least one outcome detail must be provided")
 
+        self._enforce_write_policy(actor, scope, "outcome")
         text = self._compose_outcome_memory_text(
             project=project,
             outcome_status=outcome_status,
@@ -552,6 +707,10 @@ class MemoryStore:
         return [dict(row) for row in rows]
 
     def approve_candidate(self, candidate_id: str, *, actor: str = "user", reason: str = "") -> str:
+        candidate = self._candidate(candidate_id)
+        if candidate is None:
+            raise KeyError(f"candidate not found: {candidate_id}")
+        self._enforce_write_policy(actor, candidate["scope"], "approve")
         memory_id = self._activate_candidate(candidate_id, actor=actor)
         self.conn.execute(
             """
@@ -568,6 +727,7 @@ class MemoryStore:
         row = self._candidate(candidate_id)
         if row is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        self._enforce_write_policy(actor, row["scope"], "reject")
         existing = self.conn.execute(
             "SELECT memory_id FROM memories WHERE candidate_id = ? AND status = 'active'",
             (candidate_id,),
@@ -2485,32 +2645,39 @@ class MemoryStore:
             status = "completed"
             memory_result = None
             if keeper_text:
-                memory_result = self.remember(
-                    keeper_text,
-                    scope=str(row["scope"]),
-                    actor=str(row["agent_id"] or actor),
-                    source_type="system",
-                    source_ref=job_id,
-                    auto_approve=bool(metadata.get("auto_approve", False)),
-                    metadata={
-                        **metadata,
-                        "source_kind": "queued_keeper_job",
-                        "keeper_job_id": job_id,
-                        "thread_id": row["thread_id"],
-                        "turn_ids": turn_ids,
-                        "model_id": row["model_id"],
-                        "user_id": row["user_id"],
-                    },
-                )
-                event_id = memory_result["event_id"]
-                for candidate in memory_result["candidates"]:
-                    candidate_ids.append(candidate["candidate_id"])
-                    if candidate["status"] == "quarantined":
-                        warnings.append("keeper candidate quarantined")
-                    elif candidate["status"] == "pending":
-                        warnings.append("keeper candidate requires review")
-                if warnings and all("quarantined" in warning for warning in warnings):
-                    status = "quarantined"
+                try:
+                    memory_result = self.remember(
+                        keeper_text,
+                        scope=str(row["scope"]),
+                        actor=str(row["agent_id"] or actor),
+                        source_type="system",
+                        source_ref=job_id,
+                        auto_approve=bool(metadata.get("auto_approve", False)),
+                        metadata={
+                            **metadata,
+                            "source_kind": "queued_keeper_job",
+                            "keeper_job_id": job_id,
+                            "thread_id": row["thread_id"],
+                            "turn_ids": turn_ids,
+                            "model_id": row["model_id"],
+                            "user_id": row["user_id"],
+                        },
+                    )
+                except PermissionError as exc:
+                    status = "denied"
+                    warnings.append(str(exc))
+                if memory_result is not None:
+                    event_id = memory_result["event_id"]
+                    for warning in memory_result.get("warnings", []):
+                        warnings.append(str(warning))
+                    for candidate in memory_result["candidates"]:
+                        candidate_ids.append(candidate["candidate_id"])
+                        if candidate["status"] == "quarantined":
+                            warnings.append("keeper candidate quarantined")
+                        elif candidate["status"] == "pending":
+                            warnings.append("keeper candidate requires review")
+                    if warnings and all("quarantined" in warning for warning in warnings):
+                        status = "quarantined"
             else:
                 status = "empty"
                 warnings.append("queued keeper job had no readable turns")
@@ -2560,10 +2727,11 @@ class MemoryStore:
         if not text:
             raise ValueError("text must not be empty")
         row = self.conn.execute(
-            "SELECT memory_id FROM memories WHERE memory_id = ?", (memory_id,)
+            "SELECT memory_id, scope FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"memory not found: {memory_id}")
+        self._enforce_write_policy(actor, row["scope"], "correct")
         self.conn.execute(
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
@@ -2603,6 +2771,7 @@ class MemoryStore:
             raise KeyError(f"memory not found: {memory_id}")
         if right is None:
             raise KeyError(f"memory not found: {other_memory_id}")
+        self._enforce_write_policy(actor, left["scope"], "conflict")
         relation = (relation or "conflicts_with").strip().lower()
         if relation not in {"conflicts_with", "contradicted_by", "supersedes", "context_bound"}:
             raise ValueError("relation must be conflicts_with, contradicted_by, supersedes, or context_bound")
@@ -2675,6 +2844,7 @@ class MemoryStore:
             raise KeyError(f"memory not found: {new_memory_id}")
         if old_memory_id == new_memory_id:
             raise ValueError("old_memory_id and new_memory_id must differ")
+        self._enforce_write_policy(actor, old["scope"], "supersede")
         ts = now_iso()
         self.conn.execute(
             "UPDATE memories SET status = 'superseded', updated_at = ? WHERE memory_id = ?",
@@ -2811,11 +2981,17 @@ class MemoryStore:
         status = (status or "").strip().lower()
         if status not in {"deleted", "distrusted", "expired"}:
             raise ValueError("status must be deleted, distrusted, or expired")
+        action = {
+            "deleted": "delete",
+            "distrusted": "distrust",
+            "expired": "expire",
+        }[status]
         row = self.conn.execute(
-            "SELECT memory_id FROM memories WHERE memory_id = ?", (memory_id,)
+            "SELECT memory_id, scope FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"memory not found: {memory_id}")
+        self._enforce_write_policy(actor, row["scope"], action)
         ts = now_iso()
         self.conn.execute(
             "UPDATE memories SET status = ?, updated_at = ? WHERE memory_id = ?",
@@ -2826,11 +3002,6 @@ class MemoryStore:
             (status, ts, memory_id),
         )
         self._propagate_inactive_memory(memory_id)
-        action = {
-            "deleted": "delete",
-            "distrusted": "distrust",
-            "expired": "expire",
-        }[status]
         self._audit(action, "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
@@ -3833,6 +4004,85 @@ class MemoryStore:
             return json.loads(value or "")
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    def _resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        actor = (actor or "user").strip() or "user"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        action = (action or "*").strip().lower() or "*"
+        rows = self.conn.execute(
+            """
+            SELECT policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json
+            FROM memory_write_policies
+            WHERE agent_id IN (?, '*')
+              AND scope IN (?, '*')
+              AND action IN (?, '*')
+            """,
+            (actor, scope, action),
+        ).fetchall()
+        if not rows:
+            return {
+                "policy_id": "",
+                "decision": "allow",
+                "reason": "no matching policy",
+                "agent_id": actor,
+                "scope": scope,
+                "action": action,
+                "matched": False,
+                "metadata": {},
+            }
+
+        def specificity(row: sqlite3.Row) -> tuple[int, str, str]:
+            score = 0
+            if row["agent_id"] == actor:
+                score += 4
+            if row["scope"] == scope:
+                score += 2
+            if row["action"] == action:
+                score += 1
+            return score, str(row["updated_at"]), str(row["created_at"])
+
+        row = max(rows, key=specificity)
+        return {
+            "policy_id": row["policy_id"],
+            "decision": row["decision"],
+            "reason": row["reason"],
+            "agent_id": row["agent_id"],
+            "scope": row["scope"],
+            "action": row["action"],
+            "matched": True,
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _enforce_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        decision = self._resolve_write_policy(actor, scope, action)
+        if decision["decision"] == "deny":
+            self._audit_write_denied(actor, scope, action, decision)
+            self.conn.commit()
+            reason = decision["reason"] or "write policy denied this action"
+            raise PermissionError(
+                f"write denied for actor={actor} scope={scope} action={action}: {reason}"
+            )
+        return decision
+
+    def _audit_write_denied(
+        self,
+        actor: str,
+        scope: str,
+        action: str,
+        decision: dict[str, Any],
+    ) -> None:
+        self._audit(
+            "write_denied",
+            "memory_write_policy",
+            str(decision.get("policy_id", "")),
+            actor=actor,
+            details={
+                "scope": normalize_scope(scope),
+                "action": action,
+                "decision": decision,
+            },
+        )
 
     @staticmethod
     def _compose_outcome_memory_text(

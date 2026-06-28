@@ -49,6 +49,130 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(len(store.search("concise", scope="personal")), 1)
             store.close()
 
+    def test_write_policy_downgrades_auto_approve_without_losing_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.set_write_policy(
+                agent_id="*",
+                scope="professional",
+                action="auto_approve",
+                decision="deny",
+                reason="review required",
+            )
+            store.set_write_policy(
+                agent_id="trusted-agent",
+                scope="professional",
+                action="auto_approve",
+                decision="allow",
+                reason="trusted writer",
+            )
+
+            limited = store.remember(
+                "Rule: limited-agent memories require human review.",
+                actor="limited-agent",
+                scope="professional",
+                auto_approve=True,
+            )
+            self.assertEqual(limited["candidates"][0]["status"], "pending")
+            self.assertIn("auto_approve denied", limited["warnings"][0])
+            self.assertEqual(store.search("limited-agent", scope="professional"), [])
+            event_count = store.conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()
+            self.assertEqual(event_count["count"], 1)
+
+            trusted = store.remember(
+                "Rule: trusted-agent memories may auto approve safe manual facts.",
+                actor="trusted-agent",
+                scope="professional",
+                auto_approve=True,
+            )
+            self.assertEqual(trusted["candidates"][0]["status"], "approved")
+            self.assertEqual(len(store.search("trusted-agent", scope="professional")), 1)
+            decision = store.resolve_write_policy(
+                "trusted-agent",
+                "professional",
+                "auto_approve",
+            )
+            self.assertEqual(decision["decision"], "allow")
+            self.assertTrue(decision["matched"])
+            store.close()
+
+    def test_write_policy_blocks_approve_and_mutation_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            pending = store.remember(
+                "Rule: limited-agent cannot approve this candidate.",
+                scope="professional",
+            )
+            candidate_id = pending["candidates"][0]["candidate_id"]
+            store.set_write_policy(
+                agent_id="limited-agent",
+                scope="professional",
+                action="approve",
+                decision="deny",
+                reason="reviewer required",
+            )
+            with self.assertRaises(PermissionError):
+                store.approve_candidate(candidate_id, actor="limited-agent")
+
+            memory_id = store.approve_candidate(candidate_id, actor="user")
+            store.set_write_policy(
+                agent_id="limited-agent",
+                scope="professional",
+                action="delete",
+                decision="deny",
+                reason="destructive writes blocked",
+            )
+            with self.assertRaises(PermissionError):
+                store.delete_memory(memory_id, actor="limited-agent")
+            self.assertEqual(len(store.search("cannot approve", scope="professional")), 1)
+
+            store.set_write_policy(
+                agent_id="limited-agent",
+                scope="professional",
+                action="correct",
+                decision="deny",
+                reason="corrections require owner",
+            )
+            with self.assertRaises(PermissionError):
+                store.correct_memory(memory_id, "Rule: overwritten by limited agent.", actor="limited-agent")
+            self.assertIn("cannot approve", store.context_pack("limited-agent"))
+
+            denied = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM audit_log WHERE action = 'write_denied'"
+            ).fetchone()
+            self.assertGreaterEqual(denied["count"], 3)
+            store.close()
+
+    def test_http_write_policy_endpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            result = handle_api_request(
+                store,
+                "/write-policy/set",
+                {
+                    "agent_id": "api-agent",
+                    "scope": "professional",
+                    "action": "auto_approve",
+                    "decision": "deny",
+                    "reason": "api review required",
+                },
+            )
+            self.assertEqual(result["decision"], "deny")
+            listed = handle_api_request(
+                store,
+                "/write-policy/list",
+                {"agent_id": "api-agent", "scope": "professional"},
+            )
+            self.assertEqual(len(listed["policies"]), 1)
+            self.assertEqual(listed["policies"][0]["action"], "auto_approve")
+            store.close()
+
     def test_secret_like_content_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

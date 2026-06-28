@@ -54,6 +54,12 @@ Implemented local runtime behavior:
 - denied scopes produce `access_decisions` and warnings;
 - the main model never receives profile notes, thread messages, graph branches,
   source ids, or memory text for a denied active scope.
+- `memory_write_policies` can allow or deny writes by `agent_id`, `scope`, and
+  `action`, with `*` wildcards and most-specific match precedence;
+- denied `auto_approve` requests still store raw events but keep durable memory
+  as review candidates;
+- denied review, lifecycle, outcome, conflict, and supersession actions raise
+  `PermissionError` before mutation and record `write_denied` audit events.
 
 ## Permissions
 
@@ -71,6 +77,20 @@ Minimum permissions:
 The Router requires `memory.read` for every branch it injects. The Keeper can
 write events and propose graph commands, but it should not approve high-impact
 rules unless policy grants that permission.
+
+Local action names exposed by write policy:
+
+- `record`
+- `auto_approve`
+- `approve`
+- `reject`
+- `correct`
+- `delete`
+- `distrust`
+- `expire`
+- `outcome`
+- `conflict`
+- `supersede`
 
 ## Threat Model
 

@@ -376,6 +376,45 @@ class HermesMemoryProvider:
             metadata=metadata,
         )
 
+    def set_write_policy(
+        self,
+        *,
+        agent_id: str = "*",
+        scope: str = "*",
+        action: str = "*",
+        decision: str = "allow",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+        actor: str = "hermes-admin",
+    ) -> dict[str, Any]:
+        return self.store.set_write_policy(
+            agent_id=agent_id,
+            scope=scope,
+            action=action,
+            decision=decision,
+            reason=reason,
+            metadata=metadata,
+            actor=actor,
+        )
+
+    def write_policies(
+        self,
+        *,
+        agent_id: str | None = None,
+        scope: str | None = None,
+        action: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_write_policies(
+            agent_id=agent_id,
+            scope=scope,
+            action=action,
+            limit=limit,
+        )
+
+    def resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        return self.store.resolve_write_policy(actor, scope, action)
+
     def review_pending(self) -> list[dict[str, Any]]:
         return self.store.list_candidates("pending")
 

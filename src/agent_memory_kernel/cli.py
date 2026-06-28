@@ -53,6 +53,38 @@ def cmd_remember(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_write_policy_set(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.set_write_policy(
+        agent_id=args.agent_id,
+        scope=args.scope,
+        action=args.action,
+        decision=args.decision,
+        reason=args.reason,
+        metadata=json.loads(args.metadata_json),
+        actor=args.actor,
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
+def cmd_write_policy_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_write_policies(
+            agent_id=args.agent_id,
+            scope=args.scope,
+            action=args.action,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_review_list(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -677,6 +709,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sensitivity", default="internal", choices=["public", "internal", "personal", "secret"])
     p.add_argument("--approve", action="store_true", help="Auto-approve safe trusted-source notes")
     p.set_defaults(func=cmd_remember)
+
+    p = sub.add_parser("write-policy", help="Configure agent write authority")
+    add_common_db(p)
+    policy_sub = p.add_subparsers(dest="write_policy_command", required=True)
+
+    wp = policy_sub.add_parser("set", help="Set an allow/deny write policy")
+    wp.add_argument("--agent-id", default="*", help="Agent id or * wildcard")
+    wp.add_argument("--scope", default="*", choices=["*", "personal", "professional", "project", "agent", "session"])
+    wp.add_argument("--action", default="*", help="Action name or * wildcard")
+    wp.add_argument("--decision", default="allow", choices=["allow", "deny"])
+    wp.add_argument("--reason", default="")
+    wp.add_argument("--metadata-json", default="{}")
+    wp.add_argument("--actor", default="user")
+    wp.set_defaults(func=cmd_write_policy_set)
+
+    wp = policy_sub.add_parser("list", help="List configured write policies")
+    wp.add_argument("--agent-id")
+    wp.add_argument("--scope", choices=["*", "personal", "professional", "project", "agent", "session"])
+    wp.add_argument("--action")
+    wp.add_argument("--limit", type=int, default=100)
+    wp.set_defaults(func=cmd_write_policy_list)
 
     p = sub.add_parser("review", help="Review candidate memories")
     add_common_db(p)

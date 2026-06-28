@@ -45,6 +45,8 @@ Included now:
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Scope access enforcement for runtime memory retrieval.
+- Agent write-policy enforcement for record, auto-approve, review, lifecycle,
+  outcome, conflict, and supersession paths.
 - Conflict and supersession records for truth maintenance.
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
@@ -194,6 +196,25 @@ agent-memory export-profile --db .memory/demo.db --scope professional
 agent-memory import-profile --db .memory/restored.db exported-profile.json
 ```
 
+Configure agent write authority:
+
+```bash
+agent-memory write-policy --db .memory/demo.db set \
+  --agent-id writer \
+  --scope professional \
+  --action auto_approve \
+  --decision deny \
+  --reason "writer proposes memory; reviewer approves"
+
+agent-memory write-policy --db .memory/demo.db list --agent-id writer
+```
+
+When `auto_approve` is denied, raw events are still stored but durable active
+memory stays as a review candidate. Destructive or lifecycle actions such as
+`approve`, `correct`, `delete`, `distrust`, `expire`, `conflict`, and
+`supersede` are blocked with an audited `write_denied` event when policy denies
+them.
+
 Export a readable vault:
 
 ```bash
@@ -340,6 +361,13 @@ agent-memory after-saved-turn \
   --keeper-mode queued \
   --user-text "Plan the next SEO loop" \
   --assistant-text "Use the prior successful refresh pattern."
+
+agent-memory write-policy set \
+  --agent-id writer \
+  --scope professional \
+  --action auto_approve \
+  --decision deny \
+  --reason "production writers propose memory for review"
 
 agent-memory worker --db .memory/demo.db --once --limit 10
 

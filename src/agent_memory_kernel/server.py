@@ -61,6 +61,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)
+    if path == "/write-policy/set":
+        return store.set_write_policy(**payload)
+    if path == "/write-policy/list":
+        return {
+            "policies": store.list_write_policies(
+                agent_id=payload.get("agent_id"),
+                scope=payload.get("scope"),
+                action=payload.get("action"),
+                limit=int(payload.get("limit", 100) or 100),
+            )
+        }
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}
