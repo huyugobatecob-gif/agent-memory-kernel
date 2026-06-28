@@ -38,6 +38,17 @@ The adapter should not:
 
 See `hermes_provider.py` for the minimal provider shape.
 
+Hermes can pass a configured extractor into the provider:
+
+```python
+from agent_memory_kernel.extractors import OpenAIExtractor
+
+provider = HermesMemoryProvider(
+    ".memory/hermes-memory.db",
+    extractor=OpenAIExtractor(client=openai_client, model="gpt-4.1-mini"),
+)
+```
+
 Recommended planning call:
 
 ```python

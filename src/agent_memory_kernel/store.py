@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .extractors.base import Extractor
 from .extractors.rules import RuleBasedExtractor
 from .policy import admission_policy, normalize_confidence, normalize_scope, resolve_scope_access
 
@@ -181,8 +182,9 @@ class MemoryStore:
     review or explicit trusted auto-approval.
     """
 
-    def __init__(self, db_path: str | Path):
+    def __init__(self, db_path: str | Path, *, extractor: Extractor | None = None):
         self.db_path = Path(db_path).expanduser()
+        self.extractor = extractor or RuleBasedExtractor()
         if self.db_path.parent:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.db_path))
@@ -413,9 +415,8 @@ class MemoryStore:
         )
         self._audit("record", "event", event_id, actor=actor, details={"scope": scope})
 
-        extractor = RuleBasedExtractor()
         candidates: list[dict[str, Any]] = []
-        for extracted in extractor.extract(text, scope=scope):
+        for extracted in self.extractor.extract(text, scope=scope):
             policy = admission_policy(
                 extracted.text,
                 source_type=source_type,

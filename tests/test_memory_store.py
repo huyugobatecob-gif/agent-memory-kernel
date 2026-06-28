@@ -5,8 +5,26 @@ import unittest
 from pathlib import Path
 
 from agent_memory_kernel import MemoryStore
+from agent_memory_kernel.extractors.base import ExtractedMemory
 from agent_memory_kernel.server import handle_api_request
 from agent_memory_kernel.slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
+
+
+class StaticExtractor:
+    def __init__(self) -> None:
+        self.inputs: list[tuple[str, str]] = []
+
+    def extract(self, text: str, *, scope: str = "professional") -> list[ExtractedMemory]:
+        self.inputs.append((text, scope))
+        return [
+            ExtractedMemory(
+                text="Decision: injected extractor memory controls Keeper output.",
+                kind="decision",
+                scope=scope,
+                confidence="high",
+                nodes=[{"type": "project", "label": "inject-site"}],
+            )
+        ]
 
 
 class MemoryStoreTests(unittest.TestCase):
@@ -32,6 +50,28 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(results[0]["scope"], "professional")
             self.assertIn("provenance", store.context_pack("provenance"))
 
+            store.close()
+
+    def test_memory_store_uses_injected_extractor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            extractor = StaticExtractor()
+            store = MemoryStore(Path(tmp) / "memory.db", extractor=extractor)
+            store.init_db()
+
+            result = store.remember(
+                "Raw text that the static extractor will replace.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            self.assertEqual(extractor.inputs[0][1], "professional")
+            self.assertEqual(result["candidates"][0]["status"], "approved")
+            self.assertEqual(
+                store.search("injected extractor", scope="professional")[0]["kind"],
+                "decision",
+            )
+            labels = [node["label"] for node in store.list_graph_nodes(scope="professional")]
+            self.assertIn("inject-site", labels)
             store.close()
 
     def test_auto_approve_trusted_manual_note(self) -> None:

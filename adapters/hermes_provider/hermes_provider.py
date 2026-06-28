@@ -15,8 +15,8 @@ from agent_memory_kernel import MemoryStore
 class HermesMemoryProvider:
     """Thin provider wrapper around MemoryStore."""
 
-    def __init__(self, db_path: str | Path = ".memory/hermes-memory.db"):
-        self.store = MemoryStore(db_path)
+    def __init__(self, db_path: str | Path = ".memory/hermes-memory.db", *, extractor: Any = None):
+        self.store = MemoryStore(db_path, extractor=extractor)
         self.store.init_db()
 
     def context_pack(self, query: str, scope: str | None = None, limit: int = 8) -> str:

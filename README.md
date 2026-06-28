@@ -217,6 +217,18 @@ memory stays as a review candidate. Destructive or lifecycle actions such as
 `supersede` are blocked with an audited `write_denied` event when policy denies
 them.
 
+Use a model-backed extractor from an application:
+
+```python
+from agent_memory_kernel import MemoryStore
+from agent_memory_kernel.extractors import OpenAIExtractor
+
+store = MemoryStore(
+    ".memory/demo.db",
+    extractor=OpenAIExtractor(client=openai_client, model="gpt-4.1-mini"),
+)
+```
+
 Export a readable vault:
 
 ```bash
