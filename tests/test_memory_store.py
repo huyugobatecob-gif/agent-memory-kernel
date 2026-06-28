@@ -295,8 +295,11 @@ class MemoryStoreTests(unittest.TestCase):
             export_control = store.export_control_report(
                 actor="blocked-export",
                 scope="professional",
+                redaction_profile="safe",
             )
             self.assertEqual(export_control["version"], "export-control-v0.1")
+            self.assertEqual(export_control["redaction"]["profile"], "safe")
+            self.assertFalse(export_control["redaction"]["content_included"])
             self.assertFalse(export_control["allowed"])
             self.assertEqual(export_control["denied_scopes"], ["professional"])
             self.assertEqual(export_control["recommended_action"], "request_consent_or_reduce_scope")
@@ -388,12 +391,28 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue((export_dir / "personal.md").exists())
             self.assertIn("local-first", (export_dir / "professional.md").read_text())
 
+            safe_profile = store.export_profile(scope="professional", redaction_profile="safe")
+            self.assertEqual(
+                safe_profile["export_metadata"]["redaction"]["profile"],
+                "safe",
+            )
+            self.assertGreater(safe_profile["export_metadata"]["redaction"]["redaction_count"], 0)
+            self.assertNotIn("local-first", str(safe_profile))
+            self.assertIn("[redacted:safe:blob]", str(safe_profile))
+
+            redacted_dir = Path(tmp) / "vault-redacted"
+            store.export_markdown(redacted_dir, redaction_profile="safe")
+            redacted_markdown = (redacted_dir / "professional.md").read_text()
+            self.assertIn("[redacted:safe:text]", redacted_markdown)
+            self.assertNotIn("local-first", redacted_markdown)
+
             store.delete_memory(memory_id, reason="test cleanup")
             self.assertEqual(store.search("SQLite"), [])
             self.assertEqual(store.list_memory_items(), [])
             self.assertEqual(store.list_graph_nodes(scope="professional"), [])
             self.assertEqual(store.list_graph_edges(scope="professional"), [])
             profile = store.export_profile(scope="professional")
+            self.assertEqual(profile["export_metadata"]["redaction"]["profile"], "full")
             self.assertEqual(profile["memory_tree"]["nodes"], [])
             self.assertEqual(profile["memory_tree"]["edges"], [])
             self.assertEqual(profile["memory_tree"]["node_evidence"], [])

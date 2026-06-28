@@ -758,16 +758,28 @@ class HermesMemoryProvider:
         scope: str | None = None,
         project: str = "",
         actor: str = "hermes",
+        redaction_profile: str = "full",
     ) -> dict[str, Any]:
-        return self.store.export_profile(scope=scope, project=project, actor=actor)
+        return self.store.export_profile(
+            scope=scope,
+            project=project,
+            actor=actor,
+            redaction_profile=redaction_profile,
+        )
 
     def export_control_report(
         self,
         actor: str = "hermes",
         scope: str | None = None,
         project: str = "",
+        redaction_profile: str = "full",
     ) -> dict[str, Any]:
-        return self.store.export_control_report(actor=actor, scope=scope, project=project)
+        return self.store.export_control_report(
+            actor=actor,
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+        )
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         return self.store.import_profile(payload)

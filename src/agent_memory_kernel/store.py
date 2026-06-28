@@ -99,7 +99,52 @@ MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
+EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 SCHEMA_VERSION = 1
+EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
+EXPORT_SAFE_REDACT_KEYS = {
+    "blob",
+    "aliases_json",
+    "canonical_key",
+    "content",
+    "chronology_json",
+    "edge_evidence",
+    "events_json",
+    "extracted_json",
+    "facts_json",
+    "key_topics_json",
+    "label",
+    "memory_text",
+    "new_text",
+    "notes_json",
+    "other_memory_text",
+    "people_json",
+    "previous_text",
+    "proposed_text",
+    "quote",
+    "source_ref",
+    "source_label",
+    "summary",
+    "target_label",
+    "text",
+    "topics_json",
+    "turns",
+    "verified_entities_json",
+    "winner_memory_text",
+}
+EXPORT_METADATA_REDACT_KEYS = EXPORT_SAFE_REDACT_KEYS | {
+    "aliases_json",
+    "canonical_key",
+    "group_label",
+    "label",
+    "metadata_json",
+    "project",
+    "source_label",
+    "source_ref",
+    "target_label",
+    "title",
+    "topics_json",
+}
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
     "record",
@@ -2956,8 +3001,10 @@ class MemoryStore:
         scope: str | None = None,
         project: str = "",
         actor: str = "user",
+        redaction_profile: str = "full",
     ) -> dict[str, Any]:
         scope = normalize_scope(scope) if scope else None
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
         self._enforce_export_policy(actor, scope)
         project = (project or "").strip()
         profiles = self.conn.execute(
@@ -2970,7 +3017,7 @@ class MemoryStore:
             """,
             (scope, scope, project, project),
         ).fetchall()
-        return {
+        payload = {
             "profile_notes": self.list_profile_notes(scope=scope),
             "project_profiles": [dict(row) for row in profiles],
             "memory_tree": {
@@ -2987,6 +3034,13 @@ class MemoryStore:
             "optimization_runs": self.list_graph_optimization_runs(scope=scope, limit=500),
             "digital_brain": self.digital_brain_state(scope=scope),
         }
+        return self._apply_export_redaction_profile(
+            payload,
+            redaction_profile=redaction_profile,
+            actor=actor,
+            scope=scope,
+            project=project,
+        )
 
     def export_control_report(
         self,
@@ -2994,10 +3048,12 @@ class MemoryStore:
         actor: str = "user",
         scope: str | None = None,
         project: str = "",
+        redaction_profile: str = "full",
     ) -> dict[str, Any]:
         """Preview export scope, policy, and aggregate risk without exporting content."""
         scope = normalize_scope(scope) if scope else None
         project = (project or "").strip()
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
         scopes = [scope] if scope else ["personal", "professional", "project", "agent", "session"]
         scope_reports = []
         denied_scopes: list[str] = []
@@ -3050,6 +3106,8 @@ class MemoryStore:
             "actor": actor,
             "scope": scope or "all",
             "project": project,
+            "redaction_profile": redaction_profile,
+            "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
             "allowed": allowed,
             "denied_scopes": denied_scopes,
             "recommended_action": "export_allowed" if allowed else "request_consent_or_reduce_scope",
@@ -5419,7 +5477,14 @@ class MemoryStore:
         self._audit(action, "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
-    def export_markdown(self, out_dir: str | Path, *, actor: str = "user") -> None:
+    def export_markdown(
+        self,
+        out_dir: str | Path,
+        *,
+        actor: str = "user",
+        redaction_profile: str = "full",
+    ) -> None:
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
         out_path = Path(out_dir)
         out_path.mkdir(parents=True, exist_ok=True)
         rows = self.conn.execute(
@@ -5446,9 +5511,14 @@ class MemoryStore:
                 "",
             ]
             for item in items:
+                text = (
+                    item["text"]
+                    if redaction_profile == "full"
+                    else self._redaction_marker(redaction_profile, "text")
+                )
                 lines.append(
                     f"- `{item['kind']}` `{item['confidence']}` `{item['source_trust']}` "
-                    f"{item['text']} <!-- {item['memory_id']} -->"
+                    f"{text} <!-- {item['memory_id']} -->"
                 )
             (out_path / f"{scope}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -5459,10 +5529,30 @@ class MemoryStore:
         ]
         pending_lines = ["# Pending Memory Review", ""]
         for item in review_items:
+            proposed_text = (
+                item["proposed_text"]
+                if redaction_profile == "full"
+                else self._redaction_marker(redaction_profile, "proposed_text")
+            )
             pending_lines.append(
                 f"- `{item['candidate_id']}` `{item['status']}` `{item['scope']}` `{item['kind']}` "
-                f"{item['proposed_text']}"
+                f"{proposed_text}"
             )
+        pending_lines.extend(
+            [
+                "",
+                "<!-- export-redaction "
+                + json.dumps(
+                    self._export_redaction_metadata(
+                        redaction_profile,
+                        0 if redaction_profile == "full" else len(review_items),
+                        ["proposed_text"] if redaction_profile != "full" and review_items else [],
+                    ),
+                    sort_keys=True,
+                )
+                + " -->",
+            ]
+        )
         (out_path / "pending-review.md").write_text(
             "\n".join(pending_lines) + "\n", encoding="utf-8"
         )
@@ -6923,6 +7013,97 @@ class MemoryStore:
                 "SELECT COUNT(*) FROM llm_usage_stats WHERE scope = ?",
                 (scope,),
             ),
+        }
+
+    @staticmethod
+    def _normalize_export_redaction_profile(profile: str) -> str:
+        profile = (profile or "full").strip().lower()
+        if profile not in EXPORT_REDACTION_PROFILES:
+            raise ValueError(
+                "redaction_profile must be one of: "
+                + ", ".join(sorted(EXPORT_REDACTION_PROFILES))
+            )
+        return profile
+
+    def _apply_export_redaction_profile(
+        self,
+        payload: dict[str, Any],
+        *,
+        redaction_profile: str,
+        actor: str,
+        scope: str | None,
+        project: str,
+    ) -> dict[str, Any]:
+        if redaction_profile == "full":
+            return {
+                **payload,
+                "export_metadata": {
+                    "actor": actor,
+                    "scope": scope or "all",
+                    "project": project,
+                    "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
+                },
+            }
+        redacted_keys: set[str] = set()
+
+        def redact(value: Any, key: str = "") -> Any:
+            normalized_key = key.lower()
+            keys = (
+                EXPORT_METADATA_REDACT_KEYS
+                if redaction_profile == "metadata"
+                else EXPORT_SAFE_REDACT_KEYS
+            )
+            if normalized_key in keys:
+                redacted_keys.add(normalized_key)
+                return self._redaction_marker(redaction_profile, normalized_key)
+            if isinstance(value, dict):
+                return {item_key: redact(item_value, str(item_key)) for item_key, item_value in value.items()}
+            if isinstance(value, list):
+                return [redact(item, key) for item in value]
+            return value
+
+        redacted = redact(payload)
+        redaction_count = self._count_redaction_markers(redacted)
+        return {
+            **redacted,
+            "export_metadata": {
+                "actor": actor,
+                "scope": scope or "all",
+                "project": project,
+                "redaction": self._export_redaction_metadata(
+                    redaction_profile,
+                    redaction_count,
+                    sorted(redacted_keys),
+                ),
+            },
+        }
+
+    @staticmethod
+    def _redaction_marker(profile: str, key: str) -> str:
+        return f"[redacted:{profile}:{key}]"
+
+    @staticmethod
+    def _count_redaction_markers(value: Any) -> int:
+        if isinstance(value, str):
+            return 1 if value.startswith("[redacted:") else 0
+        if isinstance(value, dict):
+            return sum(MemoryStore._count_redaction_markers(item) for item in value.values())
+        if isinstance(value, list):
+            return sum(MemoryStore._count_redaction_markers(item) for item in value)
+        return 0
+
+    @staticmethod
+    def _export_redaction_metadata(
+        profile: str,
+        redaction_count: int,
+        redacted_keys: list[str],
+    ) -> dict[str, Any]:
+        return {
+            "version": EXPORT_REDACTION_VERSION,
+            "profile": profile,
+            "redaction_count": redaction_count,
+            "redacted_keys": redacted_keys,
+            "content_included": profile == "full",
         }
 
     def _export_chat_history(self, *, scope: str | None) -> dict[str, list[dict[str, Any]]]:

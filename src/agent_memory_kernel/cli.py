@@ -813,7 +813,14 @@ def cmd_usage_list(args: argparse.Namespace) -> int:
 def cmd_export_profile(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    print_json(store.export_profile(scope=args.scope, project=args.project, actor=args.actor))
+    print_json(
+        store.export_profile(
+            scope=args.scope,
+            project=args.project,
+            actor=args.actor,
+            redaction_profile=args.redaction_profile,
+        )
+    )
     store.close()
     return 0
 
@@ -821,7 +828,14 @@ def cmd_export_profile(args: argparse.Namespace) -> int:
 def cmd_export_control(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    print_json(store.export_control_report(actor=args.actor, scope=args.scope, project=args.project))
+    print_json(
+        store.export_control_report(
+            actor=args.actor,
+            scope=args.scope,
+            project=args.project,
+            redaction_profile=args.redaction_profile,
+        )
+    )
     store.close()
     return 0
 
@@ -1075,7 +1089,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    store.export_markdown(args.out, actor=args.actor)
+    store.export_markdown(args.out, actor=args.actor, redaction_profile=args.redaction_profile)
     store.close()
     print(f"exported markdown vault to {args.out}")
     return 0
@@ -1586,6 +1600,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--project", default="")
     p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.set_defaults(func=cmd_export_profile)
 
     p = sub.add_parser("export-control", help="Preview export policy and aggregate memory counts")
@@ -1593,6 +1608,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--project", default="")
     p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.set_defaults(func=cmd_export_control)
 
     p = sub.add_parser("import-profile", help="Import project profile JSON")
@@ -1759,6 +1775,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("--out", default="memory-vault")
     p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.set_defaults(func=cmd_export)
 
     return parser

@@ -158,7 +158,7 @@ For graph maintenance and profile export:
 ```bash
 agent-memory graph groups --scope professional
 agent-memory graph optimize --mode record_linkage --scope professional
-agent-memory export-profile --scope professional
+agent-memory export-profile --scope professional --redaction-profile safe
 ```
 
 The agent receives the returned markdown alongside the task. After the task,

@@ -43,6 +43,8 @@ The adapter should:
   permissions before delegating work to an agent;
 - expose `export_control_report()` so Hermes can preview export policy,
   aggregate scope counts, and risk flags before memory leaves the store;
+- expose `export_profile(..., redaction_profile="safe")` when Hermes needs to
+  share memory structure without exporting content-bearing fields;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
@@ -164,8 +166,21 @@ Check the effective capability matrix before starting an agent:
 
 ```python
 provider.capability_report(actor="writer", scope="professional")
-provider.export_control_report(actor="writer", scope="professional")
+provider.export_control_report(
+    actor="writer",
+    scope="professional",
+    redaction_profile="safe",
+)
+provider.export_profile(scope="professional", redaction_profile="safe")
 ```
+
+Export redaction profiles are explicit:
+
+- `full`: includes exportable memory content after policy checks.
+- `safe`: redacts content-bearing fields while preserving IDs, counts, scopes,
+  and graph shape.
+- `metadata`: redacts content plus additional human-readable metadata labels for
+  safer sharing of structure.
 
 After review, preserve the expected behavior:
 

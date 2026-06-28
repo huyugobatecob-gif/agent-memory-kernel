@@ -241,6 +241,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "user")),
             scope=payload.get("scope"),
             project=str(payload.get("project", "")),
+            redaction_profile=str(payload.get("redaction_profile", "full")),
         )
     if path == "/search":
         query = str(payload.pop("query"))
@@ -253,6 +254,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return {"tree": store.memory_tree_pack(query, **payload)}
     if path == "/brain/style":
         return store.brain_style_append(scope=str(payload.get("scope", "professional")))
+    if path == "/export/profile":
+        return store.export_profile(
+            scope=payload.get("scope"),
+            project=str(payload.get("project", "")),
+            actor=str(payload.get("actor", "user")),
+            redaction_profile=str(payload.get("redaction_profile", "full")),
+        )
     if path == "/review/inbox":
         return store.review_inbox(
             status=str(payload.get("status", "open")),

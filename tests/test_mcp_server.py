@@ -46,6 +46,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)
             self.assertIn("memory_export_control", names)
+            self.assertIn("memory_export_profile", names)
             self.assertIn("memory_derived_invalidations", names)
             self.assertIn("memory_observability", names)
             self.assertIn("memory_migration_status", names)
@@ -109,10 +110,32 @@ class MCPServerTests(unittest.TestCase):
                 "export-control-v0.1",
             )
 
-            saved_turn = server.handle_message(
+            export_profile = server.handle_message(
                 {
                     "jsonrpc": "2.0",
                     "id": 6,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_export_profile",
+                        "arguments": {
+                            "actor": "designer",
+                            "scope": "professional",
+                            "redaction_profile": "safe",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(export_profile["result"]["isError"])
+            self.assertEqual(
+                export_profile["result"]["structuredContent"]["export_metadata"]["redaction"]["profile"],
+                "safe",
+            )
+            self.assertNotIn("Hermes SEO agents", json.dumps(export_profile["result"]["structuredContent"]))
+
+            saved_turn = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 7,
                     "method": "tools/call",
                     "params": {
                         "name": "memory_after_saved_turn",

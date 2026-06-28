@@ -84,7 +84,12 @@ Operator and graph tools:
 - `memory_distrust`: keep memory for audit but suppress retrieval.
 - `memory_expire`: expire active memory and suppress retrieval.
 - `memory_export_control`: preview export policy, aggregate scope counts, and
-  risk flags before memory leaves the store.
+  risk flags before memory leaves the store. Accepts `redaction_profile`
+  (`full`, `safe`, or `metadata`) so operators can preview the intended export
+  mode.
+- `memory_export_profile`: export the profile, memory tree, graph, evidence,
+  outcomes, and related metadata. Accepts `redaction_profile` (`full`, `safe`,
+  or `metadata`) to preserve structure while redacting content-bearing fields.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
 

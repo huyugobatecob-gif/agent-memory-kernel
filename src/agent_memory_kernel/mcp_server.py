@@ -459,6 +459,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "actor": _string("Exporting actor.", "mcp"),
                 "scope": _string("Optional memory scope/lane.", ""),
                 "project": _string("Optional project filter.", ""),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+            }
+        ),
+    },
+    "memory_export_profile": {
+        "endpoint": "/export/profile",
+        "description": "Export project profile and memory tree, optionally applying a redaction profile.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Exporting actor.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "project": _string("Optional project filter.", ""),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
             }
         ),
     },

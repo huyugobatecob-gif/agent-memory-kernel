@@ -18,6 +18,7 @@ Status: implemented in this template.
 - Light Model semantic analyses.
 - Profile notes, project profile metadata, and profile export.
 - LLM usage stats.
+- Export control previews and export redaction profiles.
 - Graph groups, optimization runs, and Digital Brain calibration.
 - Guarded Digital Brain style append in prompt envelopes.
 - Context packs.
@@ -174,6 +175,11 @@ Baseline export governance is implemented through `agent-memory export-control`,
 `memory_export_control`. Export previews return matched policy, aggregate
 scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
 without returning memory content.
+Baseline export redaction profiles are implemented through
+`agent-memory export-profile`, `agent-memory export`, `/export/profile`, Hermes
+`export_profile()`, and MCP `memory_export_profile`. The supported profiles are
+`full`, `safe`, and `metadata`; safe modes preserve graph/export structure while
+replacing content-bearing fields with explicit redaction markers.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker

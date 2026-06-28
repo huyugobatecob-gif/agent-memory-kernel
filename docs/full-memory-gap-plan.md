@@ -224,6 +224,10 @@ Already present:
   `memory_export_control`; export previews show policy decisions, aggregate
   scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
   without returning memory content.
+- Baseline export redaction profiles through `agent-memory export-profile`,
+  `agent-memory export`, `/export/profile`, Hermes `export_profile()`, and MCP
+  `memory_export_profile`; `full`, `safe`, and `metadata` profiles preserve
+  export shape while making content inclusion explicit.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -595,8 +599,8 @@ PYTHONPATH=src python3 -m agent_memory_kernel.server --db /tmp/amk-full-memory.d
 
 **Verification:** `/before-model-call`, `/after-saved-turn`, `/review/list`,
 `/review/inbox`, `/memory/correct`, `/memory/delete`, `/memory/distrust`,
-`/memory/expire`, `/graph/nodes`, `/graph/edges`, and MCP equivalents return
-stable JSON.
+`/memory/expire`, `/export/control`, `/export/profile`, `/graph/nodes`,
+`/graph/edges`, and MCP equivalents return stable JSON.
 
 **Result:** Baseline implemented. The repository now has `agent-memory serve`,
 `agent-memory mcp`, `agent-memory-mcp`, `src/agent_memory_kernel/mcp_server.py`,
@@ -684,8 +688,8 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. Remaining work is a
 browser review UI, graph browser, batch correction, export controls, and reviewer
 notifications.
-Export-control baseline is implemented, but retention policy, redaction
-profiles, encrypted export, and approval workflow for sensitive exports remain
+Export-control and redaction-profile baselines are implemented, but retention
+policy, encrypted export, and approval workflow for sensitive exports remain
 production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust

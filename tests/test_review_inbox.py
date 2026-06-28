@@ -297,6 +297,13 @@ class ReviewInboxTests(unittest.TestCase):
             export_control = provider.export_control_report(actor="reviewer", scope="professional")
             self.assertEqual(export_control["version"], "export-control-v0.1")
             self.assertTrue(export_control["allowed"])
+            safe_export = provider.export_profile(
+                actor="reviewer",
+                scope="professional",
+                redaction_profile="safe",
+            )
+            self.assertEqual(safe_export["export_metadata"]["redaction"]["profile"], "safe")
+            self.assertNotIn("provider wrapper is corrected", str(safe_export))
             deleted = provider.delete_memory(approved["memory_id"], actor="reviewer")
             self.assertEqual(deleted["status"], "deleted")
             provider.close()

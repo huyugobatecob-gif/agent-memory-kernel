@@ -127,10 +127,21 @@ class HermesMemoryProvider:
     def graph_nodes(self, scope: str | None = None, node_type: str | None = None) -> list[dict]:
         ...
 
-    def export_profile(self, scope: str | None = None, project: str = "") -> dict:
+    def export_profile(
+        self,
+        scope: str | None = None,
+        project: str = "",
+        redaction_profile: str = "full",
+    ) -> dict:
         ...
 
-    def export_control_report(self, actor: str = "hermes", scope: str | None = None, project: str = "") -> dict:
+    def export_control_report(
+        self,
+        actor: str = "hermes",
+        scope: str | None = None,
+        project: str = "",
+        redaction_profile: str = "full",
+    ) -> dict:
         ...
 
     def remember(self, text: str, scope: str = "professional", source_ref: str = "") -> dict:
@@ -201,7 +212,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_derived_invalidations`, `memory_operational_status`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, and `memory_worker_run`.
+`memory_graph_edges`, `memory_export_control`, `memory_export_profile`, and
+`memory_worker_run`.
 
 Useful endpoints:
 
@@ -247,6 +259,7 @@ Useful endpoints:
 - `POST /read-policy/list`
 - `POST /capability/check`
 - `POST /export/control`
+- `POST /export/profile`
 - `POST /search`
 - `POST /review/inbox`
 - `POST /review/batch`
@@ -626,14 +639,16 @@ agent-memory backup --db .memory/hermes-memory.db --out .memory/backups/hermes-m
 Workspace profile export:
 
 ```bash
-agent-memory export-control --scope professional --project demo-site --actor writer
-agent-memory export-profile --scope professional --project demo-site
+agent-memory export-control --scope professional --project demo-site --actor writer --redaction-profile safe
+agent-memory export-profile --scope professional --project demo-site --redaction-profile safe
 agent-memory import-profile exported-profile.json --db .memory/restored.db
 ```
 
 Run export control before export. It returns matched export policy, aggregate
 counts by scope, sensitivity/trust breakdowns, denied scopes, and risk flags
 without returning memory content.
+Use `--redaction-profile safe` or `--redaction-profile metadata` when Hermes
+should share memory structure without sharing content-bearing fields.
 
 ## Loop Memory Extension
 
