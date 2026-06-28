@@ -231,41 +231,20 @@ class MemoryOrchestrator:
     ) -> dict[str, Any]:
         """Apply controlled graph updates through normal memory ingest.
 
-        This baseline accepts Keeper-style update objects and turns each into a
-        reviewable memory candidate. Approval then updates graph nodes, edges,
-        summaries, and evidence through the same audited store path as any
-        other memory.
+        Keeper-style command objects become a reviewable memory candidate.
+        Approval applies the normalized graph commands with evidence.
         """
-        if not isinstance(updates, list):
-            raise TypeError("updates must be a list of graph update objects")
-        results = []
-        for index, update in enumerate(updates):
-            if not isinstance(update, dict):
-                raise TypeError("each graph update must be an object")
-            text = self._graph_update_text(update)
-            result = self.store.remember(
-                text,
-                scope=scope,
-                actor=actor,
-                source_type="system",
-                source_ref=source_ref,
-                auto_approve=auto_approve,
-                metadata={
-                    **(metadata or {}),
-                    "orchestrator_phase": "ingest_graph",
-                    "graph_update_index": index,
-                    "graph_update": update,
-                },
-            )
-            results.append(result)
-        candidate_ids = [
-            candidate["candidate_id"]
-            for result in results
-            for candidate in result.get("candidates", [])
-        ]
+        result = self.store.apply_graph_commands(
+            updates,
+            scope=scope,
+            actor=actor,
+            source_ref=source_ref,
+            auto_approve=auto_approve,
+            metadata={**(metadata or {}), "orchestrator_phase": "ingest_graph"},
+        )
+        candidate_ids = [candidate["candidate_id"] for candidate in result.get("candidates", [])]
         memory_ids = [
             candidate.get("memory_id")
-            for result in results
             for candidate in result.get("candidates", [])
             if candidate.get("memory_id")
         ]
@@ -275,7 +254,8 @@ class MemoryOrchestrator:
             "update_count": len(updates),
             "candidate_ids": candidate_ids,
             "memory_ids": memory_ids,
-            "results": results,
+            "commands": result.get("commands", []),
+            "result": result,
         }
 
     def after_turn(
@@ -314,30 +294,3 @@ class MemoryOrchestrator:
 
     def close(self) -> None:
         self.store.close()
-
-    @staticmethod
-    def _graph_update_text(update: dict[str, Any]) -> str:
-        text = str(update.get("text", "") or update.get("memory", "")).strip()
-        if text:
-            return text
-
-        kind = str(update.get("kind", "") or update.get("type", "fact")).strip() or "fact"
-        label = str(update.get("label", "") or update.get("node", "")).strip()
-        summary = str(update.get("summary", "") or update.get("description", "")).strip()
-        relation = str(update.get("relation", "") or update.get("edge", "")).strip()
-        target = str(update.get("target", "") or update.get("to", "")).strip()
-        evidence = str(update.get("evidence", "") or update.get("source_quote", "")).strip()
-
-        parts = [f"{kind.title()}:"]
-        if label:
-            parts.append(label)
-        if relation and target:
-            parts.append(f"{relation} {target}")
-        if summary:
-            parts.append(summary)
-        if evidence:
-            parts.append(f"Evidence: {evidence}")
-        rendered = " ".join(parts).strip()
-        if rendered == f"{kind.title()}:":
-            raise ValueError("graph update must include text, label, summary, relation, or evidence")
-        return rendered

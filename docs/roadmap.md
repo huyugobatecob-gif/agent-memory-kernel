@@ -14,7 +14,7 @@ Status: implemented in this template.
 - Quarantine for secret-like text.
 - Persistent graph nodes and edges.
 - Node and edge evidence.
-- Keeper runs and graph commands audit.
+- Keeper runs, graph command normalization, and graph command audit.
 - Light Model semantic analyses.
 - Profile notes, project profile metadata, and profile export.
 - LLM usage stats.
@@ -119,6 +119,11 @@ Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
 `keeper-extraction-v0.1`, local schema validation, deterministic fallback, and
 candidate extraction metadata. Production Keeper prompt tuning, live provider
 configuration, and trace-based quality evals are still backlog.
+Baseline graph command normalization is implemented through
+`graph-command-v0.1`, `apply_graph_commands`, orchestrator `ingest_graph`,
+reviewable proposed commands, approval-time graph mutation, node/edge evidence,
+and idempotent graph upserts. Advanced merge/split/consistency heuristics are
+still backlog.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.

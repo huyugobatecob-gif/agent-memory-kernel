@@ -14,6 +14,12 @@ from typing import Any
 
 from .extractors.base import Extractor
 from .extractors.rules import RuleBasedExtractor
+from .graph_commands import (
+    GRAPH_COMMAND_VERSION,
+    graph_commands_to_extraction,
+    graph_commands_to_text,
+    normalize_graph_commands,
+)
 from .policy import admission_policy, normalize_confidence, normalize_scope, resolve_scope_access
 
 
@@ -939,6 +945,153 @@ class MemoryStore:
 
         self.conn.commit()
         return {"event_id": event_id, "candidates": candidates, "warnings": warnings}
+
+    def apply_graph_commands(
+        self,
+        updates: list[dict[str, Any]],
+        *,
+        scope: str = "professional",
+        actor: str = "keeper",
+        source_type: str = "system",
+        source_ref: str = "",
+        sensitivity: str = "internal",
+        auto_approve: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record normalized Keeper graph commands as reviewable memory.
+
+        Pending commands are auditable but do not mutate the graph. Approved
+        commands are applied during normal candidate activation, so graph writes
+        inherit the memory lifecycle, evidence, and policy gates.
+        """
+        scope = normalize_scope(scope)
+        self._enforce_write_policy(actor, scope, "record")
+        commands = normalize_graph_commands(updates, default_scope=scope)
+        text = graph_commands_to_text(commands)
+        extraction = graph_commands_to_extraction(commands)
+
+        warnings: list[str] = []
+        effective_auto_approve = auto_approve
+        auto_approve_policy = self._resolve_write_policy(actor, scope, "auto_approve")
+        if auto_approve and auto_approve_policy["decision"] == "deny":
+            effective_auto_approve = False
+            warnings.append("auto_approve denied by write policy; graph commands require review")
+            self._audit_write_denied(
+                actor,
+                scope,
+                "auto_approve",
+                auto_approve_policy,
+            )
+
+        policy = admission_policy(
+            text,
+            source_type=source_type,
+            sensitivity=sensitivity,
+            auto_approve=effective_auto_approve,
+        )
+        ts = now_iso()
+        event_id = new_id("evt")
+        candidate_id = new_id("cand")
+        self.conn.execute(
+            """
+            INSERT INTO events
+              (event_id, created_at, actor, scope, source_type, source_ref, content, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                ts,
+                actor,
+                scope,
+                source_type,
+                source_ref,
+                text,
+                json.dumps(
+                    {
+                        **(metadata or {}),
+                        "graph_command_version": GRAPH_COMMAND_VERSION,
+                        "graph_command_count": len(commands),
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        self._audit("record", "event", event_id, actor=actor, details={"scope": scope})
+        self.conn.execute(
+            """
+            INSERT INTO candidate_memories
+              (candidate_id, event_id, created_at, proposed_text, kind, scope,
+               confidence, sensitivity, source_trust, status, reason, extraction_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                candidate_id,
+                event_id,
+                ts,
+                text,
+                self._graph_command_candidate_kind(commands),
+                scope,
+                self._graph_command_confidence(commands),
+                policy.sensitivity,
+                policy.source_trust,
+                policy.status,
+                policy.reason,
+                json.dumps(extraction, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "candidate_created",
+            "candidate",
+            candidate_id,
+            actor=actor,
+            details={
+                "status": policy.status,
+                "reason": policy.reason,
+                "source_trust": policy.source_trust,
+                "graph_command_count": len(commands),
+            },
+        )
+        memory_id = None
+        if policy.status == "approved":
+            memory_id = self._activate_candidate(candidate_id, actor=actor)
+        else:
+            for command in commands:
+                self.conn.execute(
+                    """
+                    INSERT INTO graph_commands
+                      (command_id, run_id, created_at, command_type, payload_json, status)
+                    VALUES (?, NULL, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_id("cmd"),
+                        ts,
+                        command["command_type"],
+                        json.dumps(
+                            {
+                                **command,
+                                "candidate_id": candidate_id,
+                                "event_id": event_id,
+                            },
+                            sort_keys=True,
+                        ),
+                        "proposed" if policy.status == "pending" else policy.status,
+                    ),
+                )
+        self.conn.commit()
+        return {
+            "version": GRAPH_COMMAND_VERSION,
+            "event_id": event_id,
+            "commands": commands,
+            "candidates": [
+                {
+                    "candidate_id": candidate_id,
+                    "status": policy.status,
+                    "reason": policy.reason,
+                    "memory_id": memory_id,
+                }
+            ],
+            "warnings": warnings,
+        }
 
     def record_outcome(
         self,
@@ -4624,6 +4777,16 @@ class MemoryStore:
                 ]
             )
 
+        commands.extend(
+            self._apply_extraction_graph_commands(
+                extraction.get("graph_commands", []),
+                item_id=item_id,
+                memory_id=memory_id,
+                event=event,
+                candidate=candidate,
+            )
+        )
+
         run_id = new_id("run")
         self.conn.execute(
             """
@@ -4679,6 +4842,254 @@ class MemoryStore:
         self._refresh_graph_groups(candidate["scope"])
         self._refresh_digital_brain_state(candidate["scope"])
         return item_id
+
+    def _apply_extraction_graph_commands(
+        self,
+        raw_commands: Any,
+        *,
+        item_id: str,
+        memory_id: str,
+        event: sqlite3.Row,
+        candidate: sqlite3.Row,
+    ) -> list[dict[str, Any]]:
+        if not raw_commands:
+            return []
+        if not isinstance(raw_commands, list):
+            return []
+        commands = normalize_graph_commands(
+            raw_commands,
+            default_scope=str(candidate["scope"]),
+            default_confidence=str(candidate["confidence"]),
+        )
+        applied: list[dict[str, Any]] = []
+        for command in commands:
+            command_type = command["command_type"]
+            if command_type == "upsert_edge":
+                applied.append(
+                    self._apply_graph_edge_command(
+                        command,
+                        item_id=item_id,
+                        memory_id=memory_id,
+                        event=event,
+                        candidate=candidate,
+                    )
+                )
+            elif command_type == "mark_conflict":
+                applied.append(
+                    self._apply_graph_conflict_command(
+                        command,
+                        memory_id=memory_id,
+                        event=event,
+                    )
+                )
+            else:
+                applied.append(
+                    self._apply_graph_node_command(
+                        command,
+                        item_id=item_id,
+                        memory_id=memory_id,
+                        event=event,
+                        candidate=candidate,
+                    )
+                )
+        return applied
+
+    def _apply_graph_node_command(
+        self,
+        command: dict[str, Any],
+        *,
+        item_id: str,
+        memory_id: str,
+        event: sqlite3.Row,
+        candidate: sqlite3.Row,
+    ) -> dict[str, Any]:
+        node = command.get("node", {})
+        quote = command.get("evidence") or command.get("summary") or candidate["proposed_text"]
+        graph_node_id = self._upsert_memory_graph_node(
+            node_type=str(node.get("type", "memory")),
+            label=str(node.get("label", "")),
+            scope=str(command.get("scope") or candidate["scope"]),
+            blob=str(quote or candidate["proposed_text"]),
+            summary=str(command.get("summary") or node.get("summary") or ""),
+            confidence=str(command.get("confidence") or candidate["confidence"]),
+            metadata={
+                "source": "graph_command",
+                "command_type": command["command_type"],
+                "memory_id": memory_id,
+                "item_id": item_id,
+            },
+        )
+        self._add_node_evidence(
+            graph_node_id=graph_node_id,
+            item_id=item_id,
+            memory_id=memory_id,
+            event=event,
+            quote=str(quote or candidate["proposed_text"]),
+            confidence=str(command.get("confidence") or candidate["confidence"]),
+        )
+        return {
+            "type": command["command_type"],
+            "graph_node_id": graph_node_id,
+            "node_type": node.get("type", "memory"),
+            "label": node.get("label", ""),
+            "source": "graph_command",
+        }
+
+    def _apply_graph_edge_command(
+        self,
+        command: dict[str, Any],
+        *,
+        item_id: str,
+        memory_id: str,
+        event: sqlite3.Row,
+        candidate: sqlite3.Row,
+    ) -> dict[str, Any]:
+        quote = command.get("evidence") or command.get("summary") or candidate["proposed_text"]
+        confidence = str(command.get("confidence") or candidate["confidence"])
+        source_node = command["source"]
+        target_node = command["target"]
+        source_node_id = self._upsert_memory_graph_node(
+            node_type=str(source_node.get("type", "memory")),
+            label=str(source_node.get("label", "")),
+            scope=str(command.get("scope") or candidate["scope"]),
+            blob=str(quote or candidate["proposed_text"]),
+            summary=str(source_node.get("summary") or ""),
+            confidence=confidence,
+            metadata={"source": "graph_command", "memory_id": memory_id, "item_id": item_id},
+        )
+        target_node_id = self._upsert_memory_graph_node(
+            node_type=str(target_node.get("type", "memory")),
+            label=str(target_node.get("label", "")),
+            scope=str(command.get("scope") or candidate["scope"]),
+            blob=str(quote or candidate["proposed_text"]),
+            summary=str(target_node.get("summary") or ""),
+            confidence=confidence,
+            metadata={"source": "graph_command", "memory_id": memory_id, "item_id": item_id},
+        )
+        for graph_node_id in (source_node_id, target_node_id):
+            self._add_node_evidence(
+                graph_node_id=graph_node_id,
+                item_id=item_id,
+                memory_id=memory_id,
+                event=event,
+                quote=str(quote or candidate["proposed_text"]),
+                confidence=confidence,
+            )
+        edge_type = str(command.get("edge_type") or "relates_to")
+        edge_id = self._upsert_memory_graph_edge(
+            source_graph_node_id=source_node_id,
+            target_graph_node_id=target_node_id,
+            edge_type=edge_type,
+            label=str(command.get("label") or edge_type.replace("_", " ")),
+            confidence=confidence,
+            source_memory_id=memory_id,
+            source_event_id=event["event_id"],
+            metadata={"source": "graph_command", "item_id": item_id},
+        )
+        self._add_edge_evidence(
+            graph_edge_id=edge_id,
+            item_id=item_id,
+            memory_id=memory_id,
+            event=event,
+            quote=str(quote or candidate["proposed_text"]),
+            confidence=confidence,
+        )
+        return {
+            "type": "upsert_edge",
+            "graph_edge_id": edge_id,
+            "source_graph_node_id": source_node_id,
+            "target_graph_node_id": target_node_id,
+            "edge_type": edge_type,
+            "source": "graph_command",
+        }
+
+    def _apply_graph_conflict_command(
+        self,
+        command: dict[str, Any],
+        *,
+        memory_id: str,
+        event: sqlite3.Row,
+    ) -> dict[str, Any]:
+        current_memory_id = str(command.get("memory_id") or memory_id)
+        other_memory_id = str(command.get("other_memory_id") or "")
+        relation = str(command.get("relation") or "conflicts_with")
+        if not other_memory_id:
+            return {
+                "type": "mark_conflict",
+                "status": "skipped",
+                "reason": "missing other_memory_id",
+                "memory_id": current_memory_id,
+            }
+        existing = self.conn.execute(
+            """
+            SELECT conflict_id
+            FROM memory_conflicts
+            WHERE memory_id = ? AND other_memory_id = ? AND relation = ?
+            LIMIT 1
+            """,
+            (current_memory_id, other_memory_id, relation),
+        ).fetchone()
+        if existing:
+            conflict_id = str(existing["conflict_id"])
+        else:
+            conflict_id = new_id("conflict")
+            ts = now_iso()
+            self.conn.execute(
+                """
+                INSERT INTO memory_conflicts
+                  (conflict_id, created_at, updated_at, scope, memory_id,
+                   other_memory_id, relation, status, reason, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+                """,
+                (
+                    conflict_id,
+                    ts,
+                    ts,
+                    str(command.get("scope") or event["scope"]),
+                    current_memory_id,
+                    other_memory_id,
+                    relation,
+                    str(command.get("reason") or command.get("summary") or ""),
+                    json.dumps(
+                        {
+                            "source": "graph_command",
+                            "event_id": event["event_id"],
+                            "evidence": command.get("evidence", ""),
+                        },
+                        sort_keys=True,
+                    ),
+                ),
+            )
+        return {
+            "type": "mark_conflict",
+            "status": "applied",
+            "conflict_id": conflict_id,
+            "memory_id": current_memory_id,
+            "other_memory_id": other_memory_id,
+            "relation": relation,
+        }
+
+    @staticmethod
+    def _graph_command_candidate_kind(commands: list[dict[str, Any]]) -> str:
+        for command in commands:
+            if command["command_type"] == "upsert_edge":
+                return "fact"
+            if command["command_type"] == "mark_conflict":
+                return "gotcha"
+            node_type = str(command.get("node", {}).get("type", ""))
+            if node_type in {"fact", "preference", "rule", "decision", "attempt", "outcome", "gotcha", "pattern"}:
+                return node_type
+        return "fact"
+
+    @staticmethod
+    def _graph_command_confidence(commands: list[dict[str, Any]]) -> str:
+        order = {"low": 0, "medium": 1, "high": 2, "confirmed": 3}
+        selected = "medium"
+        for command in commands:
+            confidence = normalize_confidence(str(command.get("confidence", "medium")))
+            if order.get(confidence, 1) > order.get(selected, 1):
+                selected = confidence
+        return selected
 
     def _extract_keeper_entities(
         self,

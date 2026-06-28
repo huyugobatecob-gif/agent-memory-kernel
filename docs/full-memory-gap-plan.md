@@ -185,6 +185,10 @@ Already present:
 - Baseline versioned LLM Keeper extraction contract through
   `LLMKeeperExtractor`, `keeper-extraction-v0.1`, local schema validation,
   deterministic fallback, and candidate extraction metadata.
+- Baseline graph command normalization through `graph-command-v0.1`,
+  `apply_graph_commands`, `ingest_graph`, reviewable proposed commands,
+  approval-time graph mutation, node/edge evidence, and idempotent graph
+  upserts.
 - Baseline read-time policy and Router explainability through prompt metadata,
   `router_runs`, `/router-explain`, and `agent-memory router-explain`.
 - Baseline Router usefulness feedback through `router_feedback`,
@@ -240,7 +244,7 @@ Remaining for full memory:
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
-  post-turn Keeper retry guard.
+  post-turn Keeper retry guard and graph command upserts.
 - Production LLM-backed Keeper eval suite, managed model configuration,
   provider-specific adapters, and reviewed extraction prompts for
   natural-language graph updates beyond the baseline schema contract.
@@ -422,7 +426,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 **Verification:** Re-running the same Keeper output does not duplicate nodes or edges. Every node and edge has evidence.
 
-**Result:** The graph tree grows automatically while staying auditable and deduplicated.
+**Result:** Baseline implemented. Keeper-style updates are normalized into
+`graph-command-v0.1` commands. Pending commands are reviewable and do not mutate
+the graph; approved commands apply through the normal memory lifecycle, create
+or update graph nodes and edges, attach evidence, record `graph_commands`, and
+dedupe repeated node/edge writes. Remaining work is richer merge/split
+heuristics, destructive command review UX, and broader graph consistency evals.
 
 ### Step 6: Build The Memory Router
 

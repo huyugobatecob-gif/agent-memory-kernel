@@ -67,7 +67,7 @@ Included now:
 - Compact `memory_items`.
 - Persistent memory graph nodes and edges.
 - Node and edge evidence.
-- Keeper runs and graph commands audit.
+- Keeper runs, graph command normalization, and graph command audit.
 - Graph groups and optimization runs.
 - Light Model semantic analyses: facts, chronology, key topics, people, events,
   verified entities.
@@ -654,6 +654,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-demo.db
 src/agent_memory_kernel/
   cli.py                 CLI commands
   orchestrator.py        high-level memory lifecycle facade
+  graph_commands.py      safe Keeper graph command normalization
   store.py               SQLite-backed memory store
   policy.py              safety and admission policy
   server.py              stdlib HTTP API service
