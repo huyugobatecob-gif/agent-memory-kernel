@@ -124,6 +124,12 @@ Useful endpoints:
 - `POST /shadow-traces`
 - `POST /shadow-eval`
 - `POST /shadow-evals`
+- `POST /read-time-policy`
+- `POST /router-runs`
+- `POST /router-explain`
+- `POST /router-feedback/record`
+- `POST /router-feedback/list`
+- `POST /memory-quality`
 - `POST /remember`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
@@ -201,6 +207,22 @@ To explain a live Router decision:
 agent-memory router-runs --thread-id seo-demo
 agent-memory router-explain router_xxxxxxxxxxxxxxxx
 ```
+
+After the task, Hermes or a reviewer can record whether the selected memory was
+actually useful:
+
+```bash
+agent-memory router-feedback record router_xxxxxxxxxxxxxxxx \
+  --memory-id mem_xxxxxxxxxxxxxxxx \
+  --rating helpful \
+  --reason "the selected branch grounded the SEO loop plan"
+
+agent-memory memory-quality --scope professional
+```
+
+Feedback is a quality signal only. It does not automatically approve, delete, or
+rewrite memory; later Router evals and reviewers can use it to tune ranking and
+find stale or harmful branches.
 
 Lower-level context builder call:
 

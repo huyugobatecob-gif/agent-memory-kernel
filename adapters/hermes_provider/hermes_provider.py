@@ -102,6 +102,52 @@ class HermesMemoryProvider:
     def explain_router_run(self, router_run_id: str) -> dict[str, Any]:
         return self.store.explain_router_run(router_run_id)
 
+    def record_router_feedback(
+        self,
+        router_run_id: str,
+        *,
+        memory_id: str = "",
+        branch_id: str = "",
+        rating: str = "neutral",
+        score: float | None = None,
+        actor: str = "reviewer",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.record_router_feedback(
+            router_run_id,
+            memory_id=memory_id,
+            branch_id=branch_id,
+            rating=rating,
+            score=score,
+            actor=actor,
+            reason=reason,
+            metadata=metadata,
+        )
+
+    def router_feedback(
+        self,
+        *,
+        router_run_id: str | None = None,
+        memory_id: str | None = None,
+        rating: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_router_feedback(
+            router_run_id=router_run_id,
+            memory_id=memory_id,
+            rating=rating,
+            limit=limit,
+        )
+
+    def memory_quality_report(
+        self,
+        *,
+        scope: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        return self.store.memory_quality_report(scope=scope, limit=limit)
+
     def before_model_call(
         self,
         query: str,

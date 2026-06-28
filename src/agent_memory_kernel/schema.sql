@@ -343,6 +343,19 @@ CREATE TABLE IF NOT EXISTS router_runs (
     metadata_json            TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS router_feedback (
+    feedback_id    TEXT PRIMARY KEY,
+    created_at     TEXT NOT NULL,
+    router_run_id  TEXT NOT NULL REFERENCES router_runs(router_run_id),
+    memory_id      TEXT NOT NULL DEFAULT '',
+    branch_id      TEXT NOT NULL DEFAULT '',
+    actor          TEXT NOT NULL DEFAULT 'reviewer',
+    rating         TEXT NOT NULL DEFAULT 'neutral',
+    score          REAL NOT NULL DEFAULT 0,
+    reason         TEXT NOT NULL DEFAULT '',
+    metadata_json  TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS keeper_jobs (
     keeper_job_id      TEXT PRIMARY KEY,
     created_at         TEXT NOT NULL,
@@ -499,6 +512,8 @@ CREATE INDEX IF NOT EXISTS idx_profile_notes_scope_type ON profile_notes(scope, 
 CREATE INDEX IF NOT EXISTS idx_llm_usage_scope_thread ON llm_usage_stats(scope, thread_id);
 CREATE INDEX IF NOT EXISTS idx_graph_optimizations_scope ON graph_optimization_runs(scope);
 CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
+CREATE INDEX IF NOT EXISTS idx_router_feedback_run ON router_feedback(router_run_id);
+CREATE INDEX IF NOT EXISTS idx_router_feedback_memory ON router_feedback(memory_id);
 CREATE INDEX IF NOT EXISTS idx_keeper_jobs_thread ON keeper_jobs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_shadow_traces_thread ON shadow_traces(thread_id);
 CREATE INDEX IF NOT EXISTS idx_shadow_trace_evals_trace ON shadow_trace_evals(shadow_trace_id);

@@ -203,6 +203,40 @@ Required behavior:
 - store pass/fail checks and findings so the trace becomes a repeatable
   regression fixture.
 
+### `record_router_feedback`
+
+Called after an operator, QA process, or supervising agent reviews whether
+selected memory helped the main model.
+
+Input:
+
+```json
+{
+  "router_run_id": "router_...",
+  "memory_id": "mem_...",
+  "branch_id": "gnode_...",
+  "rating": "helpful",
+  "score": 1.0,
+  "actor": "reviewer",
+  "reason": "selected memory grounded the plan"
+}
+```
+
+Ratings:
+
+- `helpful`: selected memory improved the answer or plan.
+- `neutral`: selected memory was acceptable but not decisive.
+- `ignored`: selected memory was present but not used.
+- `missing`: the right memory was absent from the prompt.
+- `harmful`: selected memory caused confusion, stale context, or wrong action.
+
+Required behavior:
+
+- never mutate active memory automatically from feedback alone;
+- link feedback to the Router run and optional memory/branch id;
+- make feedback listable and auditable;
+- aggregate quality signals by scope for Router and memory-quality evals.
+
 ## Router Contract
 
 Router inputs:

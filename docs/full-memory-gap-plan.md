@@ -160,6 +160,8 @@ Already present:
 - Guarded brain/style system-prompt append derived from graph analytics.
 - Baseline read-time policy and Router explainability through prompt metadata,
   `router_runs`, `/router-explain`, and `agent-memory router-explain`.
+- Baseline Router usefulness feedback through `router_feedback`,
+  `/router-feedback/record`, `/memory-quality`, and `agent-memory memory-quality`.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -188,7 +190,8 @@ Remaining for full memory:
 - Automatic pre-turn context retrieval inside each external orchestrator.
 - Automatic post-turn Keeper analysis inside each external orchestrator.
 - Production-grade read-time ranking beyond the baseline deterministic policy.
-- A memory quality contract with behavioral metrics and golden fixtures.
+- Production memory quality contract with broader behavioral metrics and golden
+  fixtures.
 - Derived-memory invalidation across summaries, graph links, cached prompt
   surfaces, outcome lessons, and graph-derived style state.
 - A current-best resolver for stale, conflicting, superseded, or equal-trust
@@ -391,8 +394,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. Agents receive useful memory content, not just
 tags or labels, and operators can inspect read-time policy and Router decisions
 with `router-runs`, `router-explain`, `/router-runs`, and `/router-explain`.
-Remaining work is production ranking, usefulness feedback, current-best conflict
-resolution, and larger golden evals.
+Remaining work is production ranking, automated usefulness learning,
+current-best conflict resolution, and larger golden evals.
 
 ### Step 7: Add Embeddings And Semantic Reranking
 

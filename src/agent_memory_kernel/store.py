@@ -115,6 +115,13 @@ READ_TIME_POLICY = {
         "fact": "factual evidence",
     },
 }
+ROUTER_FEEDBACK_SCORES = {
+    "helpful": 1.0,
+    "neutral": 0.0,
+    "ignored": 0.0,
+    "missing": -0.5,
+    "harmful": -1.0,
+}
 STOPWORDS = {
     "and",
     "are",
@@ -2647,6 +2654,171 @@ class MemoryStore:
             "token_estimate": metadata.get("token_estimate", 0),
         }
 
+    def record_router_feedback(
+        self,
+        router_run_id: str,
+        *,
+        memory_id: str = "",
+        branch_id: str = "",
+        rating: str = "neutral",
+        score: float | None = None,
+        actor: str = "reviewer",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record whether a prompt-facing memory selection helped or hurt."""
+        router_run_id = (router_run_id or "").strip()
+        if not router_run_id:
+            raise ValueError("router_run_id is required")
+        rating = (rating or "neutral").strip().lower()
+        if rating not in ROUTER_FEEDBACK_SCORES:
+            allowed = ", ".join(sorted(ROUTER_FEEDBACK_SCORES))
+            raise ValueError(f"rating must be one of: {allowed}")
+        row = self.conn.execute(
+            "SELECT router_run_id FROM router_runs WHERE router_run_id = ?",
+            (router_run_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"router run not found: {router_run_id}")
+        score_value = ROUTER_FEEDBACK_SCORES[rating] if score is None else float(score)
+        score_value = max(-1.0, min(score_value, 1.0))
+        feedback_id = new_id("rfb")
+        self.conn.execute(
+            """
+            INSERT INTO router_feedback
+              (feedback_id, created_at, router_run_id, memory_id, branch_id,
+               actor, rating, score, reason, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                feedback_id,
+                now_iso(),
+                router_run_id,
+                (memory_id or "").strip(),
+                (branch_id or "").strip(),
+                (actor or "reviewer").strip() or "reviewer",
+                rating,
+                score_value,
+                reason or "",
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "record_router_feedback",
+            "router_run",
+            router_run_id,
+            actor=actor or "reviewer",
+            details={
+                "feedback_id": feedback_id,
+                "memory_id": memory_id,
+                "branch_id": branch_id,
+                "rating": rating,
+                "score": score_value,
+            },
+        )
+        self.conn.commit()
+        return {
+            "feedback_id": feedback_id,
+            "router_run_id": router_run_id,
+            "memory_id": (memory_id or "").strip(),
+            "branch_id": (branch_id or "").strip(),
+            "rating": rating,
+            "score": score_value,
+            "reason": reason or "",
+            "status": "recorded",
+        }
+
+    def list_router_feedback(
+        self,
+        *,
+        router_run_id: str | None = None,
+        memory_id: str | None = None,
+        rating: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List feedback for Router runs and selected memory items."""
+        clauses = []
+        params: list[Any] = []
+        if router_run_id:
+            clauses.append("rf.router_run_id = ?")
+            params.append(router_run_id)
+        if memory_id:
+            clauses.append("rf.memory_id = ?")
+            params.append(memory_id)
+        if rating:
+            clauses.append("rf.rating = ?")
+            params.append(rating.strip().lower())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT rf.feedback_id, rf.created_at, rf.router_run_id,
+                   rf.memory_id, rf.branch_id, rf.actor, rf.rating, rf.score,
+                   rf.reason, rf.metadata_json,
+                   rr.thread_id, rr.scope, rr.query
+            FROM router_feedback rf
+            JOIN router_runs rr ON rr.router_run_id = rf.router_run_id
+            {where}
+            ORDER BY rf.created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        return [self._router_feedback_dict(row) for row in rows]
+
+    def memory_quality_report(
+        self,
+        *,
+        scope: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Aggregate Router feedback into a lightweight quality report."""
+        scope = normalize_scope(scope) if scope else None
+        router_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM router_runs
+            WHERE (? IS NULL OR scope = ?)
+            """,
+            (scope, scope),
+        ).fetchone()["count"]
+        feedback_rows = self.conn.execute(
+            """
+            SELECT rf.rating, rf.score
+            FROM router_feedback rf
+            JOIN router_runs rr ON rr.router_run_id = rf.router_run_id
+            WHERE (? IS NULL OR rr.scope = ?)
+            """,
+            (scope, scope),
+        ).fetchall()
+        by_rating = {rating: 0 for rating in sorted(ROUTER_FEEDBACK_SCORES)}
+        total_score = 0.0
+        for row in feedback_rows:
+            rating = str(row["rating"])
+            by_rating[rating] = by_rating.get(rating, 0) + 1
+            total_score += float(row["score"] or 0)
+        feedback_count = len(feedback_rows)
+        avg_score = round(total_score / feedback_count, 4) if feedback_count else 0.0
+        coverage = round(feedback_count / router_count, 4) if router_count else 0.0
+        top_limit = max(1, min(int(limit or 10), 50))
+        return {
+            "scope": scope or "all",
+            "router_runs": router_count,
+            "feedback_count": feedback_count,
+            "feedback_coverage": coverage,
+            "average_score": avg_score,
+            "by_rating": by_rating,
+            "top_helpful_memories": self._memory_feedback_rollup(
+                scope=scope,
+                positive=True,
+                limit=top_limit,
+            ),
+            "top_harmful_memories": self._memory_feedback_rollup(
+                scope=scope,
+                positive=False,
+                limit=top_limit,
+            ),
+        }
+
     def list_shadow_traces(
         self,
         *,
@@ -4692,6 +4864,66 @@ class MemoryStore:
             "warnings": self._loads_json(row["warnings_json"], []),
             "metadata": self._loads_json(row["metadata_json"], {}),
         }
+
+    def _router_feedback_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "feedback_id": row["feedback_id"],
+            "created_at": row["created_at"],
+            "router_run_id": row["router_run_id"],
+            "memory_id": row["memory_id"],
+            "branch_id": row["branch_id"],
+            "actor": row["actor"],
+            "rating": row["rating"],
+            "score": row["score"],
+            "reason": row["reason"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+            "thread_id": row["thread_id"],
+            "scope": row["scope"],
+            "query": row["query"],
+        }
+
+    def _memory_feedback_rollup(
+        self,
+        *,
+        scope: str | None,
+        positive: bool,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        score_clause = "rf.score > 0" if positive else "rf.score < 0"
+        order = "DESC" if positive else "ASC"
+        rows = self.conn.execute(
+            f"""
+            SELECT rf.memory_id,
+                   COUNT(*) AS feedback_count,
+                   AVG(rf.score) AS average_score,
+                   SUM(rf.score) AS total_score,
+                   m.text AS memory_text,
+                   m.kind,
+                   m.source_trust
+            FROM router_feedback rf
+            JOIN router_runs rr ON rr.router_run_id = rf.router_run_id
+            LEFT JOIN memories m ON m.memory_id = rf.memory_id
+            WHERE rf.memory_id != ''
+              AND {score_clause}
+              AND (? IS NULL OR rr.scope = ?)
+            GROUP BY rf.memory_id
+            ORDER BY total_score {order}, feedback_count DESC, rf.memory_id
+            LIMIT ?
+            """,
+            (scope, scope, max(1, min(int(limit or 10), 50))),
+        ).fetchall()
+        return [
+            {
+                "memory_id": row["memory_id"],
+                "feedback_count": row["feedback_count"],
+                "average_score": round(float(row["average_score"] or 0), 4),
+                "total_score": round(float(row["total_score"] or 0), 4),
+                "kind": row["kind"] or "",
+                "source_trust": row["source_trust"] or "",
+                "text": row["memory_text"] or "",
+            }
+            for row in rows
+        ]
 
     def _get_shadow_trace(self, shadow_trace_id: str) -> dict[str, Any]:
         row = self.conn.execute(

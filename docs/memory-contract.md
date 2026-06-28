@@ -177,6 +177,8 @@ real shadow traces prove that memory:
   memory under multi-agent orchestration;
 - supports inspection flows for remembered facts, prompt injections, last-turn
   changes, provenance, undo, distrust, and export;
+- records whether prompt-facing memory helped, was ignored, was missing, or
+  caused harm, without mutating active memory automatically;
 - improves behavior compared with no-memory baseline;
 - remains provider-neutral across model adapters;
 - defines fallback behavior for slow, unavailable, corrupted, partially

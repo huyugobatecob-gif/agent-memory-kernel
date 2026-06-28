@@ -68,6 +68,8 @@ Included now:
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
 - Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
+- Router read-time policy, explainability, usefulness feedback, and memory
+  quality reports.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
@@ -225,6 +227,18 @@ Inspect why the Router selected memory for a prompt:
 agent-memory read-time-policy --db .memory/demo.db --scope professional
 agent-memory router-runs --db .memory/demo.db --thread-id seo-demo
 agent-memory router-explain --db .memory/demo.db router_xxxxxxxxxxxxxxxx
+```
+
+Record whether selected memory helped and inspect quality signals:
+
+```bash
+agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx \
+  --memory-id mem_xxxxxxxxxxxxxxxx \
+  --rating helpful \
+  --reason "grounded the plan"
+
+agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
+agent-memory memory-quality --db .memory/demo.db --scope professional
 ```
 
 Inspect the formal memory contract and run the deterministic full-memory gate:

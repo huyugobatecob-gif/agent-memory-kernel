@@ -41,6 +41,23 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         }
     if path == "/router-explain":
         return store.explain_router_run(str(payload.get("router_run_id", "")))
+    if path == "/router-feedback/record":
+        router_run_id = str(payload.pop("router_run_id"))
+        return store.record_router_feedback(router_run_id, **payload)
+    if path == "/router-feedback/list":
+        return {
+            "feedback": store.list_router_feedback(
+                router_run_id=payload.get("router_run_id"),
+                memory_id=payload.get("memory_id"),
+                rating=payload.get("rating"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/memory-quality":
+        return store.memory_quality_report(
+            scope=payload.get("scope"),
+            limit=int(payload.get("limit", 10) or 10),
+        )
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":

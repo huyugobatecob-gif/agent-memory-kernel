@@ -791,6 +791,22 @@ class MemoryStoreTests(unittest.TestCase):
                 explained["selection_decisions"][0]["memory_id"],
                 envelope["metadata"]["selection_decisions"][0]["memory_id"],
             )
+            feedback = store.record_router_feedback(
+                before["router_run_id"],
+                memory_id=envelope["metadata"]["selection_decisions"][0]["memory_id"],
+                rating="helpful",
+                actor="qa",
+                reason="selected memory correctly grounded the SEO loop plan",
+            )
+            self.assertTrue(feedback["feedback_id"].startswith("rfb_"))
+            self.assertEqual(feedback["score"], 1.0)
+            feedback_rows = store.list_router_feedback(router_run_id=before["router_run_id"])
+            self.assertEqual(len(feedback_rows), 1)
+            self.assertEqual(feedback_rows[0]["rating"], "helpful")
+            quality = store.memory_quality_report(scope="professional")
+            self.assertEqual(quality["feedback_count"], 1)
+            self.assertEqual(quality["average_score"], 1.0)
+            self.assertTrue(quality["top_helpful_memories"])
             router_runs = store.list_router_runs(thread_id="thread-runtime")
             self.assertEqual(router_runs[0]["router_run_id"], before["router_run_id"])
             router_count = store.conn.execute(
@@ -1211,6 +1227,27 @@ class MemoryStoreTests(unittest.TestCase):
                 "/router-explain",
                 {"router_run_id": before["router_run_id"]},
             )
+            router_feedback = handle_api_request(
+                store,
+                "/router-feedback/record",
+                {
+                    "router_run_id": before["router_run_id"],
+                    "memory_id": router_explain["selection_decisions"][0]["memory_id"],
+                    "rating": "helpful",
+                    "actor": "api-reviewer",
+                    "reason": "API selected the expected slice-site branch.",
+                },
+            )
+            router_feedback_list = handle_api_request(
+                store,
+                "/router-feedback/list",
+                {"router_run_id": before["router_run_id"]},
+            )
+            memory_quality = handle_api_request(
+                store,
+                "/memory-quality",
+                {"scope": "professional"},
+            )
             after = handle_api_request(
                 store,
                 "/after-saved-turn",
@@ -1362,6 +1399,9 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(len(router_runs["runs"]), 1)
             self.assertEqual(router_explain["router_run"]["router_run_id"], before["router_run_id"])
             self.assertIn("selection_decisions", router_explain)
+            self.assertEqual(router_feedback["status"], "recorded")
+            self.assertEqual(len(router_feedback_list["feedback"]), 1)
+            self.assertGreaterEqual(memory_quality["feedback_count"], 1)
             self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
             self.assertEqual(queued["status"], "queued")
             self.assertEqual(worker["processed"], 1)

@@ -68,7 +68,7 @@ production layers around the local kernel:
 - background worker;
 - review and security hardening;
 - production governed read-time ranking and current-best conflict resolution;
-- memory quality evals and usefulness feedback;
+- production memory quality evals beyond baseline usefulness feedback;
 - derived-memory invalidation for summaries, graph surfaces, cached packs,
   outcome lessons, and graph-derived style;
 - capability and consent model for read/write/promote/inject/export/delete;
@@ -106,6 +106,9 @@ Baseline read-time policy and Router explainability are implemented through
 `agent-memory read-time-policy`, `agent-memory router-runs`,
 `agent-memory router-explain`, `/read-time-policy`, `/router-runs`, and
 `/router-explain`.
+Baseline Router usefulness feedback and quality reporting are implemented
+through `agent-memory router-feedback`, `agent-memory memory-quality`,
+`/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.

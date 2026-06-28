@@ -85,6 +85,19 @@ why-signals, prompt role, source trust, sensitivity, conflict status, and
 outcome signal. This makes the Router auditable without giving the main model
 access to the full graph.
 
+Operators can then record usefulness feedback:
+
+```bash
+agent-memory router-feedback record router_xxxxxxxxxxxxxxxx \
+  --memory-id mem_xxxxxxxxxxxxxxxx \
+  --rating helpful
+agent-memory memory-quality --scope professional
+```
+
+Feedback is stored separately from memory content. It is used for quality
+measurement and future ranking work, not as an automatic mutation of active
+memory.
+
 ## Persistent Graph Tree
 
 The graph-tree layer is made of:

@@ -155,6 +155,7 @@ ACCEPTANCE_GATES = [
         "requires": [
             "a repeatable fixture proves memory improves task context versus no-memory baseline",
             "stale, unsafe, and cross-lane memory are rejected by tests",
+            "Router usefulness feedback can mark selected memory as helpful, ignored, missing, or harmful",
             "review decisions are regression-testable",
         ],
     },

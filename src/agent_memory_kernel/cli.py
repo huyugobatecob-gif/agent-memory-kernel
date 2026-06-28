@@ -206,6 +206,48 @@ def cmd_router_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_router_feedback_record(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.record_router_feedback(
+            args.router_run_id,
+            memory_id=args.memory_id,
+            branch_id=args.branch_id,
+            rating=args.rating,
+            score=args.score,
+            actor=args.actor,
+            reason=args.reason,
+            metadata=json.loads(args.metadata_json),
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_router_feedback_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_router_feedback(
+            router_run_id=args.router_run_id,
+            memory_id=args.memory_id,
+            rating=args.rating,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_memory_quality(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.memory_quality_report(scope=args.scope, limit=args.limit))
+    store.close()
+    return 0
+
+
 def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -917,6 +959,38 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("router_run_id")
     p.set_defaults(func=cmd_router_explain)
+
+    p = sub.add_parser("router-feedback", help="Record or list Router memory usefulness feedback")
+    add_common_db(p)
+    feedback_sub = p.add_subparsers(dest="router_feedback_command", required=True)
+
+    fp = feedback_sub.add_parser("record", help="Record whether selected memory helped")
+    fp.add_argument("router_run_id")
+    fp.add_argument("--memory-id", default="")
+    fp.add_argument("--branch-id", default="")
+    fp.add_argument(
+        "--rating",
+        default="neutral",
+        choices=["helpful", "neutral", "ignored", "missing", "harmful"],
+    )
+    fp.add_argument("--score", type=float)
+    fp.add_argument("--actor", default="reviewer")
+    fp.add_argument("--reason", default="")
+    fp.add_argument("--metadata-json", default="{}")
+    fp.set_defaults(func=cmd_router_feedback_record)
+
+    fp = feedback_sub.add_parser("list", help="List Router feedback")
+    fp.add_argument("--router-run-id")
+    fp.add_argument("--memory-id")
+    fp.add_argument("--rating", choices=["helpful", "neutral", "ignored", "missing", "harmful"])
+    fp.add_argument("--limit", type=int, default=50)
+    fp.set_defaults(func=cmd_router_feedback_list)
+
+    p = sub.add_parser("memory-quality", help="Summarize Router feedback quality signals")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--limit", type=int, default=10)
+    p.set_defaults(func=cmd_memory_quality)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
     add_common_db(p)
