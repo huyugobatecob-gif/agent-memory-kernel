@@ -334,6 +334,21 @@ def cmd_memory_changes(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_derived_invalidations(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.derived_invalidations(
+            memory_id=args.memory_id,
+            scope=args.scope,
+            action=args.action,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1168,6 +1183,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=20)
     p.set_defaults(func=cmd_memory_changes)
+
+    p = sub.add_parser("derived-invalidations", help="Inspect derived-memory invalidation records")
+    add_common_db(p)
+    p.add_argument("--memory-id", default="")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--action", default="", help="Lifecycle action such as correct, delete, distrust, expire, supersede")
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_derived_invalidations)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
     add_common_db(p)

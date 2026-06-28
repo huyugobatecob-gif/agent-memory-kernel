@@ -429,6 +429,62 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("rollback", audit_actions)
             store.close()
 
+    def test_derived_invalidations_are_recorded_for_correction_and_delete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            result = store.remember(
+                "Decision: project invalidation-site canonical CMS is Drupal.",
+                scope="professional",
+                auto_approve=True,
+            )
+            memory_id = result["candidates"][0]["memory_id"]
+            store.correct_memory(
+                memory_id,
+                "Decision: project invalidation-site canonical CMS is WordPress.",
+                actor="reviewer",
+                reason="CMS corrected by user",
+            )
+
+            corrected = store.derived_invalidations(memory_id=memory_id)
+            self.assertEqual(corrected["version"], "derived-invalidation-v0.1")
+            self.assertEqual(corrected["count"], 1)
+            self.assertEqual(corrected["invalidations"][0]["action"], "correct")
+            corrected_surfaces = corrected["invalidations"][0]["surfaces"]
+            self.assertEqual(corrected_surfaces["mode"], "refreshed")
+            self.assertGreaterEqual(corrected_surfaces["updated"]["memory_items"], 1)
+            self.assertIn("memory_tree_pack", corrected_surfaces["invalidated"])
+
+            store.delete_memory(memory_id, actor="reviewer", reason="remove obsolete CMS")
+            deleted = store.derived_invalidations(memory_id=memory_id)
+            actions = [item["action"] for item in deleted["invalidations"]]
+            self.assertEqual(deleted["count"], 2)
+            self.assertIn("delete", actions)
+            delete_record = next(item for item in deleted["invalidations"] if item["action"] == "delete")
+            delete_surfaces = delete_record["surfaces"]
+            self.assertEqual(delete_surfaces["mode"], "invalidated")
+            self.assertGreaterEqual(delete_surfaces["invalidated"]["memory_graph_nodes"], 1)
+            self.assertEqual(delete_surfaces["invalidated"]["prompt_envelope"], "rebuild_on_next_before_model_call")
+            self.assertIn("graph_derived_style", delete_surfaces["invalidated"])
+
+            api_report = handle_api_request(
+                store,
+                "/derived-invalidations",
+                {"memory_id": memory_id},
+            )
+            self.assertEqual(api_report["count"], 2)
+            self.assertEqual(store.search("Drupal", scope="professional"), [])
+            self.assertEqual(store.search("WordPress", scope="professional"), [])
+            audit_actions = [
+                row["action"]
+                for row in store.conn.execute(
+                    "SELECT action FROM audit_log WHERE target_type = 'memory'"
+                ).fetchall()
+            ]
+            self.assertIn("derived_invalidation", audit_actions)
+            store.close()
+
     def test_distrust_and_expire_suppress_retrieval_and_graph(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

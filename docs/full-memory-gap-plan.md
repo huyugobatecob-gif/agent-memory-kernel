@@ -174,6 +174,11 @@ Already present:
   `/capability/check`, the Hermes provider wrapper, and MCP
   `memory_capability_check`, with read/export enforcement on direct retrieval
   and export surfaces.
+- Baseline derived-memory invalidation ledger through `agent-memory
+  derived-invalidations`, `/derived-invalidations`, the Hermes provider wrapper,
+  and MCP `memory_derived_invalidations`; correction, rollback, delete,
+  distrust, expire, and supersede actions record affected graph, evidence,
+  prompt-pack, export, and graph-derived style surfaces.
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
@@ -216,8 +221,9 @@ Remaining for full memory:
 - Production-grade read-time ranking beyond the baseline deterministic policy.
 - Production memory quality contract with broader behavioral metrics and golden
   fixtures.
-- Derived-memory invalidation across summaries, graph links, cached prompt
-  surfaces, outcome lessons, and graph-derived style state.
+- Production derived-memory invalidation beyond the baseline ledger, including
+  richer summary dependency tracking, provider embeddings, cached prompt stores,
+  and outcome lesson lineage.
 - Production current-best heuristics for stale, conflicting, superseded, or
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local

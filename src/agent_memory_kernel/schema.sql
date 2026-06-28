@@ -67,6 +67,18 @@ CREATE TABLE IF NOT EXISTS memory_revisions (
     metadata_json           TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS derived_invalidations (
+    invalidation_id TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    memory_id       TEXT NOT NULL REFERENCES memories(memory_id),
+    action          TEXT NOT NULL,
+    actor           TEXT NOT NULL DEFAULT 'system',
+    scope           TEXT NOT NULL DEFAULT 'professional',
+    reason          TEXT NOT NULL DEFAULT '',
+    surfaces_json   TEXT NOT NULL DEFAULT '{}',
+    metadata_json   TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS memory_write_policies (
     policy_id     TEXT PRIMARY KEY,
     created_at    TEXT NOT NULL,

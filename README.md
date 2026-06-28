@@ -52,6 +52,8 @@ Included now:
 - Capability/consent reports for read, inject, export, promote, lifecycle, and
   other write actions.
 - Correction revision history and rollback for active memories.
+- Derived-memory invalidation ledger for correction, rollback, delete,
+  distrust, expire, and supersede lifecycle actions.
 - Conflict and supersession records for truth maintenance.
 - Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
@@ -352,6 +354,17 @@ matched policy, reason, and denied actions. Direct `search`, `context-pack`,
 `graph tree`, and profile/markdown export calls can take `--actor` so denied
 read/export policies are enforced outside the prompt hook too.
 
+Inspect derived-memory invalidation after corrections or lifecycle changes:
+
+```bash
+agent-memory derived-invalidations --db .memory/demo.db --scope professional
+agent-memory derived-invalidations --db .memory/demo.db --memory-id mem_xxxxxxxxxxxxxxxx
+```
+
+The report shows which graph, evidence, prompt-pack, export, and graph-derived
+style surfaces were refreshed or invalidated so stale memory cannot silently
+survive in derived context.
+
 Use a model-backed extractor from an application:
 
 ```python
@@ -561,8 +574,8 @@ agent-memory-mcp --db .memory/demo.db
 The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_before_model_call`, `memory_after_saved_turn`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
-`memory_capability_check`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_capability_check`, `memory_derived_invalidations`,
+`memory_graph_nodes`, `memory_graph_edges`, and `memory_worker_run`.
 
 ## Implementation Plan
 

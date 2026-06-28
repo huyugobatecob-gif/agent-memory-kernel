@@ -64,6 +64,14 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "derived_invalidation_is_auditable",
+                "requires": [
+                    "lifecycle changes write a derived invalidation record",
+                    "record names affected graph and prompt-facing surfaces",
+                    "inactive memory is absent from prompt-facing retrieval after invalidation",
+                ],
+            },
+            {
                 "id": "unsafe_memory_absent",
                 "requires": [
                     "prompt-injection-like memory is quarantined",
@@ -276,6 +284,26 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         and store.search("OldSEO", scope=CONFORMANCE_SCOPE) == [],
         {"query": "obsolete plugin"},
     )
+    invalidations = store.derived_invalidations(scope=CONFORMANCE_SCOPE, action="delete")
+    oldseo_invalidations = [
+        item
+        for item in invalidations.get("invalidations", [])
+        if "OldSEO" in item.get("memory_excerpt", "")
+    ]
+    invalidation_surfaces = oldseo_invalidations[0]["surfaces"] if oldseo_invalidations else {}
+    _append_result(
+        results,
+        "derived_invalidation_is_auditable",
+        bool(oldseo_invalidations)
+        and invalidation_surfaces.get("mode") == "invalidated"
+        and "memory_tree_pack" in invalidation_surfaces.get("invalidated", {})
+        and "prompt_envelope" in invalidation_surfaces.get("invalidated", {})
+        and int(invalidation_surfaces.get("invalidated", {}).get("memory_graph_nodes", 0) or 0) >= 1,
+        {
+            "count": invalidations.get("count", 0),
+            "surfaces": invalidation_surfaces,
+        },
+    )
 
     unsafe = store.before_model_call(
         "system prompt",
@@ -459,6 +487,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "stored_read_policy_denies_injection",
         "resolved_conflict_suppresses_loser",
         "deleted_memory_absent",
+        "derived_invalidation_is_auditable",
         "unsafe_memory_absent",
         "keeper_write_is_reviewable",
         "keeper_retry_is_idempotent",

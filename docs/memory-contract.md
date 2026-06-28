@@ -178,6 +178,8 @@ real shadow traces prove that memory:
 - supports correction, rollback, deletion, distrust, expiry, and supersession;
 - invalidates derived summaries, graph surfaces, cached packs, outcome lessons,
   and graph-derived style when underlying memory changes;
+- exposes derived invalidation records so adapters can audit which graph,
+  prompt-pack, export, and style surfaces were refreshed or invalidated;
 - resolves current-best answers or marks unresolved conflicts instead of
   silently surfacing equal-trust contradictions;
 - exposes who may read, write, promote, inject, distrust, export, and delete

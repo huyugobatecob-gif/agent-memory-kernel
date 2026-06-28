@@ -29,6 +29,8 @@ The adapter should:
   saved turn and why;
 - expose `capability_report()` so Hermes can inspect read/write/export/delete
   permissions before delegating work to an agent;
+- expose `derived_invalidations()` so Hermes can audit stale derived surfaces
+  after correction, rollback, delete, distrust, expire, or supersede;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;

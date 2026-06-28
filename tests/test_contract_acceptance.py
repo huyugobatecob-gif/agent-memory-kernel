@@ -61,6 +61,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         scenario_ids = {item["id"] for item in spec["scenarios"]}
         self.assertIn("stored_read_policy_denies_injection", scenario_ids)
         self.assertIn("resolved_conflict_suppresses_loser", scenario_ids)
+        self.assertIn("derived_invalidation_is_auditable", scenario_ids)
         self.assertIn("keeper_write_is_reviewable", scenario_ids)
         self.assertIn("keeper_retry_is_idempotent", scenario_ids)
         self.assertIn("keeper_change_is_inspectable", scenario_ids)
@@ -82,6 +83,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("stored_read_policy_denies_injection", passed)
             self.assertIn("resolved_conflict_suppresses_loser", passed)
             self.assertIn("deleted_memory_absent", passed)
+            self.assertIn("derived_invalidation_is_auditable", passed)
             self.assertIn("unsafe_memory_absent", passed)
             self.assertIn("keeper_write_is_reviewable", passed)
             self.assertIn("keeper_retry_is_idempotent", passed)

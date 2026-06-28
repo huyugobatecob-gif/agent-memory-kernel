@@ -121,6 +121,11 @@ Baseline capability/consent reporting is implemented through `agent-memory
 capability`, `/capability/check`, the Hermes provider wrapper, and MCP
 `memory_capability_check`. Direct search/context/tree-pack and export surfaces
 can enforce read/export policy by actor.
+Baseline derived-memory invalidation is implemented through `agent-memory
+derived-invalidations`, `/derived-invalidations`, the Hermes provider wrapper,
+and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,
+expire, and supersede lifecycle actions record graph/evidence/prompt-pack/export
+surfaces that were refreshed or invalidated.
 Post-turn memory-change inspection is implemented through `agent-memory
 memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted

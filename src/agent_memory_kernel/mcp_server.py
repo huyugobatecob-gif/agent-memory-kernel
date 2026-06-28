@@ -104,6 +104,18 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_derived_invalidations": {
+        "endpoint": "/derived-invalidations",
+        "description": "Inspect derived-memory invalidation records after correction or lifecycle changes.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Optional memory id to inspect.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "action": _string("Optional lifecycle action filter.", ""),
+                "limit": _integer("Maximum invalidation records.", 50),
+            }
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

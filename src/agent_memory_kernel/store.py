@@ -87,6 +87,7 @@ LEFT_BRAIN_STYLE_SHARE = 0.60
 RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
+DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
     "record",
@@ -443,6 +444,12 @@ class MemoryStore:
             """
             CREATE INDEX IF NOT EXISTS idx_memory_read_policies_lookup
             ON memory_read_policies(agent_id, scope, action)
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_derived_invalidations_memory
+            ON derived_invalidations(memory_id, created_at)
             """
         )
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
@@ -3321,6 +3328,64 @@ class MemoryStore:
             "changes": changes,
         }
 
+    def derived_invalidations(
+        self,
+        *,
+        memory_id: str = "",
+        scope: str | None = None,
+        action: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """List derived-memory invalidation records."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if memory_id:
+            clauses.append("di.memory_id = ?")
+            params.append(memory_id)
+        if scope:
+            clauses.append("di.scope = ?")
+            params.append(normalize_scope(scope))
+        if action:
+            clauses.append("di.action = ?")
+            params.append(action.strip().lower())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT di.invalidation_id, di.created_at, di.memory_id, di.action,
+                   di.actor, di.scope, di.reason, di.surfaces_json,
+                   di.metadata_json, m.status AS memory_status, m.text AS memory_text
+            FROM derived_invalidations di
+            JOIN memories m ON m.memory_id = di.memory_id
+            {where}
+            ORDER BY di.created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return {
+            "version": DERIVED_INVALIDATION_VERSION,
+            "memory_id": memory_id,
+            "scope": normalize_scope(scope) if scope else "",
+            "action": action.strip().lower() if action else "",
+            "count": len(rows),
+            "invalidations": [
+                {
+                    "invalidation_id": row["invalidation_id"],
+                    "created_at": row["created_at"],
+                    "memory_id": row["memory_id"],
+                    "memory_status": row["memory_status"],
+                    "memory_excerpt": self._excerpt(row["memory_text"], 220),
+                    "action": row["action"],
+                    "actor": row["actor"],
+                    "scope": row["scope"],
+                    "reason": row["reason"],
+                    "surfaces": self._loads_json(row["surfaces_json"], {}),
+                    "metadata": self._loads_json(row["metadata_json"], {}),
+                }
+                for row in rows
+            ],
+        }
+
     def list_shadow_traces(
         self,
         *,
@@ -3840,11 +3905,21 @@ class MemoryStore:
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
         )
-        self.conn.execute(
+        memory_item_count = self.conn.execute(
             "UPDATE memory_items SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
+        ).rowcount
+        surfaces = self._propagate_corrected_memory(memory_id, text)
+        surfaces.setdefault("updated", {})["memory_items"] = max(int(memory_item_count or 0), 0)
+        self._record_derived_invalidation(
+            memory_id,
+            action="correct",
+            actor=actor,
+            scope=str(row["scope"]),
+            reason=reason,
+            surfaces=surfaces,
+            metadata={"revision_id": revision_id},
         )
-        self._propagate_corrected_memory(memory_id, text)
         self._audit("correct", "memory", memory_id, actor=actor, details={"revision_id": revision_id})
         self.conn.commit()
 
@@ -3885,11 +3960,24 @@ class MemoryStore:
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
             (restored_text, ts, memory_id),
         )
-        self.conn.execute(
+        memory_item_count = self.conn.execute(
             "UPDATE memory_items SET text = ?, updated_at = ? WHERE memory_id = ?",
             (restored_text, ts, memory_id),
+        ).rowcount
+        surfaces = self._propagate_corrected_memory(memory_id, restored_text)
+        surfaces.setdefault("updated", {})["memory_items"] = max(int(memory_item_count or 0), 0)
+        self._record_derived_invalidation(
+            memory_id,
+            action="rollback",
+            actor=actor,
+            scope=str(row["scope"]),
+            reason=reason or "rollback",
+            surfaces=surfaces,
+            metadata={
+                "restored_revision_id": revision["revision_id"],
+                "rollback_revision_id": rollback_revision_id,
+            },
         )
-        self._propagate_corrected_memory(memory_id, restored_text)
         self._audit(
             "rollback",
             "memory",
@@ -4046,7 +4134,16 @@ class MemoryStore:
             "UPDATE memory_items SET status = 'superseded', updated_at = ? WHERE memory_id = ?",
             (ts, old_memory_id),
         )
-        self._propagate_inactive_memory(old_memory_id)
+        surfaces = self._propagate_inactive_memory(old_memory_id)
+        self._record_derived_invalidation(
+            old_memory_id,
+            action="supersede",
+            actor=actor,
+            scope=str(old["scope"]),
+            reason=reason,
+            surfaces=surfaces,
+            metadata={"superseded_by": new_memory_id},
+        )
         self.conn.execute(
             """
             UPDATE memory_conflicts
@@ -4193,7 +4290,15 @@ class MemoryStore:
             "UPDATE memory_items SET status = ?, updated_at = ? WHERE memory_id = ?",
             (status, ts, memory_id),
         )
-        self._propagate_inactive_memory(memory_id)
+        surfaces = self._propagate_inactive_memory(memory_id)
+        self._record_derived_invalidation(
+            memory_id,
+            action=action,
+            actor=actor,
+            scope=str(row["scope"]),
+            reason=reason,
+            surfaces=surfaces,
+        )
         self._audit(action, "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
@@ -4766,7 +4871,109 @@ class MemoryStore:
         )
         return analysis_id
 
-    def _propagate_corrected_memory(self, memory_id: str, text: str) -> None:
+    def _derived_surface_report(
+        self,
+        *,
+        memory_id: str,
+        mode: str,
+        scopes: set[str] | list[str],
+        updated: dict[str, Any],
+        invalidated: dict[str, Any],
+    ) -> dict[str, Any]:
+        scope_values = sorted({str(item) for item in scopes if str(item or "").strip()})
+        if not scope_values:
+            row = self.conn.execute(
+                "SELECT scope FROM memories WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()
+            if row is not None:
+                scope_values = [str(row["scope"])]
+        common_rebuilds = {
+            "memory_tree_pack": "rebuild_on_next_request",
+            "context_pack": "rebuild_on_next_request",
+            "context_builder_pack": "rebuild_on_next_request",
+            "prompt_envelope": "rebuild_on_next_before_model_call",
+            "profile_export": "filtered_by_active_status",
+            "graph_derived_style": "refreshed_for_scopes",
+        }
+        invalidated = {**common_rebuilds, **invalidated}
+        updated = {
+            key: value
+            for key, value in updated.items()
+            if not (isinstance(value, int) and value == 0)
+        }
+        return {
+            "version": DERIVED_INVALIDATION_VERSION,
+            "memory_id": memory_id,
+            "mode": mode,
+            "scopes": scope_values,
+            "updated": updated,
+            "invalidated": invalidated,
+            "notes": [
+                "Prompt-facing packs are rebuilt on demand from active memory.",
+                "Graph groups and graph-derived style are refreshed for affected scopes.",
+            ],
+        }
+
+    def _record_derived_invalidation(
+        self,
+        memory_id: str,
+        *,
+        action: str,
+        actor: str,
+        scope: str,
+        reason: str = "",
+        surfaces: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        action = (action or "unknown").strip().lower()
+        actor = (actor or "system").strip() or "system"
+        scope = normalize_scope(scope)
+        invalidation_id = new_id("dinv")
+        ts = now_iso()
+        surfaces = surfaces or self._derived_surface_report(
+            memory_id=memory_id,
+            mode="unknown",
+            scopes=[scope],
+            updated={},
+            invalidated={},
+        )
+        self.conn.execute(
+            """
+            INSERT INTO derived_invalidations
+              (invalidation_id, created_at, memory_id, action, actor, scope,
+               reason, surfaces_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                invalidation_id,
+                ts,
+                memory_id,
+                action,
+                actor,
+                scope,
+                reason,
+                json.dumps(surfaces, sort_keys=True),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "derived_invalidation",
+            "memory",
+            memory_id,
+            actor=actor,
+            details={
+                "invalidation_id": invalidation_id,
+                "action": action,
+                "scope": scope,
+                "reason": reason,
+                "surfaces": surfaces,
+                "metadata": metadata or {},
+            },
+        )
+        return invalidation_id
+
+    def _propagate_corrected_memory(self, memory_id: str, text: str) -> dict[str, Any]:
         ts = now_iso()
         item_rows = self.conn.execute(
             """
@@ -4776,13 +4983,16 @@ class MemoryStore:
             """,
             (memory_id,),
         ).fetchall()
+        affected_scopes: set[str] = set()
+        graph_node_updates = 0
         for item in item_rows:
+            affected_scopes.add(str(item["scope"]))
             item_type = self._normalize_graph_node_type(str(item["item_type"]))
             label = self._item_label(item_type, text)
             summary = excerpt(text, 180)
             embedding_text = " ".join([label, summary, text])
             topics = self._node_topics(item_type, label, text)
-            self.conn.execute(
+            cursor = self.conn.execute(
                 """
                 UPDATE memory_graph_nodes
                 SET updated_at = ?, label = ?, canonical_key = ?, blob = ?,
@@ -4809,20 +5019,32 @@ class MemoryStore:
                     item_type,
                 ),
             )
+            graph_node_updates += max(int(cursor.rowcount or 0), 0)
             self._refresh_graph_groups(str(item["scope"]))
             self._refresh_digital_brain_state(str(item["scope"]))
 
         quote = excerpt(text, 600)
-        self.conn.execute(
+        node_evidence_updates = self.conn.execute(
             "UPDATE node_evidence SET quote = ? WHERE memory_id = ?",
             (quote, memory_id),
-        )
-        self.conn.execute(
+        ).rowcount
+        edge_evidence_updates = self.conn.execute(
             "UPDATE edge_evidence SET quote = ? WHERE memory_id = ?",
             (quote, memory_id),
+        ).rowcount
+        return self._derived_surface_report(
+            memory_id=memory_id,
+            mode="refreshed",
+            scopes=affected_scopes,
+            updated={
+                "memory_graph_nodes": graph_node_updates,
+                "node_evidence": max(int(node_evidence_updates or 0), 0),
+                "edge_evidence": max(int(edge_evidence_updates or 0), 0),
+            },
+            invalidated={},
         )
 
-    def _propagate_inactive_memory(self, memory_id: str) -> None:
+    def _propagate_inactive_memory(self, memory_id: str) -> dict[str, Any]:
         affected_scopes = {
             str(row["scope"])
             for row in self.conn.execute(
@@ -4842,6 +5064,7 @@ class MemoryStore:
             ).fetchall()
         }
         ts = now_iso()
+        inactive_edges = 0
         edge_rows = self.conn.execute(
             """
             SELECT DISTINCT graph_edge_id
@@ -4865,7 +5088,7 @@ class MemoryStore:
                 (graph_edge_id,),
             ).fetchone()["count"]
             if int(active_evidence or 0) == 0:
-                self.conn.execute(
+                cursor = self.conn.execute(
                     """
                     UPDATE memory_graph_edges
                     SET status = 'inactive', updated_at = ?
@@ -4873,7 +5096,9 @@ class MemoryStore:
                     """,
                     (ts, graph_edge_id),
                 )
+                inactive_edges += max(int(cursor.rowcount or 0), 0)
 
+        inactive_nodes = 0
         node_rows = self.conn.execute(
             """
             SELECT DISTINCT graph_node_id
@@ -4897,7 +5122,7 @@ class MemoryStore:
                 (graph_node_id,),
             ).fetchone()["count"]
             if int(active_evidence or 0) == 0:
-                self.conn.execute(
+                cursor = self.conn.execute(
                     """
                     UPDATE memory_graph_nodes
                     SET status = 'inactive', updated_at = ?
@@ -4905,10 +5130,32 @@ class MemoryStore:
                     """,
                     (ts, graph_node_id),
                 )
+                inactive_nodes += max(int(cursor.rowcount or 0), 0)
 
         for scope in sorted(affected_scopes):
             self._refresh_graph_groups(scope)
             self._refresh_digital_brain_state(scope)
+        return self._derived_surface_report(
+            memory_id=memory_id,
+            mode="invalidated",
+            scopes=affected_scopes,
+            updated={
+                "memory_graph_groups": len(affected_scopes),
+                "digital_brain_state": len(affected_scopes),
+            },
+            invalidated={
+                "memory_graph_nodes": inactive_nodes,
+                "memory_graph_edges": inactive_edges,
+                "memory_tree_pack": "rebuild_on_next_request",
+                "context_pack": "rebuild_on_next_request",
+                "context_builder_pack": "rebuild_on_next_request",
+                "prompt_envelope": "rebuild_on_next_before_model_call",
+                "profile_export": "filtered_by_active_status",
+                "graph_derived_style": "refreshed_for_scopes",
+                "thread_summaries": "not_directly_linked_rebuild_or_review_manually",
+                "outcome_lessons": "status_filtered_on_retrieval",
+            },
+        )
 
     def _refresh_graph_groups(self, scope: str) -> None:
         ts = now_iso()

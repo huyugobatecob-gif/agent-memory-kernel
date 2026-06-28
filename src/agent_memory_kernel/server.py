@@ -82,6 +82,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             limit=int(payload.get("limit", 20) or 20),
         )
+    if path == "/derived-invalidations":
+        return store.derived_invalidations(
+            memory_id=str(payload.get("memory_id", "")),
+            scope=payload.get("scope"),
+            action=str(payload.get("action", "")),
+            limit=int(payload.get("limit", 50) or 50),
+        )
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":

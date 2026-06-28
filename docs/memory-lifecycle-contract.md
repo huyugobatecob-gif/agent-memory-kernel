@@ -83,6 +83,8 @@ Required propagation:
 
 - update active memory text;
 - record before/after text in `memory_revisions`;
+- record a `derived_invalidations` entry with refreshed graph/evidence and
+  prompt-pack surfaces;
 - add correction audit event;
 - update linked memory item;
 - update graph node summaries and blobs;
@@ -101,6 +103,8 @@ Required propagation:
 - select an explicit revision or the latest revision for that memory;
 - restore the revision's `previous_text`;
 - record a new rollback revision with `rollback_of_revision_id`;
+- record a `derived_invalidations` entry with refreshed graph/evidence and
+  prompt-pack surfaces;
 - update linked memory item;
 - update graph node summaries and blobs through the same correction propagation;
 - add rollback audit event;
@@ -116,6 +120,8 @@ Required propagation:
 - remove from FTS/vector retrieval;
 - mark graph nodes or edges inactive when they have no remaining active
   evidence;
+- record a `derived_invalidations` entry with inactive graph/evidence and
+  prompt-pack/export/style surfaces;
 - invalidate summaries that depend only on deleted memory;
 - invalidate embeddings and cached context packs;
 - update graph group counts and brain/style counts;

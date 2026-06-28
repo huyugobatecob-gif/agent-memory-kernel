@@ -108,6 +108,9 @@ class HermesMemoryProvider:
 
     def capability_report(self, actor: str = "hermes", scope: str = "professional") -> dict:
         ...
+
+    def derived_invalidations(self, memory_id: str = "", scope: str | None = None) -> dict:
+        ...
 ```
 
 The provider should call `MemoryStore`, not duplicate storage logic.
@@ -132,8 +135,9 @@ agent-memory-mcp --db .memory/hermes-memory.db
 
 The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_after_saved_turn`, `memory_changes`, `memory_tree_pack`,
-`memory_capability_check`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, and `memory_worker_run`.
+`memory_capability_check`, `memory_derived_invalidations`,
+`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_worker_run`.
 
 Useful endpoints:
 
@@ -156,6 +160,7 @@ Useful endpoints:
 - `POST /memory-quality`
 - `POST /current-best`
 - `POST /memory-changes`
+- `POST /derived-invalidations`
 - `POST /remember`
 - `POST /graph/items`
 - `POST /graph/nodes`

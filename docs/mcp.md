@@ -38,6 +38,9 @@ Runtime tools:
 - `memory_changes`: inspect what Keeper changed after a saved turn.
 - `memory_capability_check`: report effective read/write permissions before
   delegating work to an agent.
+- `memory_derived_invalidations`: inspect derived surfaces refreshed or
+  invalidated after correction, rollback, delete, distrust, expire, or
+  supersede.
 
 Retrieval tools:
 

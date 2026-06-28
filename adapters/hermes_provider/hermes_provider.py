@@ -648,6 +648,21 @@ class HermesMemoryProvider:
             write_actions=write_actions,
         )
 
+    def derived_invalidations(
+        self,
+        *,
+        memory_id: str = "",
+        scope: str | None = None,
+        action: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.derived_invalidations(
+            memory_id=memory_id,
+            scope=scope,
+            action=action,
+            limit=limit,
+        )
+
     def review_pending(self) -> list[dict[str, Any]]:
         return self.store.list_candidates("pending")
 
