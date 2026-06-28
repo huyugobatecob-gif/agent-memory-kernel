@@ -233,6 +233,7 @@ class HermesMemoryProvider:
         scope: str | None = None,
         topic: str | None = None,
         severity: str | None = None,
+        assigned_to: str | None = None,
         target_type: str | None = None,
         target_id: str | None = None,
         limit: int = 50,
@@ -242,9 +243,27 @@ class HermesMemoryProvider:
             scope=scope,
             topic=topic,
             severity=severity,
+            assigned_to=assigned_to,
             target_type=target_type,
             target_id=target_id,
             limit=limit,
+        )
+
+    def assign_notification(
+        self,
+        notification_id: str,
+        *,
+        assigned_to: str,
+        actor: str = "hermes",
+        due_at: str = "",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.assign_notification(
+            notification_id,
+            assigned_to=assigned_to,
+            actor=actor,
+            due_at=due_at,
+            reason=reason,
         )
 
     def ack_notification(

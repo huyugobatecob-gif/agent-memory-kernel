@@ -190,8 +190,30 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(notification["target_id"], candidate_id)
             self.assertEqual(notification["status"], "open")
             self.assertEqual(
+                notification["operator_handles"]["assign"]["http"]["path"],
+                "/notifications/assign",
+            )
+            self.assertEqual(
                 notification["operator_handles"]["ack"]["http"]["path"],
                 "/notifications/ack",
+            )
+
+            assigned = handle_api_request(
+                store,
+                "/notifications/assign",
+                {
+                    "notification_id": notification["notification_id"],
+                    "assigned_to": "reviewer-a",
+                    "actor": "lead",
+                    "due_at": "2026-06-30T00:00:00+00:00",
+                    "reason": "route SEO review",
+                },
+            )
+            self.assertEqual(assigned["assigned_to"], "reviewer-a")
+            self.assertEqual(assigned["assigned_by"], "lead")
+            self.assertEqual(
+                store.list_notifications(assigned_to="reviewer-a")["count"],
+                1,
             )
 
             acknowledged = handle_api_request(
@@ -212,15 +234,19 @@ class ReviewInboxTests(unittest.TestCase):
                     "id": 1,
                     "method": "tools/call",
                     "params": {
-                        "name": "memory_notifications_list",
-                        "arguments": {"status": "acknowledged"},
+                        "name": "memory_notification_assign",
+                        "arguments": {
+                            "notification_id": notification["notification_id"],
+                            "assigned_to": "reviewer-b",
+                            "actor": "lead",
+                        },
                     },
                 }
             )
             self.assertFalse(mcp_list["result"]["isError"])
             self.assertEqual(
-                mcp_list["result"]["structuredContent"]["notifications"][0]["target_id"],
-                candidate_id,
+                mcp_list["result"]["structuredContent"]["assigned_to"],
+                "reviewer-b",
             )
 
             store.approve_candidate(candidate_id, actor="reviewer")
@@ -408,6 +434,17 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(inbox["items"][0]["candidate"]["candidate_id"], candidate_id)
             notifications = provider.notifications(status="open", topic="review_candidate")
             self.assertEqual(notifications["count"], 1)
+            assigned = provider.assign_notification(
+                notifications["notifications"][0]["notification_id"],
+                assigned_to="reviewer-provider",
+                actor="lead",
+                reason="provider assignment",
+            )
+            self.assertEqual(assigned["assigned_to"], "reviewer-provider")
+            self.assertEqual(
+                provider.notifications(status="open", assigned_to="reviewer-provider")["count"],
+                1,
+            )
             acknowledged = provider.ack_notification(
                 notifications["notifications"][0]["notification_id"],
                 actor="reviewer",

@@ -151,9 +151,18 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             topic=payload.get("topic"),
             severity=payload.get("severity"),
+            assigned_to=payload.get("assigned_to"),
             target_type=payload.get("target_type"),
             target_id=payload.get("target_id"),
             limit=int(payload.get("limit", 50) or 50),
+        )
+    if path == "/notifications/assign":
+        return store.assign_notification(
+            str(payload.get("notification_id", "")),
+            assigned_to=str(payload.get("assigned_to", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            due_at=str(payload.get("due_at", "")),
+            reason=str(payload.get("reason", "")),
         )
     if path == "/notifications/ack":
         return store.ack_notification(

@@ -170,10 +170,11 @@ reject, correct, delete, distrust, and expire. HTTP and MCP also expose
 correct/delete/distrust/expire lifecycle endpoints/tools.
 The baseline operator notification queue is implemented through `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
-`memory_notifications_list` / `memory_notification_ack` /
-`memory_notification_resolve`. Pending/quarantined review candidates,
-sensitive export approval requests, and expired export artifacts create open
-notifications that can be acknowledged or resolved.
+`memory_notifications_list` / `memory_notification_assign` /
+`memory_notification_ack` / `memory_notification_resolve`.
+Pending/quarantined review candidates, sensitive export approval requests, and
+expired export artifacts create open notifications that can be assigned to a
+reviewer with optional `due_at`, acknowledged, or resolved.
 Baseline batch review is implemented through `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
@@ -271,7 +272,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- reviewer assignment plus push/email/web notification transports;
+- push/email/web notification transports and SLAs;
 - hosted key-management and export custody controls.
 
 ## v1.0: Stable Memory Contract

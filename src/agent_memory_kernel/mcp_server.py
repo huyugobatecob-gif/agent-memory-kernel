@@ -347,10 +347,25 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "scope": _string("Optional memory scope/lane.", ""),
                 "topic": _string("Optional notification topic.", ""),
                 "severity": _string("Optional severity: info, warning, high, or critical.", ""),
+                "assigned_to": _string("Optional assigned operator filter.", ""),
                 "target_type": _string("Optional target type filter.", ""),
                 "target_id": _string("Optional target id filter.", ""),
                 "limit": _integer("Maximum notifications.", 50),
             }
+        ),
+    },
+    "memory_notification_assign": {
+        "endpoint": "/notifications/assign",
+        "description": "Assign an operator notification to a reviewer.",
+        "inputSchema": _schema(
+            {
+                "notification_id": _string("Notification id."),
+                "assigned_to": _string("Reviewer or operator id."),
+                "actor": _string("Assigning actor.", "reviewer"),
+                "due_at": _string("Optional due timestamp.", ""),
+                "reason": _string("Assignment reason.", ""),
+            },
+            ["notification_id", "assigned_to"],
         ),
     },
     "memory_notification_ack": {

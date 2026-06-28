@@ -524,6 +524,13 @@ class MemoryStore:
             ON derived_invalidations(memory_id, created_at)
             """
         )
+        for column, declaration in [
+            ("assigned_to", "TEXT NOT NULL DEFAULT ''"),
+            ("assigned_by", "TEXT NOT NULL DEFAULT ''"),
+            ("assigned_at", "TEXT"),
+            ("due_at", "TEXT NOT NULL DEFAULT ''"),
+        ]:
+            self._ensure_column("memory_notifications", column, declaration)
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         self.conn.commit()
@@ -1535,6 +1542,7 @@ class MemoryStore:
         scope: str | None = None,
         topic: str | None = None,
         severity: str | None = None,
+        assigned_to: str | None = None,
         target_type: str | None = None,
         target_id: str | None = None,
         limit: int = 50,
@@ -1560,6 +1568,9 @@ class MemoryStore:
         if severity:
             clauses.append("severity = ?")
             params.append(severity.strip().lower())
+        if assigned_to:
+            clauses.append("assigned_to = ?")
+            params.append(assigned_to.strip())
         if target_type:
             clauses.append("target_type = ?")
             params.append(target_type.strip().lower())
@@ -1630,6 +1641,41 @@ class MemoryStore:
             row["notification_id"],
             actor=actor,
             details={"reason": reason},
+        )
+        self.conn.commit()
+        return self._notification_to_dict(self._notification_row(notification_id))
+
+    def assign_notification(
+        self,
+        notification_id: str,
+        *,
+        assigned_to: str,
+        actor: str = "reviewer",
+        due_at: str = "",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        assignee = (assigned_to or "").strip()
+        if not assignee:
+            raise ValueError("assigned_to must not be empty")
+        row = self._notification_row(notification_id)
+        if row["status"] == "resolved":
+            return self._notification_to_dict(row)
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_notifications
+            SET updated_at = ?, assigned_to = ?, assigned_by = ?,
+                assigned_at = ?, due_at = ?
+            WHERE notification_id = ?
+            """,
+            (ts, assignee, actor, ts, due_at, row["notification_id"]),
+        )
+        self._audit(
+            "notification_assigned",
+            "memory_notification",
+            row["notification_id"],
+            actor=actor,
+            details={"assigned_to": assignee, "due_at": due_at, "reason": reason},
         )
         self.conn.commit()
         return self._notification_to_dict(self._notification_row(notification_id))
@@ -10769,6 +10815,10 @@ class MemoryStore:
             "topic": row["topic"],
             "scope": row["scope"],
             "actor": row["actor"],
+            "assigned_to": row["assigned_to"],
+            "assigned_by": row["assigned_by"],
+            "assigned_at": row["assigned_at"],
+            "due_at": row["due_at"],
             "target_type": row["target_type"],
             "target_id": row["target_id"],
             "title": row["title"],
@@ -10789,6 +10839,11 @@ class MemoryStore:
     def _notification_operator_handles(notification: dict[str, Any]) -> dict[str, Any]:
         notification_id = notification["notification_id"]
         handles: dict[str, Any] = {
+            "assign": {
+                "cli": f"agent-memory notifications assign {notification_id} --assigned-to reviewer",
+                "http": {"path": "/notifications/assign", "notification_id": notification_id},
+                "mcp": {"tool": "memory_notification_assign", "notification_id": notification_id},
+            },
             "ack": {
                 "cli": f"agent-memory notifications ack {notification_id} --actor reviewer",
                 "http": {"path": "/notifications/ack", "notification_id": notification_id},

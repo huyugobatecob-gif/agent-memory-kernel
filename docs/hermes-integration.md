@@ -106,6 +106,9 @@ class HermesMemoryProvider:
     def notifications(self, status: str = "open", scope: str | None = None, topic: str | None = None) -> dict:
         ...
 
+    def assign_notification(self, notification_id: str, assigned_to: str, actor: str = "reviewer", due_at: str = "", reason: str = "") -> dict:
+        ...
+
     def ack_notification(self, notification_id: str, actor: str = "reviewer", reason: str = "") -> dict:
         ...
 
@@ -258,8 +261,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
 `memory_graph_edges`, `memory_export_control`, `memory_export_profile`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
-`memory_notifications_list`, `memory_notification_ack`,
-`memory_notification_resolve`, and
+`memory_notifications_list`, `memory_notification_assign`,
+`memory_notification_ack`, `memory_notification_resolve`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
 `memory_export_retention_list`, `memory_export_retention_enforce`,
@@ -299,6 +302,7 @@ Useful endpoints:
 - `POST /current-best`
 - `POST /memory-changes`
 - `POST /notifications/list`
+- `POST /notifications/assign`
 - `POST /notifications/ack`
 - `POST /notifications/resolve`
 - `POST /derived-invalidations`
@@ -468,6 +472,8 @@ single operator queue across pending memory review, sensitive export approval,
 and export-retention cleanup. A notification can be acknowledged without
 mutating memory, then resolved automatically by the underlying approve/reject or
 purge action, or manually through `resolve_notification()`.
+Notifications can also be assigned to a reviewer with optional `due_at`, so
+Hermes can show per-operator queues before a browser UI exists.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP

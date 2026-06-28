@@ -46,6 +46,7 @@ notifications for:
 
 ```bash
 agent-memory notifications --db .memory/demo.db list --status open
+agent-memory notifications --db .memory/demo.db assign ntf_xxxxxxxxxxxxxxxx --assigned-to reviewer-a --actor lead
 agent-memory notifications --db .memory/demo.db ack ntf_xxxxxxxxxxxxxxxx --actor reviewer
 agent-memory notifications --db .memory/demo.db resolve ntf_xxxxxxxxxxxxxxxx --actor reviewer
 ```
@@ -53,6 +54,9 @@ agent-memory notifications --db .memory/demo.db resolve ntf_xxxxxxxxxxxxxxxx --a
 Approving or rejecting a candidate resolves candidate notifications. Approving
 or rejecting an export approval resolves export approval notifications. Purging
 an export retention record resolves the export retention notification.
+Assignments add `assigned_to`, `assigned_by`, `assigned_at`, and optional
+`due_at`, so Hermes or a UI can filter one reviewer queue without changing
+memory state.
 
 ## Actions
 
@@ -94,6 +98,7 @@ HTTP endpoints:
 - `POST /memory/distrust`
 - `POST /memory/expire`
 - `POST /notifications/list`
+- `POST /notifications/assign`
 - `POST /notifications/ack`
 - `POST /notifications/resolve`
 
@@ -108,6 +113,7 @@ MCP tools:
 - `memory_distrust`
 - `memory_expire`
 - `memory_notifications_list`
+- `memory_notification_assign`
 - `memory_notification_ack`
 - `memory_notification_resolve`
 
@@ -121,11 +127,12 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
 3. Call `notifications list --status open` or `memory_notifications_list` when
    the operator needs one queue across review, export approval, and retention
    cleanup.
-4. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
+4. Assign notifications to a reviewer when a human owner is needed.
+5. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
    approve/reject policy before mutating memory.
-5. Approve only candidates that are safe, scoped correctly, and useful.
-6. Reject quarantined or low-quality candidates.
-7. Use correct/delete/distrust/expire on already active memories when the
+6. Approve only candidates that are safe, scoped correctly, and useful.
+7. Reject quarantined or low-quality candidates.
+8. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -140,4 +147,4 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - browser-assisted batch approve/reject;
 - conflict warnings inline with candidates;
 - hosted key-management and export custody controls;
-- reviewer assignment, push/email/web notification transports, and SLAs.
+- push/email/web notification transports and SLAs.

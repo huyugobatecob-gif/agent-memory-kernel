@@ -221,9 +221,10 @@ Already present:
   batches support dry-run and per-candidate results.
 - Baseline operator notification queue through `agent-memory notifications`,
   `/notifications/*`, Hermes notification wrappers, and MCP
-  `memory_notifications_list` / `memory_notification_ack` /
-  `memory_notification_resolve`; review candidates, sensitive export approvals,
-  and expired export artifacts produce open notifications with operator handles.
+  `memory_notifications_list` / `memory_notification_assign` /
+  `memory_notification_ack` / `memory_notification_resolve`; review
+  candidates, sensitive export approvals, and expired export artifacts produce
+  open notifications with operator handles and reviewer assignment/filtering.
 - Baseline export governance through `agent-memory export-control`,
   `/export/control`, Hermes `export_control_report()`, and MCP
   `memory_export_control`; export previews show policy decisions, aggregate
@@ -320,8 +321,8 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review web UI, graph browser, batch correction, reviewer assignment,
-  push/email/web notification transports, and SLAs beyond the baseline
+- Human review web UI, graph browser, batch correction, push/email/web
+  notification transports, and SLAs beyond the baseline
   machine-readable review inbox, notification queue, and approve/reject batch
   flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
@@ -709,12 +710,12 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
-export approval, and retention cleanup. Remaining work is a browser review UI,
-graph browser, batch correction, reviewer assignment, notification transports,
-hosted key-management controls, and reviewer SLAs.
+export approval, retention cleanup, and reviewer assignment/filtering.
+Remaining work is a browser review UI, graph browser, batch correction,
+notification transports, hosted key-management controls, and reviewer SLAs.
 Export-control, redaction-profile, sensitive-export approval, export retention,
 and encrypted profile export baselines are implemented, but browser UI, graph
-browser, reviewer assignment/transports, and hosted key-management/off-host
+browser, notification transports/SLAs, and hosted key-management/off-host
 encryption remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
