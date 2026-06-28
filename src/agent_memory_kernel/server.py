@@ -43,6 +43,21 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 50) or 50),
             )
         }
+    if path == "/outcome/record":
+        return store.record_outcome(**payload)
+    if path == "/outcome/list":
+        return {
+            "outcomes": store.list_outcomes(
+                project=payload.get("project"),
+                outcome_status=payload.get("outcome_status"),
+                scope=payload.get("scope"),
+                status=payload.get("status"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/outcome/pack":
+        project = str(payload.pop("project"))
+        return {"pack": store.outcome_pack(project=project, **payload)}
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)

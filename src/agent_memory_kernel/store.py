@@ -325,6 +325,219 @@ class MemoryStore:
         self.conn.commit()
         return {"event_id": event_id, "candidates": candidates}
 
+    def record_outcome(
+        self,
+        *,
+        project: str,
+        outcome_status: str,
+        hypothesis: str = "",
+        action: str = "",
+        result: str = "",
+        cause: str = "",
+        lesson: str = "",
+        next_recommendation: str = "",
+        loop_id: str = "",
+        score: float = 0.0,
+        scope: str = "professional",
+        actor: str = "user",
+        auto_approve: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record a structured attempt/outcome for iterative work."""
+        scope = normalize_scope(scope)
+        project = (project or "").strip()
+        if not project:
+            raise ValueError("project must not be empty")
+        outcome_status = (outcome_status or "unknown").strip().lower()
+        if outcome_status not in {"success", "failure", "mixed", "unknown"}:
+            raise ValueError("outcome_status must be success, failure, mixed, or unknown")
+        if not any((hypothesis, action, result, cause, lesson, next_recommendation)):
+            raise ValueError("at least one outcome detail must be provided")
+
+        text = self._compose_outcome_memory_text(
+            project=project,
+            outcome_status=outcome_status,
+            hypothesis=hypothesis,
+            action=action,
+            result=result,
+            cause=cause,
+            lesson=lesson,
+            next_recommendation=next_recommendation,
+            loop_id=loop_id,
+        )
+        memory_result = self.remember(
+            text,
+            scope=scope,
+            actor=actor,
+            source_type="manual",
+            source_ref=f"outcome://{project}/{loop_id or 'manual'}",
+            auto_approve=auto_approve,
+            metadata={
+                **(metadata or {}),
+                "source_kind": "outcome_record",
+                "project": project,
+                "loop_id": loop_id,
+                "outcome_status": outcome_status,
+            },
+        )
+        candidate = memory_result["candidates"][0] if memory_result["candidates"] else {}
+        candidate_id = str(candidate.get("candidate_id", "") or "")
+        memory_id = str(candidate.get("memory_id", "") or "")
+        status = "active" if memory_id else str(candidate.get("status", "pending") or "pending")
+        outcome_id = new_id("outcome")
+        ts = now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO outcome_records
+              (outcome_id, created_at, updated_at, scope, project, loop_id,
+               outcome_status, score, hypothesis, action, result, cause,
+               lesson, next_recommendation, memory_id, candidate_id, event_id,
+               status, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                outcome_id,
+                ts,
+                ts,
+                scope,
+                project,
+                loop_id,
+                outcome_status,
+                float(score or 0),
+                hypothesis,
+                action,
+                result,
+                cause,
+                lesson,
+                next_recommendation,
+                memory_id or None,
+                candidate_id or None,
+                memory_result["event_id"],
+                status,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "record_outcome",
+            "outcome",
+            outcome_id,
+            actor=actor,
+            details={
+                "project": project,
+                "loop_id": loop_id,
+                "outcome_status": outcome_status,
+                "candidate_id": candidate_id,
+                "memory_id": memory_id,
+                "status": status,
+            },
+        )
+        self.conn.commit()
+        return {
+            "outcome_id": outcome_id,
+            "status": status,
+            "project": project,
+            "loop_id": loop_id,
+            "outcome_status": outcome_status,
+            "candidate_id": candidate_id,
+            "memory_id": memory_id,
+            "event_id": memory_result["event_id"],
+            "memory": memory_result,
+        }
+
+    def list_outcomes(
+        self,
+        *,
+        project: str | None = None,
+        outcome_status: str | None = None,
+        scope: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List structured outcome records."""
+        clauses = []
+        params: list[Any] = []
+        if project:
+            clauses.append("project = ?")
+            params.append(project)
+        if outcome_status:
+            clauses.append("outcome_status = ?")
+            params.append(outcome_status)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT outcome_id, created_at, updated_at, scope, project, loop_id,
+                   outcome_status, score, hypothesis, action, result, cause,
+                   lesson, next_recommendation, memory_id, candidate_id,
+                   event_id, status, metadata_json
+            FROM outcome_records
+            {where}
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        return [self._outcome_dict(row) for row in rows]
+
+    def outcome_pack(
+        self,
+        *,
+        project: str,
+        scope: str = "professional",
+        limit: int = 8,
+    ) -> str:
+        """Build a compact success/failure pack for planning the next loop."""
+        project = (project or "").strip()
+        if not project:
+            raise ValueError("project must not be empty")
+        outcomes = self.list_outcomes(
+            project=project,
+            scope=scope,
+            status="active",
+            limit=limit,
+        )
+        lines = [
+            "## Outcome Memory Pack",
+            "",
+            f"- project: {project}",
+            f"- scope: {normalize_scope(scope)}",
+            f"- records: {len(outcomes)}",
+        ]
+        if not outcomes:
+            lines.append("")
+            lines.append("No active outcome records matched this project.")
+            return "\n".join(lines)
+
+        for label, status_name in [
+            ("Successes", "success"),
+            ("Failures", "failure"),
+            ("Mixed / Unknown", "mixed"),
+            ("Unknown", "unknown"),
+        ]:
+            group = [item for item in outcomes if item["outcome_status"] == status_name]
+            if not group:
+                continue
+            lines.extend(["", f"### {label}"])
+            for item in group:
+                lines.append(
+                    f"- [{item['outcome_status']}; score={item['score']}; id={item['outcome_id']}] "
+                    f"{item['result'] or item['action'] or item['hypothesis']}"
+                )
+                if item["cause"]:
+                    lines.append(f"  Cause: {item['cause']}")
+                if item["lesson"]:
+                    lines.append(f"  Lesson: {item['lesson']}")
+                if item["next_recommendation"]:
+                    lines.append(f"  Next: {item['next_recommendation']}")
+                if item["memory_id"]:
+                    lines.append(f"  Memory: {item['memory_id']}")
+        return "\n".join(lines)
+
     def list_candidates(self, status: str = "pending") -> list[dict[str, Any]]:
         rows = self.conn.execute(
             """
@@ -3621,6 +3834,59 @@ class MemoryStore:
         except (TypeError, json.JSONDecodeError):
             return fallback
 
+    @staticmethod
+    def _compose_outcome_memory_text(
+        *,
+        project: str,
+        outcome_status: str,
+        hypothesis: str,
+        action: str,
+        result: str,
+        cause: str,
+        lesson: str,
+        next_recommendation: str,
+        loop_id: str,
+    ) -> str:
+        parts = [
+            f"Outcome: project {project} loop {loop_id or 'manual'} finished as {outcome_status}.",
+        ]
+        if hypothesis:
+            parts.append(f"Hypothesis: {hypothesis}")
+        if action:
+            parts.append(f"Attempt: {action}")
+        if result:
+            parts.append(f"Result: {result}")
+        if cause:
+            parts.append(f"Cause: {cause}")
+        if lesson:
+            parts.append(f"Lesson: {lesson}")
+        if next_recommendation:
+            parts.append(f"Next recommendation: {next_recommendation}")
+        return " ".join(part.strip() for part in parts if part.strip())
+
+    def _outcome_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "outcome_id": row["outcome_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "scope": row["scope"],
+            "project": row["project"],
+            "loop_id": row["loop_id"],
+            "outcome_status": row["outcome_status"],
+            "score": row["score"],
+            "hypothesis": row["hypothesis"],
+            "action": row["action"],
+            "result": row["result"],
+            "cause": row["cause"],
+            "lesson": row["lesson"],
+            "next_recommendation": row["next_recommendation"],
+            "memory_id": row["memory_id"] or "",
+            "candidate_id": row["candidate_id"] or "",
+            "event_id": row["event_id"] or "",
+            "status": row["status"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
     def _get_shadow_trace(self, shadow_trace_id: str) -> dict[str, Any]:
         row = self.conn.execute(
             """
@@ -3749,10 +4015,12 @@ class MemoryStore:
             "lesson": "pattern",
             "lessons": "pattern",
             "memory": "fact",
+            "outcomes": "outcome",
             "people": "person",
             "projects": "project",
             "success": "pattern",
             "successes": "pattern",
+            "attempts": "attempt",
             "tools": "tool",
         }
         return aliases.get(normalized, normalized)

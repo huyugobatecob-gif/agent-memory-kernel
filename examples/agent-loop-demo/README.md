@@ -3,9 +3,8 @@
 This demo shows how the same kernel can support iterative project memory:
 successes, failures, attempts, and reusable lessons.
 
-The current v0 extractor is intentionally simple, so these are stored as
-professional memories. A v0.2 outcome extractor can promote these into richer
-`attempt`, `outcome`, `pattern`, and `gotcha` nodes.
+Outcome records keep the loop-specific fields structured while also creating
+normal reviewable memory candidates.
 
 ## Run
 
@@ -16,33 +15,44 @@ PYTHONPATH=../../src python3 -m agent_memory_kernel.cli init --db /tmp/amk-loop.
 Record a failed attempt:
 
 ```bash
-PYTHONPATH=../../src python3 -m agent_memory_kernel.cli remember \
+PYTHONPATH=../../src python3 -m agent_memory_kernel.cli outcome \
   --db /tmp/amk-loop.db \
-  "Failed attempt: publishing thin SEO pages without internal links did not work for project demo-site." \
-  --scope professional
+  record \
+  --project demo-site \
+  --status failure \
+  --action "Published thin SEO pages without internal links." \
+  --result "Rankings did not improve." \
+  --cause "Pages lacked supporting internal links." \
+  --lesson "Do not publish thin pages without internal links." \
+  --next-recommendation "Add internal links before publishing." \
+  --approve
 ```
 
 Record a successful pattern:
 
 ```bash
-PYTHONPATH=../../src python3 -m agent_memory_kernel.cli remember \
+PYTHONPATH=../../src python3 -m agent_memory_kernel.cli outcome \
   --db /tmp/amk-loop.db \
-  "Rule: successful SEO refresh loops update search intent, add internal links, and track ranking changes after publishing." \
-  --scope professional \
+  record \
+  --project demo-site \
+  --status success \
+  --action "Updated search intent and added internal links." \
+  --result "Organic clicks improved after publishing." \
+  --cause "Intent matched the page better." \
+  --lesson "Refresh intent and internal links together." \
+  --next-recommendation "Reuse this pattern on similar pages." \
   --approve
 ```
 
-Search before planning the next loop:
+Build the outcome pack before planning the next loop:
 
 ```bash
-PYTHONPATH=../../src python3 -m agent_memory_kernel.cli context-pack \
+PYTHONPATH=../../src python3 -m agent_memory_kernel.cli outcome \
   --db /tmp/amk-loop.db \
-  "SEO refresh loop failed successful internal links"
+  pack \
+  --project demo-site
 ```
-
-## Future Extension
-
-The outcome layer can turn the notes above into a graph:
+The outcome pack gives the planner both what worked and what failed:
 
 ```mermaid
 flowchart TD

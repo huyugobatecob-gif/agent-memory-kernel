@@ -21,6 +21,7 @@ The adapter should:
 - record session summaries, decisions, attempts, successes, and failures;
 - inspect graph nodes and Keeper runs while debugging retrieval;
 - record conflicts or supersede stale memory when newer user/project truth wins;
+- record structured loop outcomes and retrieve outcome packs before planning;
 - leave durable promotion to policy or review;
 - expose pending memory review to the user or operator.
 
@@ -71,3 +72,19 @@ Keeper candidates.
 When a later decision replaces an older memory, call `supersede_memory()` rather
 than leaving both facts active. If the winner is unclear, call
 `record_memory_conflict()` and leave the conflict open for review.
+
+For SEO or agent loops, record measured outcomes:
+
+```python
+provider.record_outcome(
+    project="demo-site",
+    outcome_status="success",
+    action="Updated search intent and internal links.",
+    result="Organic clicks improved.",
+    lesson="Refresh intent and links together.",
+    next_recommendation="Reuse this pattern on similar pages.",
+    auto_approve=True,
+)
+
+pack = provider.outcome_pack("demo-site")
+```

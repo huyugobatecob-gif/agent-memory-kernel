@@ -99,6 +99,8 @@ Already present:
   source IDs, token budget, and access mode.
 - Explicit conflict and supersession records that suppress superseded memory
   from active retrieval and graph export.
+- First-class outcome records and outcome packs for success/failure loop
+  planning.
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
@@ -118,7 +120,7 @@ Remaining for full memory:
 - Production daemon mode for long-running Keeper workers.
 - MCP server for agents that should not use CLI or HTTP directly.
 - Provider embeddings and semantic reranking.
-- First-class outcome memory for success/failure loops.
+- Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review UI or inbox.
 - Explicit identity, scope, permission, and tenancy rules.
 - Memory lifecycle propagation for correct, delete, distrust, expire, and
@@ -405,11 +407,13 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli worker --db /tmp/amk-full-memo
 
 **Files:**
 
-- Add `src/agent_memory_kernel/outcomes.py`.
+- Modify `src/agent_memory_kernel/schema.sql`.
 - Modify `src/agent_memory_kernel/store.py`.
+- Modify `src/agent_memory_kernel/cli.py`.
+- Modify `src/agent_memory_kernel/server.py`.
 - Modify `docs/hermes-integration.md`.
 - Modify `examples/agent-loop-demo/README.md`.
-- Add tests in `tests/test_outcome_memory.py`.
+- Add tests in `tests/test_memory_store.py`.
 
 **Commands:**
 
@@ -417,9 +421,11 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli worker --db /tmp/amk-full-memo
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** A new loop plan retrieves similar successful attempts, failed attempts, derived rules, and gotchas with provenance.
+**Verification:** A new loop plan retrieves active successful and failed
+outcomes with cause, lesson, next recommendation, and linked memory provenance.
 
-**Result:** Agents can plan from prior outcomes instead of repeating failed loops.
+**Result:** Baseline implemented. Remaining work is richer similarity scoring,
+automatic lesson extraction, and project-level comparison reports.
 
 ### Step 13: Add Review Inbox And Correction Flow
 

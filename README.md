@@ -46,6 +46,7 @@ Included now:
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Scope access enforcement for runtime memory retrieval.
 - Conflict and supersession records for truth maintenance.
+- First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
 - Local stdlib HTTP API service: `serve`.
 - Conversation turns, thread messages, and rolling summaries.
@@ -135,6 +136,24 @@ agent-memory conflict --db .memory/demo.db list --status resolved
 
 `supersede` suppresses the old memory from retrieval and graph export while
 recording a resolved conflict relationship for audit.
+
+Record a loop outcome:
+
+```bash
+agent-memory outcome --db .memory/demo.db record \
+  --project demo-site \
+  --status success \
+  --action "Updated search intent and internal links." \
+  --result "Organic clicks improved after publishing." \
+  --lesson "Refresh intent and internal links together." \
+  --next-recommendation "Reuse this pattern on similar pages." \
+  --approve
+
+agent-memory outcome --db .memory/demo.db pack --project demo-site
+```
+
+Outcome records keep structured attempt/result/cause/lesson fields and can also
+create normal memory candidates, so they remain reviewable and provenance-backed.
 
 Build a context pack for an agent:
 
@@ -285,6 +304,9 @@ attempt -> outcome -> lesson -> reusable_rule
 attempt -> failed_because -> gotcha
 attempt -> succeeded_because -> pattern
 ```
+
+The starter implementation exposes this as `agent-memory outcome record/list/pack`
+and `/outcome/record`, `/outcome/list`, `/outcome/pack`.
 
 See [examples/agent-loop-demo/README.md](examples/agent-loop-demo/README.md).
 

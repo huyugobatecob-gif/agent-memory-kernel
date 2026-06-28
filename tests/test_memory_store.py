@@ -215,6 +215,67 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertNotIn("weekly", active_graph_text)
             store.close()
 
+    def test_outcome_records_create_loop_memory_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            success = store.record_outcome(
+                project="outcome-site",
+                loop_id="loop-1",
+                outcome_status="success",
+                hypothesis="Refreshing titles can recover clicks.",
+                action="Updated title intent and added internal links.",
+                result="Clicks improved after publishing.",
+                cause="Search intent matched the page better.",
+                lesson="Refresh intent and internal links together.",
+                next_recommendation="Reuse this refresh pattern on similar pages.",
+                score=0.9,
+                auto_approve=True,
+            )
+            failure = store.record_outcome(
+                project="outcome-site",
+                loop_id="loop-2",
+                outcome_status="failure",
+                action="Published thin pages without internal links.",
+                result="Rankings did not improve.",
+                cause="Pages lacked supporting internal links.",
+                lesson="Do not publish thin pages without internal links.",
+                next_recommendation="Add internal links before publishing.",
+                score=-0.4,
+                auto_approve=True,
+            )
+            pending = store.record_outcome(
+                project="outcome-site",
+                loop_id="loop-3",
+                outcome_status="mixed",
+                result="Needs review before becoming active.",
+            )
+
+            self.assertEqual(success["status"], "active")
+            self.assertEqual(failure["status"], "active")
+            self.assertEqual(pending["status"], "pending")
+            success_search = store.search("Clicks improved", scope="professional")
+            self.assertTrue(success_search)
+            self.assertEqual(success_search[0]["kind"], "outcome")
+            outcomes = store.list_outcomes(project="outcome-site", status="active")
+            self.assertEqual(len(outcomes), 2)
+            self.assertTrue(any(item["outcome_status"] == "success" for item in outcomes))
+            self.assertTrue(any(item["outcome_status"] == "failure" for item in outcomes))
+
+            pack = store.outcome_pack(project="outcome-site")
+            self.assertIn("### Successes", pack)
+            self.assertIn("### Failures", pack)
+            self.assertIn("Refresh intent and internal links together", pack)
+            self.assertIn("Do not publish thin pages without internal links", pack)
+            self.assertNotIn("Needs review before becoming active", pack)
+
+            graph_labels = "\n".join(
+                node["label"] for node in store.list_graph_nodes(scope="professional")
+            )
+            self.assertIn("outcome-site", graph_labels)
+            store.close()
+
     def test_approved_memory_creates_graph_nodes_and_edges(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -808,6 +869,29 @@ class MemoryStoreTests(unittest.TestCase):
                 },
             )
             conflicts = handle_api_request(store, "/conflict/list", {"status": "resolved"})
+            outcome = handle_api_request(
+                store,
+                "/outcome/record",
+                {
+                    "project": "api-outcome",
+                    "outcome_status": "success",
+                    "action": "Updated internal links.",
+                    "result": "Organic clicks improved.",
+                    "lesson": "Internal links helped the refresh loop.",
+                    "next_recommendation": "Reuse internal link refresh.",
+                    "auto_approve": True,
+                },
+            )
+            outcomes = handle_api_request(
+                store,
+                "/outcome/list",
+                {"project": "api-outcome", "status": "active"},
+            )
+            outcome_pack = handle_api_request(
+                store,
+                "/outcome/pack",
+                {"project": "api-outcome"},
+            )
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -825,6 +909,9 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(conflict["status"], "open")
             self.assertEqual(supersede["status"], "superseded")
             self.assertTrue(conflicts["conflicts"])
+            self.assertEqual(outcome["status"], "active")
+            self.assertEqual(len(outcomes["outcomes"]), 1)
+            self.assertIn("Internal links helped", outcome_pack["pack"])
             store.close()
 
 

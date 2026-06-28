@@ -27,6 +27,10 @@ class RuleBasedExtractor(Extractor):
         kind = "fact"
         if "i prefer" in lowered or "my preference" in lowered or "i like" in lowered:
             kind = "preference"
+        elif "outcome:" in lowered or "result:" in lowered:
+            kind = "outcome"
+        elif "attempt:" in lowered or "attempted " in lowered:
+            kind = "attempt"
         elif "rule:" in lowered or "must " in lowered or "should " in lowered:
             kind = "rule"
         elif "decided" in lowered or "decision:" in lowered:

@@ -230,6 +230,54 @@ def cmd_shadow_evals(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_outcome_record(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.record_outcome(
+        project=args.project,
+        loop_id=args.loop_id,
+        outcome_status=args.status,
+        score=args.score,
+        hypothesis=args.hypothesis,
+        action=args.action,
+        result=args.result,
+        cause=args.cause,
+        lesson=args.lesson,
+        next_recommendation=args.next_recommendation,
+        scope=args.scope,
+        actor=args.actor,
+        auto_approve=args.approve,
+        metadata=json.loads(args.metadata_json),
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
+def cmd_outcome_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_outcomes(
+            project=args.project,
+            outcome_status=args.status,
+            scope=args.scope,
+            status=args.record_status,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_outcome_pack(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print(store.outcome_pack(project=args.project, scope=args.scope, limit=args.limit))
+    store.close()
+    return 0
+
+
 def cmd_tree_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -747,6 +795,41 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", choices=["pass", "fail"])
     p.add_argument("--limit", type=int, default=50)
     p.set_defaults(func=cmd_shadow_evals)
+
+    p = sub.add_parser("outcome", help="Record and retrieve first-class loop outcomes")
+    add_common_db(p)
+    outcome_sub = p.add_subparsers(dest="outcome_command", required=True)
+
+    op = outcome_sub.add_parser("record", help="Record a structured attempt/outcome")
+    op.add_argument("--project", required=True)
+    op.add_argument("--loop-id", default="")
+    op.add_argument("--status", default="unknown", choices=["success", "failure", "mixed", "unknown"])
+    op.add_argument("--score", type=float, default=0.0)
+    op.add_argument("--hypothesis", default="")
+    op.add_argument("--action", default="")
+    op.add_argument("--result", default="")
+    op.add_argument("--cause", default="")
+    op.add_argument("--lesson", default="")
+    op.add_argument("--next-recommendation", default="")
+    op.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    op.add_argument("--actor", default="user")
+    op.add_argument("--approve", action="store_true", help="Auto-approve the generated outcome memory")
+    op.add_argument("--metadata-json", default="{}")
+    op.set_defaults(func=cmd_outcome_record)
+
+    op = outcome_sub.add_parser("list", help="List outcome records")
+    op.add_argument("--project")
+    op.add_argument("--status", choices=["success", "failure", "mixed", "unknown"])
+    op.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    op.add_argument("--record-status", choices=["pending", "active", "quarantined", "rejected"])
+    op.add_argument("--limit", type=int, default=50)
+    op.set_defaults(func=cmd_outcome_list)
+
+    op = outcome_sub.add_parser("pack", help="Build an outcome memory pack for planning")
+    op.add_argument("--project", required=True)
+    op.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    op.add_argument("--limit", type=int, default=8)
+    op.set_defaults(func=cmd_outcome_pack)
 
     p = sub.add_parser("tree-pack", help="Build a branch-oriented memory tree pack for an agent")
     add_common_db(p)

@@ -42,6 +42,12 @@ Planned:
 This is the layer that makes loops powerful for SEO projects, QA projects,
 research projects, and agent optimization.
 
+Current status: baseline outcome records are implemented through
+`agent-memory outcome record/list/pack`, `/outcome/record`, `/outcome/list`,
+`/outcome/pack`, and the Hermes provider wrapper. Outcome records store
+project, loop id, status, hypothesis, action, result, cause, lesson, next
+recommendation, score, and links to candidate/active memory.
+
 ## v0.2 Full Memory Gap
 
 The automatic memory gap plan is tracked in
@@ -94,6 +100,8 @@ Conflict and supersession records are implemented through `agent-memory
 conflict`, `agent-memory supersede`, `/conflict/record`, `/conflict/list`, and
 `/supersede`. Superseded memory is suppressed from active retrieval and graph
 export while the resolved relationship remains auditable.
+Outcome records and outcome packs are implemented for success/failure loop
+planning.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters

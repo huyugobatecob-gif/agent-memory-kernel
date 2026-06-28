@@ -233,6 +233,61 @@ class HermesMemoryProvider:
     ) -> list[dict[str, Any]]:
         return self.store.list_memory_conflicts(status=status, scope=scope, limit=limit)
 
+    def record_outcome(
+        self,
+        *,
+        project: str,
+        outcome_status: str,
+        hypothesis: str = "",
+        action: str = "",
+        result: str = "",
+        cause: str = "",
+        lesson: str = "",
+        next_recommendation: str = "",
+        loop_id: str = "",
+        score: float = 0.0,
+        scope: str = "professional",
+        actor: str = "hermes",
+        auto_approve: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.record_outcome(
+            project=project,
+            outcome_status=outcome_status,
+            hypothesis=hypothesis,
+            action=action,
+            result=result,
+            cause=cause,
+            lesson=lesson,
+            next_recommendation=next_recommendation,
+            loop_id=loop_id,
+            score=score,
+            scope=scope,
+            actor=actor,
+            auto_approve=auto_approve,
+            metadata=metadata,
+        )
+
+    def outcome_pack(self, project: str, scope: str = "professional", limit: int = 8) -> str:
+        return self.store.outcome_pack(project=project, scope=scope, limit=limit)
+
+    def outcomes(
+        self,
+        *,
+        project: str | None = None,
+        outcome_status: str | None = None,
+        scope: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_outcomes(
+            project=project,
+            outcome_status=outcome_status,
+            scope=scope,
+            status=status,
+            limit=limit,
+        )
+
     def process_keeper_jobs(self, limit: int = 10, actor: str = "hermes-worker") -> dict[str, Any]:
         return self.store.process_keeper_jobs(limit=limit, actor=actor)
 

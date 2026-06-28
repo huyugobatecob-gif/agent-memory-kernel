@@ -121,6 +121,9 @@ Useful endpoints:
 - `POST /conflict/record`
 - `POST /conflict/list`
 - `POST /supersede`
+- `POST /outcome/record`
+- `POST /outcome/list`
+- `POST /outcome/pack`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
 - `POST /worker/run`
 
@@ -247,6 +250,29 @@ Hermes can also record notable events:
 
 These should enter as candidate memories unless a trusted policy explicitly
 auto-approves them.
+
+For iterative SEO or agent loops, Hermes should also record structured outcomes:
+
+```bash
+agent-memory outcome record \
+  --project demo-site \
+  --status failure \
+  --action "Published thin pages without internal links." \
+  --result "Rankings did not improve." \
+  --cause "Pages lacked supporting internal links." \
+  --lesson "Do not publish thin pages without internal links." \
+  --next-recommendation "Add internal links before publishing." \
+  --approve
+```
+
+Before planning the next loop:
+
+```bash
+agent-memory outcome pack --project demo-site
+```
+
+The outcome pack gives the planner compact success/failure history without
+making it scan the entire graph.
 
 When a turn should become durable memory immediately:
 

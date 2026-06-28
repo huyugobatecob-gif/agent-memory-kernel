@@ -106,6 +106,28 @@ CREATE TABLE IF NOT EXISTS memory_items (
     metadata_json  TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS outcome_records (
+    outcome_id          TEXT PRIMARY KEY,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    scope               TEXT NOT NULL DEFAULT 'professional',
+    project             TEXT NOT NULL DEFAULT '',
+    loop_id             TEXT NOT NULL DEFAULT '',
+    outcome_status      TEXT NOT NULL DEFAULT 'unknown',
+    score               REAL NOT NULL DEFAULT 0,
+    hypothesis          TEXT NOT NULL DEFAULT '',
+    action              TEXT NOT NULL DEFAULT '',
+    result              TEXT NOT NULL DEFAULT '',
+    cause               TEXT NOT NULL DEFAULT '',
+    lesson              TEXT NOT NULL DEFAULT '',
+    next_recommendation TEXT NOT NULL DEFAULT '',
+    memory_id           TEXT REFERENCES memories(memory_id),
+    candidate_id        TEXT REFERENCES candidate_memories(candidate_id),
+    event_id            TEXT REFERENCES events(event_id),
+    status              TEXT NOT NULL DEFAULT 'pending',
+    metadata_json       TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS memory_graph_nodes (
     graph_node_id  TEXT PRIMARY KEY,
     created_at     TEXT NOT NULL,
@@ -436,6 +458,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_memory ON memory_items(memory_id);
 CREATE INDEX IF NOT EXISTS idx_memory_items_event ON memory_items(event_id);
 CREATE INDEX IF NOT EXISTS idx_memory_items_scope ON memory_items(scope);
 CREATE INDEX IF NOT EXISTS idx_memory_items_type ON memory_items(item_type);
+CREATE INDEX IF NOT EXISTS idx_outcome_records_project ON outcome_records(project);
+CREATE INDEX IF NOT EXISTS idx_outcome_records_scope_status ON outcome_records(scope, outcome_status);
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_scope_type ON memory_graph_nodes(scope, node_type);
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_label ON memory_graph_nodes(label);
 CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON memory_graph_edges(source_graph_node_id);
