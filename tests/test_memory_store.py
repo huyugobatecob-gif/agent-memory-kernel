@@ -286,6 +286,57 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(profile["memory_tree"]["edge_evidence"], [])
             store.close()
 
+    def test_correct_memory_records_revision_and_rollback_restores_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            result = store.remember(
+                "Decision: project rollback-site target market is ecommerce.",
+                scope="professional",
+                auto_approve=True,
+            )
+            memory_id = result["candidates"][0]["memory_id"]
+
+            store.correct_memory(
+                memory_id,
+                "Decision: project rollback-site target market is B2B SaaS.",
+                actor="reviewer",
+                reason="user corrected target market",
+            )
+            revisions = store.list_memory_revisions(memory_id)
+            self.assertEqual(len(revisions), 1)
+            self.assertIn("ecommerce", revisions[0]["previous_text"])
+            self.assertIn("B2B SaaS", revisions[0]["new_text"])
+            self.assertEqual(revisions[0]["reason"], "user corrected target market")
+            self.assertEqual(store.search("ecommerce", scope="professional"), [])
+            self.assertTrue(store.search("B2B SaaS", scope="professional"))
+
+            rollback = store.rollback_memory(
+                memory_id,
+                revision_id=revisions[0]["revision_id"],
+                actor="reviewer",
+                reason="restore original market",
+            )
+            self.assertEqual(rollback["status"], "rolled_back")
+            self.assertEqual(store.search("B2B SaaS", scope="professional"), [])
+            self.assertTrue(store.search("ecommerce", scope="professional"))
+            rollback_revisions = store.list_memory_revisions(memory_id)
+            self.assertEqual(len(rollback_revisions), 2)
+            self.assertEqual(
+                rollback_revisions[0]["rollback_of_revision_id"],
+                revisions[0]["revision_id"],
+            )
+            audit_actions = [
+                row["action"]
+                for row in store.conn.execute(
+                    "SELECT action FROM audit_log WHERE target_type = 'memory'"
+                ).fetchall()
+            ]
+            self.assertIn("correct", audit_actions)
+            self.assertIn("rollback", audit_actions)
+            store.close()
+
     def test_distrust_and_expire_suppress_retrieval_and_graph(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -1108,6 +1159,35 @@ class MemoryStoreTests(unittest.TestCase):
                 },
             )
             conflicts = handle_api_request(store, "/conflict/list", {"status": "resolved"})
+            rollback_memory = handle_api_request(
+                store,
+                "/remember",
+                {
+                    "text": "Decision: project api-rollback owner is Alice.",
+                    "scope": "professional",
+                    "auto_approve": True,
+                },
+            )["candidates"][0]["memory_id"]
+            store.correct_memory(
+                rollback_memory,
+                "Decision: project api-rollback owner is Bob.",
+                actor="api-reviewer",
+            )
+            revisions = handle_api_request(
+                store,
+                "/memory/revisions",
+                {"memory_id": rollback_memory},
+            )
+            rollback = handle_api_request(
+                store,
+                "/memory/rollback",
+                {
+                    "memory_id": rollback_memory,
+                    "revision_id": revisions["revisions"][0]["revision_id"],
+                    "actor": "api-reviewer",
+                    "reason": "restore owner",
+                },
+            )
             outcome = handle_api_request(
                 store,
                 "/outcome/record",
@@ -1148,6 +1228,9 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(conflict["status"], "open")
             self.assertEqual(supersede["status"], "superseded")
             self.assertTrue(conflicts["conflicts"])
+            self.assertEqual(len(revisions["revisions"]), 1)
+            self.assertEqual(rollback["status"], "rolled_back")
+            self.assertTrue(store.search("Alice", scope="professional"))
             self.assertEqual(outcome["status"], "active")
             self.assertEqual(len(outcomes["outcomes"]), 1)
             self.assertIn("Internal links helped", outcome_pack["pack"])

@@ -2723,16 +2723,32 @@ class MemoryStore:
         self.conn.commit()
         return {"processed": len(jobs), "jobs": jobs}
 
-    def correct_memory(self, memory_id: str, text: str, *, actor: str = "user") -> None:
+    def correct_memory(
+        self,
+        memory_id: str,
+        text: str,
+        *,
+        actor: str = "user",
+        reason: str = "",
+    ) -> None:
         text = (text or "").strip()
         if not text:
             raise ValueError("text must not be empty")
         row = self.conn.execute(
-            "SELECT memory_id, scope FROM memories WHERE memory_id = ?", (memory_id,)
+            "SELECT memory_id, scope, text FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"memory not found: {memory_id}")
         self._enforce_write_policy(actor, row["scope"], "correct")
+        if text == row["text"]:
+            return
+        revision_id = self._record_memory_revision(
+            memory_id,
+            previous_text=row["text"],
+            new_text=text,
+            actor=actor,
+            reason=reason,
+        )
         self.conn.execute(
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
@@ -2742,8 +2758,96 @@ class MemoryStore:
             (text, now_iso(), memory_id),
         )
         self._propagate_corrected_memory(memory_id, text)
-        self._audit("correct", "memory", memory_id, actor=actor)
+        self._audit("correct", "memory", memory_id, actor=actor, details={"revision_id": revision_id})
         self.conn.commit()
+
+    def rollback_memory(
+        self,
+        memory_id: str,
+        *,
+        revision_id: str = "",
+        actor: str = "user",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        row = self.conn.execute(
+            "SELECT memory_id, scope, text FROM memories WHERE memory_id = ?", (memory_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"memory not found: {memory_id}")
+        self._enforce_write_policy(actor, row["scope"], "correct")
+        revision = self._revision_row(memory_id, revision_id=revision_id)
+        if revision is None:
+            raise KeyError(f"revision not found for memory: {memory_id}")
+        restored_text = str(revision["previous_text"])
+        if restored_text == row["text"]:
+            return {
+                "memory_id": memory_id,
+                "status": "unchanged",
+                "revision_id": revision["revision_id"],
+            }
+        rollback_revision_id = self._record_memory_revision(
+            memory_id,
+            previous_text=row["text"],
+            new_text=restored_text,
+            actor=actor,
+            reason=reason or "rollback",
+            rollback_of_revision_id=str(revision["revision_id"]),
+        )
+        ts = now_iso()
+        self.conn.execute(
+            "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
+            (restored_text, ts, memory_id),
+        )
+        self.conn.execute(
+            "UPDATE memory_items SET text = ?, updated_at = ? WHERE memory_id = ?",
+            (restored_text, ts, memory_id),
+        )
+        self._propagate_corrected_memory(memory_id, restored_text)
+        self._audit(
+            "rollback",
+            "memory",
+            memory_id,
+            actor=actor,
+            details={
+                "restored_revision_id": revision["revision_id"],
+                "rollback_revision_id": rollback_revision_id,
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        return {
+            "memory_id": memory_id,
+            "status": "rolled_back",
+            "revision_id": revision["revision_id"],
+            "rollback_revision_id": rollback_revision_id,
+        }
+
+    def list_memory_revisions(self, memory_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT revision_id, memory_id, created_at, actor, previous_text,
+                   new_text, reason, rollback_of_revision_id, metadata_json
+            FROM memory_revisions
+            WHERE memory_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT ?
+            """,
+            (memory_id, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [
+            {
+                "revision_id": row["revision_id"],
+                "memory_id": row["memory_id"],
+                "created_at": row["created_at"],
+                "actor": row["actor"],
+                "previous_text": row["previous_text"],
+                "new_text": row["new_text"],
+                "reason": row["reason"],
+                "rollback_of_revision_id": row["rollback_of_revision_id"],
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for row in rows
+        ]
 
     def delete_memory(self, memory_id: str, *, actor: str = "user", reason: str = "") -> None:
         self._deactivate_memory(memory_id, status="deleted", actor=actor, reason=reason)
@@ -4538,6 +4642,61 @@ class MemoryStore:
         return self.conn.execute(
             "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
+
+    def _revision_row(self, memory_id: str, *, revision_id: str = "") -> sqlite3.Row | None:
+        revision_id = (revision_id or "").strip()
+        if revision_id:
+            return self.conn.execute(
+                """
+                SELECT *
+                FROM memory_revisions
+                WHERE memory_id = ? AND revision_id = ?
+                """,
+                (memory_id, revision_id),
+            ).fetchone()
+        return self.conn.execute(
+            """
+            SELECT *
+            FROM memory_revisions
+            WHERE memory_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1
+            """,
+            (memory_id,),
+        ).fetchone()
+
+    def _record_memory_revision(
+        self,
+        memory_id: str,
+        *,
+        previous_text: str,
+        new_text: str,
+        actor: str,
+        reason: str = "",
+        rollback_of_revision_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        revision_id = new_id("revn")
+        self.conn.execute(
+            """
+            INSERT INTO memory_revisions
+              (revision_id, memory_id, created_at, actor, previous_text,
+               new_text, reason, rollback_of_revision_id, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                revision_id,
+                memory_id,
+                now_iso(),
+                actor,
+                previous_text,
+                new_text,
+                reason,
+                rollback_of_revision_id,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        return revision_id
 
     def _node_hits(
         self,

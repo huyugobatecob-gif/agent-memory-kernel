@@ -224,6 +224,24 @@ class HermesMemoryProvider:
             metadata=metadata,
         )
 
+    def memory_revisions(self, memory_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        return self.store.list_memory_revisions(memory_id, limit=limit)
+
+    def rollback_memory(
+        self,
+        memory_id: str,
+        *,
+        revision_id: str = "",
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.rollback_memory(
+            memory_id,
+            revision_id=revision_id,
+            actor=actor,
+            reason=reason,
+        )
+
     def memory_conflicts(
         self,
         *,

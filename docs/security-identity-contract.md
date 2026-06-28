@@ -60,6 +60,8 @@ Implemented local runtime behavior:
   as review candidates;
 - denied review, lifecycle, outcome, conflict, and supersession actions raise
   `PermissionError` before mutation and record `write_denied` audit events.
+- correction and rollback history is stored in `memory_revisions` so operators
+  can inspect and restore prior memory text without erasing audit history.
 
 ## Permissions
 

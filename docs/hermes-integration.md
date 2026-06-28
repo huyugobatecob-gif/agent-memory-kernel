@@ -128,6 +128,8 @@ Useful endpoints:
 - `POST /review/list`
 - `POST /conflict/record`
 - `POST /conflict/list`
+- `POST /memory/revisions`
+- `POST /memory/rollback`
 - `POST /supersede`
 - `POST /outcome/record`
 - `POST /outcome/list`

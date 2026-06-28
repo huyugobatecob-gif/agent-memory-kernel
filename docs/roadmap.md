@@ -23,6 +23,7 @@ Status: implemented in this template.
 - Memory Tree Packs.
 - Context builder packs.
 - Agent write-policy enforcement.
+- Memory revision history and rollback.
 - OpenAI-compatible lightweight extractor adapter.
 - Markdown vault export.
 - Tests.
@@ -110,6 +111,8 @@ export while the resolved relationship remains auditable.
 Outcome records and outcome packs are implemented for success/failure loop
 planning.
 Delete, distrust, and expire now suppress retrieval and active graph export.
+Corrections now record `memory_revisions`; `agent-memory revisions` and
+`agent-memory rollback` expose operator-visible rollback.
 
 ## v0.3: Adapters
 

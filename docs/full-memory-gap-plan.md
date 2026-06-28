@@ -83,6 +83,7 @@ Already present:
 
 - SQLite source of truth.
 - Raw events, candidate memories, active memories, review actions, correction, delete, and export.
+- Memory revision history and rollback for corrected active memories.
 - Conversation turns, thread messages, and thread summaries.
 - `memory_items`, `memory_graph_nodes`, `memory_graph_edges`, node evidence, and edge evidence.
 - Keeper run and graph command audit tables.

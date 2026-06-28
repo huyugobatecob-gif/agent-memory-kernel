@@ -47,6 +47,7 @@ Included now:
 - Scope access enforcement for runtime memory retrieval.
 - Agent write-policy enforcement for record, auto-approve, review, lifecycle,
   outcome, conflict, and supersession paths.
+- Correction revision history and rollback for active memories.
 - Conflict and supersession records for truth maintenance.
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
@@ -140,6 +141,23 @@ agent-memory conflict --db .memory/demo.db list --status resolved
 
 `supersede` suppresses the old memory from retrieval and graph export while
 recording a resolved conflict relationship for audit.
+
+Correct and rollback memory:
+
+```bash
+agent-memory correct --db .memory/demo.db mem_xxxxxxxxxxxxxxxx \
+  "Decision: demo-site target market is B2B SaaS." \
+  --reason "user corrected target market"
+
+agent-memory revisions --db .memory/demo.db mem_xxxxxxxxxxxxxxxx
+agent-memory rollback --db .memory/demo.db mem_xxxxxxxxxxxxxxxx \
+  --revision-id revn_xxxxxxxxxxxxxxxx \
+  --reason "restore previous wording"
+```
+
+Corrections store before/after text in `memory_revisions`. Rollback restores
+the prior text, propagates the change to memory items and graph summaries, and
+records a new rollback revision plus audit event.
 
 Record a loop outcome:
 

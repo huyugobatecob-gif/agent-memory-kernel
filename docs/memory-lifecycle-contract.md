@@ -38,7 +38,7 @@ Active memory can be retrieved. It must have:
 - sensitivity;
 - scope/lane;
 - owner/project when applicable;
-- correction and deletion history.
+- correction, rollback, and deletion history.
 
 ### Derived Memory
 
@@ -82,7 +82,7 @@ memory becomes active.
 Required propagation:
 
 - update active memory text;
-- mark old memory as superseded;
+- record before/after text in `memory_revisions`;
 - add correction audit event;
 - update linked memory item;
 - update graph node summaries and blobs;
@@ -91,6 +91,20 @@ Required propagation:
 - invalidate cached context packs;
 - update style/brain aggregates if affected;
 - keep old evidence for audit but prevent stale retrieval.
+
+## Rollback
+
+Rollback restores active memory text from a prior correction revision.
+
+Required propagation:
+
+- select an explicit revision or the latest revision for that memory;
+- restore the revision's `previous_text`;
+- record a new rollback revision with `rollback_of_revision_id`;
+- update linked memory item;
+- update graph node summaries and blobs through the same correction propagation;
+- add rollback audit event;
+- preserve both the corrected text and rollback reason in revision history.
 
 ## Delete
 
@@ -187,6 +201,7 @@ The lifecycle is not complete until tests cover:
 
 - create -> retrieve;
 - correct -> old memory no longer retrieved;
+- rollback -> previous text is retrieved again and rollback revision is recorded;
 - delete -> derived graph edge removed or disabled;
 - distrust -> memory visible in audit but absent from prompt;
 - conflict -> newer trusted memory wins;

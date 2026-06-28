@@ -90,6 +90,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         candidate_id = str(payload.pop("candidate_id"))
         store.reject_candidate(candidate_id, **payload)
         return {"candidate_id": candidate_id, "status": "rejected"}
+    if path == "/memory/revisions":
+        memory_id = str(payload.pop("memory_id"))
+        return {
+            "revisions": store.list_memory_revisions(
+                memory_id,
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/memory/rollback":
+        memory_id = str(payload.pop("memory_id"))
+        return store.rollback_memory(memory_id, **payload)
     if path == "/supersede":
         old_memory_id = str(payload.pop("old_memory_id"))
         new_memory_id = str(payload.pop("new_memory_id"))

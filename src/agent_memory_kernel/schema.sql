@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS memory_conflicts (
     metadata_json    TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS memory_revisions (
+    revision_id             TEXT PRIMARY KEY,
+    memory_id               TEXT NOT NULL REFERENCES memories(memory_id),
+    created_at              TEXT NOT NULL,
+    actor                   TEXT NOT NULL DEFAULT 'user',
+    previous_text           TEXT NOT NULL,
+    new_text                TEXT NOT NULL,
+    reason                  TEXT NOT NULL DEFAULT '',
+    rollback_of_revision_id TEXT NOT NULL DEFAULT '',
+    metadata_json           TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS memory_write_policies (
     policy_id     TEXT PRIMARY KEY,
     created_at    TEXT NOT NULL,
@@ -462,6 +474,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
 CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status ON memory_conflicts(status);
 CREATE INDEX IF NOT EXISTS idx_memory_conflicts_scope ON memory_conflicts(scope);
+CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id);
 CREATE INDEX IF NOT EXISTS idx_memory_write_policies_lookup ON memory_write_policies(agent_id, scope, action);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);

@@ -98,6 +98,10 @@ When a later decision replaces an older memory, call `supersede_memory()` rather
 than leaving both facts active. If the winner is unclear, call
 `record_memory_conflict()` and leave the conflict open for review.
 
+If a correction was wrong, inspect `memory_revisions()` and call
+`rollback_memory()` instead of overwriting memory silently. Rollback restores
+the previous text while preserving the correction and rollback audit trail.
+
 For SEO or agent loops, record measured outcomes:
 
 ```python

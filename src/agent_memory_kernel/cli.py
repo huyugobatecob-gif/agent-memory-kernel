@@ -563,9 +563,31 @@ def cmd_import_profile(args: argparse.Namespace) -> int:
 def cmd_correct(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    store.correct_memory(args.memory_id, args.text, actor=args.actor)
+    store.correct_memory(args.memory_id, args.text, actor=args.actor, reason=args.reason)
     store.close()
     print_json({"memory_id": args.memory_id, "status": "corrected"})
+    return 0
+
+
+def cmd_revisions(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.list_memory_revisions(args.memory_id, limit=args.limit))
+    store.close()
+    return 0
+
+
+def cmd_rollback(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.rollback_memory(
+        args.memory_id,
+        revision_id=args.revision_id,
+        actor=args.actor,
+        reason=args.reason,
+    )
+    store.close()
+    print_json(result)
     return 0
 
 
@@ -1048,7 +1070,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("memory_id")
     p.add_argument("text")
     p.add_argument("--actor", default="user")
+    p.add_argument("--reason", default="")
     p.set_defaults(func=cmd_correct)
+
+    p = sub.add_parser("revisions", help="List correction and rollback history for memory")
+    add_common_db(p)
+    p.add_argument("memory_id")
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_revisions)
+
+    p = sub.add_parser("rollback", help="Rollback memory text to a prior revision")
+    add_common_db(p)
+    p.add_argument("memory_id")
+    p.add_argument("--revision-id", default="", help="Revision to restore; defaults to latest")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_rollback)
 
     p = sub.add_parser("supersede", help="Mark old memory as superseded by newer memory")
     add_common_db(p)
