@@ -239,6 +239,72 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(listed["policies"][0]["action"], "inject")
             store.close()
 
+    def test_capability_report_and_read_export_enforcement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            memory = store.remember(
+                "Decision: project consent-site canonical CMS is Statamic.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            store.set_read_policy(
+                agent_id="blocked-search",
+                scope="professional",
+                action="read",
+                decision="deny",
+                reason="search requires delegated consent",
+            )
+            store.set_read_policy(
+                agent_id="blocked-inject",
+                scope="professional",
+                action="inject",
+                decision="deny",
+                reason="prompt injection requires delegated consent",
+            )
+            store.set_read_policy(
+                agent_id="blocked-export",
+                scope="professional",
+                action="export",
+                decision="deny",
+                reason="export requires delegated consent",
+            )
+            store.set_write_policy(
+                agent_id="blocked-export",
+                scope="professional",
+                action="delete",
+                decision="deny",
+                reason="operator must delete memory",
+            )
+
+            report = store.capability_report(actor="blocked-export", scope="professional")
+            self.assertEqual(report["version"], "capability-consent-v0.1")
+            self.assertEqual(report["read"]["export"]["decision"], "deny")
+            self.assertEqual(report["write"]["delete"]["decision"], "deny")
+            self.assertIn("read:export", report["denied_actions"])
+            self.assertIn("write:delete", report["denied_actions"])
+
+            api_report = handle_api_request(
+                store,
+                "/capability/check",
+                {"actor": "blocked-export", "scope": "professional"},
+            )
+            self.assertEqual(api_report["read"]["export"]["decision"], "deny")
+
+            with self.assertRaises(PermissionError):
+                store.search("consent-site", scope="professional", actor="blocked-search")
+            with self.assertRaises(PermissionError):
+                store.memory_tree_pack("consent-site", scope="professional", actor="blocked-inject")
+            with self.assertRaises(PermissionError):
+                store.export_profile(scope="professional", actor="blocked-export")
+            with self.assertRaises(PermissionError):
+                store.delete_memory(memory, actor="blocked-export")
+
+            allowed = store.search("consent-site", scope="professional", actor="allowed-reader")
+            self.assertTrue(allowed)
+            store.close()
+
     def test_secret_like_content_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

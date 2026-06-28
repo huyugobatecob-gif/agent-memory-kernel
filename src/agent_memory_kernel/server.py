@@ -169,6 +169,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 100) or 100),
             )
         }
+    if path == "/capability/check":
+        return store.capability_report(
+            actor=str(payload.get("actor", "agent")),
+            scope=str(payload.get("scope", "professional")),
+            project=str(payload.get("project", "")),
+            read_actions=payload.get("read_actions"),
+            write_actions=payload.get("write_actions"),
+        )
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}

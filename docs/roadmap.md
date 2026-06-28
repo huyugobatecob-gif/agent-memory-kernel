@@ -117,6 +117,10 @@ supersession write paths.
 Agent read-policy enforcement is implemented for prompt-facing memory injection
 through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
 `prompt_envelope.metadata.read_policy`.
+Baseline capability/consent reporting is implemented through `agent-memory
+capability`, `/capability/check`, the Hermes provider wrapper, and MCP
+`memory_capability_check`. Direct search/context/tree-pack and export surfaces
+can enforce read/export policy by actor.
 Post-turn memory-change inspection is implemented through `agent-memory
 memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted

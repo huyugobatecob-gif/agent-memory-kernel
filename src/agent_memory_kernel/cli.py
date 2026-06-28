@@ -127,6 +127,22 @@ def cmd_read_policy_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capability(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.capability_report(
+            actor=args.actor,
+            scope=args.scope,
+            project=args.project,
+            read_actions=parse_csv(args.read_actions),
+            write_actions=parse_csv(args.write_actions),
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_review_list(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -156,7 +172,7 @@ def cmd_review_reject(args: argparse.Namespace) -> int:
 def cmd_search(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    print_json(store.search(args.query, scope=args.scope, limit=args.limit))
+    print_json(store.search(args.query, scope=args.scope, limit=args.limit, actor=args.actor))
     store.close()
     return 0
 
@@ -164,7 +180,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 def cmd_context_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    print(store.context_pack(args.query, scope=args.scope, limit=args.limit))
+    print(store.context_pack(args.query, scope=args.scope, limit=args.limit, actor=args.actor))
     store.close()
     return 0
 
@@ -179,6 +195,7 @@ def cmd_build_context(args: argparse.Namespace) -> int:
             thread_id=args.thread_id,
             limit=args.limit,
             recent_messages=args.recent_messages,
+            actor=args.actor,
         )
     )
     store.close()
@@ -472,6 +489,7 @@ def cmd_tree_pack(args: argparse.Namespace) -> int:
             depth=args.depth,
             include_raw=not args.no_raw,
             raw_chars=args.raw_chars,
+            actor=args.actor,
         )
     )
     store.close()
@@ -705,7 +723,7 @@ def cmd_usage_list(args: argparse.Namespace) -> int:
 def cmd_export_profile(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    print_json(store.export_profile(scope=args.scope, project=args.project))
+    print_json(store.export_profile(scope=args.scope, project=args.project, actor=args.actor))
     store.close()
     return 0
 
@@ -942,7 +960,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    store.export_markdown(args.out)
+    store.export_markdown(args.out, actor=args.actor)
     store.close()
     print(f"exported markdown vault to {args.out}")
     return 0
@@ -1012,6 +1030,15 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--limit", type=int, default=100)
     rp.set_defaults(func=cmd_read_policy_list)
 
+    p = sub.add_parser("capability", help="Report effective read/write memory capabilities for an agent")
+    add_common_db(p)
+    p.add_argument("--actor", default="agent")
+    p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--read-actions", default="", help="Comma-separated read actions; default: read,inject,export")
+    p.add_argument("--write-actions", default="", help="Comma-separated write actions; default: all write actions")
+    p.set_defaults(func=cmd_capability)
+
     p = sub.add_parser("review", help="Review candidate memories")
     add_common_db(p)
     review_sub = p.add_subparsers(dest="review_command", required=True)
@@ -1037,6 +1064,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query")
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--actor", default="agent")
     p.set_defaults(func=cmd_search)
 
     p = sub.add_parser("context-pack", help="Build a cited context pack for an agent")
@@ -1044,6 +1072,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query")
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--actor", default="agent")
     p.set_defaults(func=cmd_context_pack)
 
     p = sub.add_parser("build-context", help="Build a full agent context with memory tree supplement")
@@ -1053,6 +1082,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thread-id", default="default")
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--recent-messages", type=int, default=6)
+    p.add_argument("--actor", default="agent")
     p.set_defaults(func=cmd_build_context)
 
     p = sub.add_parser("before-model-call", help="Build a provider-neutral memory prompt envelope")
@@ -1241,6 +1271,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--depth", type=int, default=1, help="Graph neighbor depth, 0-3")
     p.add_argument("--raw-chars", type=int, default=1600, help="Max raw event excerpt characters")
     p.add_argument("--no-raw", action="store_true", help="Omit raw provenance excerpts")
+    p.add_argument("--actor", default="agent")
     p.set_defaults(func=cmd_tree_pack)
 
     p = sub.add_parser("turn", help="Record a conversation turn and optional memory candidate")
@@ -1332,6 +1363,7 @@ def build_parser() -> argparse.ArgumentParser:
     gp.add_argument("--depth", type=int, default=1)
     gp.add_argument("--raw-chars", type=int, default=1600)
     gp.add_argument("--no-raw", action="store_true")
+    gp.add_argument("--actor", default="agent")
     gp.set_defaults(func=cmd_graph_tree)
 
     p = sub.add_parser("profile", help="Manage intro, rules, and project profile metadata")
@@ -1389,6 +1421,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--project", default="")
+    p.add_argument("--actor", default="user")
     p.set_defaults(func=cmd_export_profile)
 
     p = sub.add_parser("import-profile", help="Import project profile JSON")
@@ -1549,6 +1582,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("export", help="Export active memories to a markdown vault")
     add_common_db(p)
     p.add_argument("--out", default="memory-vault")
+    p.add_argument("--actor", default="user")
     p.set_defaults(func=cmd_export)
 
     return parser

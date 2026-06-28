@@ -27,6 +27,8 @@ The adapter should:
   suppressed loser memories, and unresolved conflicts before prompt injection;
 - expose `memory_changes()` so Hermes can inspect what Keeper changed after a
   saved turn and why;
+- expose `capability_report()` so Hermes can inspect read/write/export/delete
+  permissions before delegating work to an agent;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
@@ -125,6 +127,12 @@ provider.set_read_policy(
     decision="deny",
     reason="writer uses professional memory only",
 )
+```
+
+Check the effective capability matrix before starting an agent:
+
+```python
+provider.capability_report(actor="writer", scope="professional")
 ```
 
 After review, preserve the expected behavior:

@@ -112,6 +112,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "query": _string("Search query."),
                 "scope": _string("Optional memory scope/lane.", ""),
                 "limit": _integer("Maximum results.", 10),
+                "actor": _string("Calling agent id for read policy enforcement.", "agent"),
             },
             ["query"],
         ),
@@ -124,6 +125,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "query": _string("Task or search query."),
                 "scope": _string("Optional memory scope/lane.", ""),
                 "limit": _integer("Maximum memory entries.", 8),
+                "actor": _string("Calling agent id for read policy enforcement.", "agent"),
             },
             ["query"],
         ),
@@ -139,6 +141,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "depth": _integer("Graph neighbor expansion depth.", 1),
                 "include_raw": _boolean("Include raw memory excerpts.", True),
                 "raw_chars": _integer("Maximum raw chars per branch.", 700),
+                "actor": _string("Calling agent id for inject policy enforcement.", "agent"),
             },
             ["query"],
         ),
@@ -190,6 +193,27 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "reason": _string("Rejection reason.", ""),
             },
             ["candidate_id"],
+        ),
+    },
+    "memory_capability_check": {
+        "endpoint": "/capability/check",
+        "description": "Report effective read/write memory capabilities for an agent.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Calling agent id.", "agent"),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "project": _string("Optional project id.", ""),
+                "read_actions": {
+                    "type": "array",
+                    "description": "Optional read actions to check.",
+                    "items": {"type": "string"},
+                },
+                "write_actions": {
+                    "type": "array",
+                    "description": "Optional write actions to check.",
+                    "items": {"type": "string"},
+                },
+            }
         ),
     },
     "memory_graph_nodes": {

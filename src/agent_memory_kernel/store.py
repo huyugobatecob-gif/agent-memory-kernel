@@ -86,6 +86,21 @@ MIN_BRAIN_STYLE_NODES = 4
 LEFT_BRAIN_STYLE_SHARE = 0.60
 RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
+CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
+READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
+WRITE_CAPABILITY_ACTIONS = [
+    "record",
+    "auto_approve",
+    "approve",
+    "reject",
+    "correct",
+    "delete",
+    "distrust",
+    "expire",
+    "outcome",
+    "conflict",
+    "supersede",
+]
 READ_TIME_POLICY = {
     "version": READ_TIME_POLICY_VERSION,
     "ranking_order": [
@@ -710,6 +725,95 @@ class MemoryStore:
         """Return the most-specific read/injection policy decision."""
         return self._resolve_read_policy(actor, scope, action)
 
+    def capability_report(
+        self,
+        *,
+        actor: str = "agent",
+        scope: str = "professional",
+        project: str = "",
+        read_actions: list[str] | None = None,
+        write_actions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return the effective memory capabilities for an agent and scope."""
+        actor = (actor or "agent").strip() or "agent"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        if isinstance(read_actions, str):
+            read_actions = [item.strip() for item in read_actions.split(",") if item.strip()]
+        if isinstance(write_actions, str):
+            write_actions = [item.strip() for item in write_actions.split(",") if item.strip()]
+        read_actions = [
+            (action or "").strip().lower()
+            for action in (read_actions or READ_CAPABILITY_ACTIONS)
+            if (action or "").strip()
+        ]
+        write_actions = [
+            (action or "").strip().lower()
+            for action in (write_actions or WRITE_CAPABILITY_ACTIONS)
+            if (action or "").strip()
+        ]
+        read = {
+            action: self._capability_decision(
+                kind="read",
+                actor=actor,
+                scope=scope,
+                action=action,
+            )
+            for action in read_actions
+        }
+        write = {
+            action: self._capability_decision(
+                kind="write",
+                actor=actor,
+                scope=scope,
+                action=action,
+            )
+            for action in write_actions
+        }
+        all_decisions = {f"read:{key}": value for key, value in read.items()}
+        all_decisions.update({f"write:{key}": value for key, value in write.items()})
+        denied = [
+            action
+            for action, decision in all_decisions.items()
+            if decision["decision"] == "deny"
+        ]
+        explicit = [
+            action
+            for action, decision in all_decisions.items()
+            if decision.get("matched")
+        ]
+        return {
+            "version": CAPABILITY_CONSENT_VERSION,
+            "actor": actor,
+            "scope": scope,
+            "project": (project or "").strip(),
+            "default_stance": "allow unless a matching deny policy exists",
+            "read": read,
+            "write": write,
+            "allowed_actions": [
+                action
+                for action, decision in all_decisions.items()
+                if decision["decision"] == "allow"
+            ],
+            "denied_actions": denied,
+            "consent": {
+                "policy_backed_actions": explicit,
+                "implicit_allow_actions": [
+                    action
+                    for action, decision in all_decisions.items()
+                    if decision["decision"] == "allow" and not decision.get("matched")
+                ],
+                "requires_operator_review": [
+                    action
+                    for action, decision in all_decisions.items()
+                    if decision["decision"] == "deny"
+                ],
+                "note": (
+                    "Use explicit read/write policies for delegated agents that "
+                    "should not inherit local default access."
+                ),
+            },
+        }
+
     def remember(
         self,
         text: str,
@@ -1098,11 +1202,21 @@ class MemoryStore:
         self._audit("reject", "candidate", candidate_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
-    def search(self, query: str, *, scope: str | None = None, limit: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        limit: int = 5,
+        actor: str = "agent",
+        enforce_read_policy: bool = True,
+    ) -> list[dict[str, Any]]:
         query = (query or "").strip()
         if not query:
             return []
         scope = normalize_scope(scope) if scope else None
+        if enforce_read_policy and scope:
+            self._enforce_read_policy(actor, scope, "read")
 
         try:
             rows = self.conn.execute(
@@ -1141,10 +1255,24 @@ class MemoryStore:
                 (like, scope, scope, limit),
             ).fetchall()
 
-        return [dict(row) for row in rows]
+        results = [dict(row) for row in rows]
+        if enforce_read_policy and not scope:
+            results = [
+                row
+                for row in results
+                if self._read_allowed(actor, str(row.get("scope", "professional")), "read")
+            ]
+        return results
 
-    def context_pack(self, query: str, *, scope: str | None = None, limit: int = 5) -> str:
-        results = self.search(query, scope=scope, limit=limit)
+    def context_pack(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        limit: int = 5,
+        actor: str = "agent",
+    ) -> str:
+        results = self.search(query, scope=scope, limit=limit, actor=actor)
         if not results:
             return "## Agent Memory Context\nNo active memories matched this request."
 
@@ -1185,6 +1313,8 @@ class MemoryStore:
         depth: int = 1,
         include_raw: bool = True,
         raw_chars: int = 1600,
+        actor: str = "agent",
+        enforce_read_policy: bool = True,
     ) -> dict[str, Any]:
         """Retrieve an agent-facing memory tree.
 
@@ -1197,6 +1327,8 @@ class MemoryStore:
             return self._empty_tree_pack(query, scope)
 
         scope = normalize_scope(scope) if scope else None
+        if enforce_read_policy and scope:
+            self._enforce_read_policy(actor, scope, "inject")
         limit_value = 8 if limit is None else int(limit)
         depth_value = 1 if depth is None else int(depth)
         raw_chars_value = 1600 if raw_chars is None else int(raw_chars)
@@ -1207,7 +1339,15 @@ class MemoryStore:
         seed_scores: dict[str, float] = {}
         reasons: dict[str, set[str]] = defaultdict(set)
 
-        for index, item in enumerate(self.search(query, scope=scope, limit=limit * 3)):
+        for index, item in enumerate(
+            self.search(
+                query,
+                scope=scope,
+                limit=limit * 3,
+                actor=actor,
+                enforce_read_policy=False,
+            )
+        ):
             memory_id = str(item["memory_id"])
             seed_scores[memory_id] = max(seed_scores.get(memory_id, 0), 100 - index)
             reasons[memory_id].add("active memory text match")
@@ -1395,6 +1535,7 @@ class MemoryStore:
         depth: int = 1,
         include_raw: bool = True,
         raw_chars: int = 1600,
+        actor: str = "agent",
     ) -> str:
         """Build the markdown tree pack passed to an agent before planning."""
         tree = self.retrieve_tree(
@@ -1404,6 +1545,7 @@ class MemoryStore:
             depth=depth,
             include_raw=include_raw,
             raw_chars=raw_chars,
+            actor=actor,
         )
         if not tree["branches"]:
             return (
@@ -1963,8 +2105,15 @@ class MemoryStore:
             "findings": findings,
         }
 
-    def export_profile(self, *, scope: str | None = None, project: str = "") -> dict[str, Any]:
+    def export_profile(
+        self,
+        *,
+        scope: str | None = None,
+        project: str = "",
+        actor: str = "user",
+    ) -> dict[str, Any]:
         scope = normalize_scope(scope) if scope else None
+        self._enforce_export_policy(actor, scope)
         project = (project or "").strip()
         profiles = self.conn.execute(
             """
@@ -2117,6 +2266,7 @@ class MemoryStore:
         thread_id: str = "default",
         limit: int = 8,
         recent_messages: int = 6,
+        actor: str = "agent",
     ) -> str:
         """Build a richer context pack like a sidecar context builder."""
         scope = normalize_scope(scope) if scope else None
@@ -2128,6 +2278,7 @@ class MemoryStore:
             scope=scope,
             limit=limit,
             include_raw=False,
+            actor=actor,
         )
         compact_memory = [
             {
@@ -2140,7 +2291,7 @@ class MemoryStore:
             for memory in branch["memories"]
         ][:limit]
         if not compact_memory:
-            compact_memory = self.search(query, scope=scope, limit=limit)
+            compact_memory = self.search(query, scope=scope, limit=limit, actor=actor)
         profile_nodes = self.list_graph_nodes(scope=scope, node_type="person", limit=8)
         summaries = self.conn.execute(
             """
@@ -2242,7 +2393,7 @@ class MemoryStore:
             [
                 "",
                 "MEMORY_TREE_SUPPLEMENT",
-                self.memory_tree_pack(query, scope=scope, limit=limit),
+                self.memory_tree_pack(query, scope=scope, limit=limit, actor=actor),
             ]
         )
         return "\n".join(lines)
@@ -2315,6 +2466,7 @@ class MemoryStore:
                 scope=scope,
                 limit=limit,
                 include_raw=True,
+                actor=agent_id,
             )
             if memory_allowed
             else self._empty_tree_pack(query, scope)
@@ -2335,6 +2487,7 @@ class MemoryStore:
                 thread_id=thread_id,
                 limit=limit,
                 recent_messages=recent_messages,
+                actor=agent_id,
             )
             if memory_allowed
             else self._access_denied_context_pack(query, scope, warnings)
@@ -4044,7 +4197,7 @@ class MemoryStore:
         self._audit(action, "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
-    def export_markdown(self, out_dir: str | Path) -> None:
+    def export_markdown(self, out_dir: str | Path, *, actor: str = "user") -> None:
         out_path = Path(out_dir)
         out_path.mkdir(parents=True, exist_ok=True)
         rows = self.conn.execute(
@@ -4062,6 +4215,8 @@ class MemoryStore:
 
         for scope in ["personal", "professional", "project", "agent", "session"]:
             items = by_scope.get(scope, [])
+            if items:
+                self._enforce_read_policy(actor, scope, "export")
             lines = [
                 f"# {scope.title()} Memory",
                 "",
@@ -5237,6 +5392,76 @@ class MemoryStore:
             "matched": True,
             "metadata": self._loads_json(row["metadata_json"], {}),
         }
+
+    def _capability_decision(
+        self,
+        *,
+        kind: str,
+        actor: str,
+        scope: str,
+        action: str,
+    ) -> dict[str, Any]:
+        if kind == "read":
+            decision = self._resolve_read_policy(actor, scope, action)
+        elif kind == "write":
+            decision = self._resolve_write_policy(actor, scope, action)
+        else:
+            raise ValueError("kind must be read or write")
+        return {
+            "kind": kind,
+            "action": action,
+            "decision": decision["decision"],
+            "reason": decision["reason"],
+            "policy_id": decision["policy_id"],
+            "matched": bool(decision.get("matched")),
+            "matched_agent_id": decision["agent_id"],
+            "matched_scope": decision["scope"],
+            "matched_action": decision["action"],
+            "metadata": decision.get("metadata", {}),
+        }
+
+    def _read_allowed(self, actor: str, scope: str, action: str) -> bool:
+        decision = self._resolve_read_policy(actor, scope, action)
+        if decision["decision"] == "deny":
+            self._audit_read_denied(actor, scope, action, decision)
+            self.conn.commit()
+            return False
+        return True
+
+    def _enforce_read_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        decision = self._resolve_read_policy(actor, scope, action)
+        if decision["decision"] == "deny":
+            self._audit_read_denied(actor, scope, action, decision)
+            self.conn.commit()
+            reason = decision["reason"] or "read policy denied this action"
+            raise PermissionError(
+                f"read denied for actor={actor} scope={scope} action={action}: {reason}"
+            )
+        return decision
+
+    def _audit_read_denied(
+        self,
+        actor: str,
+        scope: str,
+        action: str,
+        decision: dict[str, Any],
+    ) -> None:
+        self._audit(
+            "read_denied",
+            "memory_read_policy",
+            str(decision.get("policy_id", "")),
+            actor=actor,
+            details={
+                "scope": "*" if scope == "*" else normalize_scope(scope),
+                "action": action,
+                "decision": decision,
+            },
+        )
+
+    def _enforce_export_policy(self, actor: str, scope: str | None) -> None:
+        scopes = [scope] if scope else ["personal", "professional", "project", "agent", "session"]
+        for item in scopes:
+            self._enforce_read_policy(actor, item, "export")
 
     def _enforce_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
         decision = self._resolve_write_policy(actor, scope, action)

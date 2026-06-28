@@ -61,8 +61,14 @@ class HermesMemoryProvider:
     def assert_conformance(self) -> dict[str, Any]:
         return assert_conformance_suite(self.store)
 
-    def context_pack(self, query: str, scope: str | None = None, limit: int = 8) -> str:
-        return self.store.context_pack(query, scope=scope, limit=limit)
+    def context_pack(
+        self,
+        query: str,
+        scope: str | None = None,
+        limit: int = 8,
+        actor: str = "hermes",
+    ) -> str:
+        return self.store.context_pack(query, scope=scope, limit=limit, actor=actor)
 
     def tree_pack(
         self,
@@ -71,6 +77,7 @@ class HermesMemoryProvider:
         limit: int = 8,
         depth: int = 1,
         include_raw: bool = True,
+        actor: str = "hermes",
     ) -> str:
         return self.store.memory_tree_pack(
             query,
@@ -78,6 +85,7 @@ class HermesMemoryProvider:
             limit=limit,
             depth=depth,
             include_raw=include_raw,
+            actor=actor,
         )
 
     def context_builder_pack(
@@ -86,12 +94,14 @@ class HermesMemoryProvider:
         scope: str | None = None,
         thread_id: str = "default",
         limit: int = 8,
+        actor: str = "hermes",
     ) -> str:
         return self.store.context_builder_pack(
             query,
             scope=scope,
             thread_id=thread_id,
             limit=limit,
+            actor=actor,
         )
 
     def brain_style_append(self, scope: str = "professional") -> dict[str, Any]:
@@ -485,8 +495,13 @@ class HermesMemoryProvider:
     def optimize_graph(self, mode: str, scope: str = "professional") -> dict[str, Any]:
         return self.store.optimize_graph(mode, scope=scope)
 
-    def export_profile(self, scope: str | None = None, project: str = "") -> dict[str, Any]:
-        return self.store.export_profile(scope=scope, project=project)
+    def export_profile(
+        self,
+        scope: str | None = None,
+        project: str = "",
+        actor: str = "hermes",
+    ) -> dict[str, Any]:
+        return self.store.export_profile(scope=scope, project=project, actor=actor)
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         return self.store.import_profile(payload)
@@ -615,6 +630,23 @@ class HermesMemoryProvider:
 
     def resolve_read_policy(self, actor: str, scope: str, action: str = "inject") -> dict[str, Any]:
         return self.store.resolve_read_policy(actor, scope, action)
+
+    def capability_report(
+        self,
+        *,
+        actor: str = "hermes",
+        scope: str = "professional",
+        project: str = "",
+        read_actions: list[str] | None = None,
+        write_actions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.capability_report(
+            actor=actor,
+            scope=scope,
+            project=project,
+            read_actions=read_actions,
+            write_actions=write_actions,
+        )
 
     def review_pending(self) -> list[dict[str, Any]]:
         return self.store.list_candidates("pending")

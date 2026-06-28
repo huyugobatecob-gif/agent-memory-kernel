@@ -40,6 +40,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_after_saved_turn", names)
             self.assertIn("memory_graph_nodes", names)
             self.assertIn("memory_changes", names)
+            self.assertIn("memory_capability_check", names)
 
             called = server.handle_message(
                 {
@@ -57,6 +58,23 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("structuredContent", result)
             self.assertIn("results", result["structuredContent"])
             self.assertIn("Hermes SEO agents", json.dumps(result["structuredContent"]))
+
+            capability = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_capability_check",
+                        "arguments": {"actor": "designer", "scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(capability["result"]["isError"])
+            self.assertEqual(
+                capability["result"]["structuredContent"]["version"],
+                "capability-consent-v0.1",
+            )
 
     def test_mcp_tool_error_is_tool_result_not_protocol_crash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

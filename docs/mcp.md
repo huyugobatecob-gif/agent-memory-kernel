@@ -36,6 +36,8 @@ Runtime tools:
 - `memory_after_saved_turn`: save the exchange and run or queue Keeper.
 - `memory_worker_run`: process queued Keeper jobs.
 - `memory_changes`: inspect what Keeper changed after a saved turn.
+- `memory_capability_check`: report effective read/write permissions before
+  delegating work to an agent.
 
 Retrieval tools:
 
@@ -58,12 +60,14 @@ Operator and graph tools:
 
 For a normal agent loop:
 
-1. Call `memory_before_model_call` with the current user request.
-2. Inject the returned prompt envelope or `MEMORY_TREE_SUPPLEMENT` into the
+1. Call `memory_capability_check` when the orchestrator needs to verify a
+   delegated agent's memory rights.
+2. Call `memory_before_model_call` with the current user request.
+3. Inject the returned prompt envelope or `MEMORY_TREE_SUPPLEMENT` into the
    main model prompt.
-3. After the model answers, call `memory_after_saved_turn`.
-4. If Keeper was queued, call `memory_worker_run` out of band.
-5. Use `memory_changes` to audit what was saved or proposed.
+4. After the model answers, call `memory_after_saved_turn`.
+5. If Keeper was queued, call `memory_worker_run` out of band.
+6. Use `memory_changes` to audit what was saved or proposed.
 
 This keeps the main agent from scanning the entire graph. The Router chooses
 relevant branches, and Keeper updates memory after the response.

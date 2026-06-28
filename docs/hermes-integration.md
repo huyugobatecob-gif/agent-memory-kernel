@@ -105,6 +105,9 @@ class HermesMemoryProvider:
 
     def memory_changes(self, keeper_job_id: str = "", thread_id: str | None = None) -> dict:
         ...
+
+    def capability_report(self, actor: str = "hermes", scope: str = "professional") -> dict:
+        ...
 ```
 
 The provider should call `MemoryStore`, not duplicate storage logic.
@@ -129,8 +132,8 @@ agent-memory-mcp --db .memory/hermes-memory.db
 
 The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_after_saved_turn`, `memory_changes`, `memory_tree_pack`,
-`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_capability_check`, `memory_review_list`, `memory_graph_nodes`,
+`memory_graph_edges`, and `memory_worker_run`.
 
 Useful endpoints:
 
@@ -161,6 +164,7 @@ Useful endpoints:
 - `POST /write-policy/list`
 - `POST /read-policy/set`
 - `POST /read-policy/list`
+- `POST /capability/check`
 - `POST /search`
 - `POST /review/list`
 - `POST /brain/style`

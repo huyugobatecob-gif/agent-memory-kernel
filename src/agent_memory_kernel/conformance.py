@@ -94,6 +94,14 @@ def conformance_spec() -> dict[str, Any]:
                     "thread-level change list includes the Keeper job",
                 ],
             },
+            {
+                "id": "capability_report_blocks_denied_actions",
+                "requires": [
+                    "effective capability report includes read and write decisions",
+                    "denied export is visible before memory leaves the store",
+                    "denied lifecycle mutation is policy-checkable",
+                ],
+            },
         ],
     }
 
@@ -369,6 +377,59 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "prompt_surfaces": changes.get("affected", {}).get("prompt_surfaces", []),
         },
     )
+    store.set_read_policy(
+        agent_id="blocked-conformance-export",
+        scope=CONFORMANCE_SCOPE,
+        action="export",
+        decision="deny",
+        reason="conformance export requires explicit consent",
+        actor="conformance",
+    )
+    store.set_write_policy(
+        agent_id="blocked-conformance-export",
+        scope=CONFORMANCE_SCOPE,
+        action="delete",
+        decision="deny",
+        reason="conformance delete requires explicit operator approval",
+        actor="conformance",
+    )
+    capability = store.capability_report(
+        actor="blocked-conformance-export",
+        scope=CONFORMANCE_SCOPE,
+    )
+    export_blocked = False
+    delete_blocked = False
+    try:
+        store.export_profile(scope=CONFORMANCE_SCOPE, actor="blocked-conformance-export")
+    except PermissionError:
+        export_blocked = True
+    try:
+        store.delete_memory(
+            str(
+                store.conn.execute(
+                    "SELECT memory_id FROM memories WHERE scope = ? LIMIT 1",
+                    (CONFORMANCE_SCOPE,),
+                ).fetchone()["memory_id"]
+            ),
+            actor="blocked-conformance-export",
+        )
+    except PermissionError:
+        delete_blocked = True
+    _append_result(
+        results,
+        "capability_report_blocks_denied_actions",
+        capability["read"]["export"]["decision"] == "deny"
+        and capability["write"]["delete"]["decision"] == "deny"
+        and "read:export" in capability["denied_actions"]
+        and "write:delete" in capability["denied_actions"]
+        and export_blocked
+        and delete_blocked,
+        {
+            "denied_actions": capability.get("denied_actions", []),
+            "export_blocked": export_blocked,
+            "delete_blocked": delete_blocked,
+        },
+    )
 
     status = "pass" if all(item["passed"] for item in results) else "fail"
     return {
@@ -402,6 +463,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "keeper_write_is_reviewable",
         "keeper_retry_is_idempotent",
         "keeper_change_is_inspectable",
+        "capability_report_blocks_denied_actions",
     }
     checks = {
         "version_present": bool(data.get("version")),

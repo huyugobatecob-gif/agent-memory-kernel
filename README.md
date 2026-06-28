@@ -49,6 +49,8 @@ Included now:
 - Scope access enforcement for runtime memory retrieval.
 - Agent write-policy enforcement for record, auto-approve, review, lifecycle,
   outcome, conflict, and supersession paths.
+- Capability/consent reports for read, inject, export, promote, lifecycle, and
+  other write actions.
 - Correction revision history and rollback for active memories.
 - Conflict and supersession records for truth maintenance.
 - Current-best conflict resolution for prompt-facing tree retrieval.
@@ -336,6 +338,20 @@ When `inject` is denied, `before-model-call` returns a no-memory envelope for
 that scope, logs a `read_denied` audit event, and records the matched policy in
 prompt metadata.
 
+Check the effective capability matrix before delegating work to an agent:
+
+```bash
+agent-memory capability --db .memory/demo.db \
+  --actor writer \
+  --scope professional
+```
+
+The report shows read actions (`read`, `inject`, `export`) and write actions
+(`record`, `approve`, `delete`, `distrust`, `supersede`, and others) with the
+matched policy, reason, and denied actions. Direct `search`, `context-pack`,
+`graph tree`, and profile/markdown export calls can take `--actor` so denied
+read/export policies are enforced outside the prompt hook too.
+
 Use a model-backed extractor from an application:
 
 ```python
@@ -545,7 +561,8 @@ agent-memory-mcp --db .memory/demo.db
 The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_before_model_call`, `memory_after_saved_turn`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
-`memory_graph_nodes`, `memory_graph_edges`, and `memory_worker_run`.
+`memory_capability_check`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_worker_run`.
 
 ## Implementation Plan
 

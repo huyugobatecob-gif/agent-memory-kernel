@@ -170,6 +170,10 @@ Already present:
 - Personal and professional lanes.
 - Agent write-policy table and enforcement for record, auto-approve, review,
   lifecycle, outcome, conflict, and supersession paths.
+- Baseline capability and consent reporting through `agent-memory capability`,
+  `/capability/check`, the Hermes provider wrapper, and MCP
+  `memory_capability_check`, with read/export enforcement on direct retrieval
+  and export surfaces.
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
@@ -216,8 +220,8 @@ Remaining for full memory:
   surfaces, outcome lessons, and graph-derived style state.
 - Production current-best heuristics for stale, conflicting, superseded, or
   equal-trust claims beyond explicit resolved conflicts.
-- A capability and consent model for read/write/promote/inject/export/delete
-  actions under multi-agent orchestration.
+- Production hosted identity and delegation flows beyond the baseline local
+  capability/consent report for read/write/promote/inject/export/delete.
 - Broader inspection flows for undo, distrust, export, and UI review beyond
   the baseline Router explain and post-turn memory-change endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
@@ -240,8 +244,8 @@ Remaining for full memory:
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review UI or inbox.
-- Hosted identity, tenancy, and capability rules beyond the local
-  agent/scope/action read and write policies.
+- Hosted identity, tenancy, and delegation rules beyond the local
+  agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
   resolution beyond the baseline explicit-conflict resolver.
 - Broader provider adapters for the prompt envelope.
