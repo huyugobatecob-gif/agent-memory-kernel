@@ -577,6 +577,57 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(shadow_count, 1)
             store.close()
 
+    def test_shadow_trace_eval_scores_router_and_keeper_expectations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: project eval-site keeps traceable SEO loop memory.",
+                scope="professional",
+                auto_approve=True,
+            )
+            trace = store.shadow_turn(
+                "Plan eval-site SEO loop.",
+                thread_id="eval-thread",
+                scope="professional",
+                user_text="Plan eval-site SEO loop.",
+                assistant_text="Capture the eval-only Keeper marker for review.",
+            )
+
+            passed = store.evaluate_shadow_trace(
+                trace["shadow_trace_id"],
+                expected={
+                    "expected_branch_labels": ["eval-site"],
+                    "expected_candidate_text": ["eval-only Keeper marker"],
+                    "max_token_estimate": 4000,
+                    "require_candidates": True,
+                    "require_memory_allowed": True,
+                },
+                actor="qa",
+            )
+
+            self.assertEqual(passed["status"], "pass")
+            self.assertEqual(passed["score"], 1.0)
+            self.assertFalse(passed["findings"])
+
+            failed = store.evaluate_shadow_trace(
+                trace["shadow_trace_id"],
+                expected={
+                    "forbidden_candidate_text": ["eval-only Keeper marker"],
+                    "max_selected_branches": 0,
+                },
+                actor="qa",
+            )
+
+            self.assertEqual(failed["status"], "fail")
+            self.assertLess(failed["score"], 1.0)
+            self.assertTrue(failed["findings"])
+            evals = store.list_shadow_evals(shadow_trace_id=trace["shadow_trace_id"])
+            self.assertEqual(len(evals), 2)
+            self.assertEqual(sorted(item["status"] for item in evals), ["fail", "pass"])
+            store.close()
+
     def test_executable_vertical_slice_seed_run_assert(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -648,6 +699,23 @@ class MemoryStoreTests(unittest.TestCase):
                 },
             )
             traces = handle_api_request(store, "/shadow-traces", {"thread_id": "api-shadow"})
+            shadow_eval = handle_api_request(
+                store,
+                "/shadow-eval",
+                {
+                    "shadow_trace_id": shadow["shadow_trace_id"],
+                    "expected": {
+                        "expected_candidate_text": ["shadow API candidate"],
+                        "require_candidates": True,
+                    },
+                    "actor": "api-reviewer",
+                },
+            )
+            shadow_evals = handle_api_request(
+                store,
+                "/shadow-evals",
+                {"shadow_trace_id": shadow["shadow_trace_id"]},
+            )
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -660,6 +728,8 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(worker["processed"], 1)
             self.assertTrue(shadow["shadow_trace_id"].startswith("trace_"))
             self.assertEqual(len(traces["traces"]), 1)
+            self.assertEqual(shadow_eval["status"], "pass")
+            self.assertEqual(len(shadow_evals["evals"]), 1)
             store.close()
 
 

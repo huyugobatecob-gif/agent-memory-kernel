@@ -113,6 +113,8 @@ Useful endpoints:
 - `POST /after-saved-turn`
 - `POST /shadow-turn`
 - `POST /shadow-traces`
+- `POST /shadow-eval`
+- `POST /shadow-evals`
 - `POST /remember`
 - `POST /search`
 - `POST /review/list`
@@ -201,9 +203,25 @@ Review traces with:
 agent-memory shadow-traces --thread-id seo-demo
 ```
 
+Turn reviewed traces into repeatable evals:
+
+```bash
+agent-memory shadow-eval trace_xxxxxxxxxxxxxxxx \
+  --expected-json '{
+    "expected_branch_labels": ["demo-site"],
+    "expected_candidate_text": ["successful refresh pattern"],
+    "forbidden_branch_labels": ["personal"],
+    "max_token_estimate": 4000,
+    "require_candidates": true,
+    "require_memory_allowed": true
+  }'
+```
+
 The first production gate should be manual review of real shadow traces:
 selected branch quality, missed memory, stale memory, candidate quality,
-leakage, and overlong prompt context.
+leakage, and overlong prompt context. Each accepted review should become a
+stored `shadow-eval` fixture so later Router/Keeper changes can be regression
+checked.
 
 ### During Work
 

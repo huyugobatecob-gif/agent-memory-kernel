@@ -32,6 +32,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 50) or 50),
             )
         }
+    if path == "/shadow-eval":
+        shadow_trace_id = str(payload.pop("shadow_trace_id"))
+        return store.evaluate_shadow_trace(shadow_trace_id, **payload)
+    if path == "/shadow-evals":
+        return {
+            "evals": store.list_shadow_evals(
+                shadow_trace_id=payload.get("shadow_trace_id"),
+                status=payload.get("status"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)

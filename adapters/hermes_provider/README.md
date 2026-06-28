@@ -10,6 +10,7 @@ instead of duplicating memory storage logic.
 The adapter should:
 
 - run `shadow_turn()` during rollout to collect reviewable Router/Keeper traces;
+- run `evaluate_shadow_trace()` after review to keep regression fixtures;
 - call `before_model_call()` before a main agent/model answers;
 - call `after_saved_turn()` after the exchange is persisted;
 - build Memory Tree Packs before an agent plans work;
@@ -48,6 +49,19 @@ trace = provider.shadow_turn(
 Use shadow traces first. They connect a Router run and Keeper proposal with
 `write_policy=propose_only`, so Hermes can review real traffic without
 auto-approving new active memory.
+
+After review, preserve the expected behavior:
+
+```python
+provider.evaluate_shadow_trace(
+    trace["shadow_trace_id"],
+    expected={
+        "expected_branch_labels": ["demo-site"],
+        "expected_candidate_text": ["successful refresh pattern"],
+        "require_candidates": True,
+    },
+)
+```
 
 Production runtime should then use `before_model_call()` to get the prompt
 envelope and `after_saved_turn()` to save the exchange and create reviewable

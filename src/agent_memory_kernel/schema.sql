@@ -319,6 +319,19 @@ CREATE TABLE IF NOT EXISTS shadow_traces (
     metadata_json           TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS shadow_trace_evals (
+    eval_id          TEXT PRIMARY KEY,
+    shadow_trace_id  TEXT NOT NULL REFERENCES shadow_traces(shadow_trace_id),
+    created_at       TEXT NOT NULL,
+    actor            TEXT NOT NULL DEFAULT 'reviewer',
+    status           TEXT NOT NULL DEFAULT 'pass',
+    score            REAL NOT NULL DEFAULT 0,
+    expected_json    TEXT NOT NULL DEFAULT '{}',
+    checks_json      TEXT NOT NULL DEFAULT '[]',
+    findings_json    TEXT NOT NULL DEFAULT '[]',
+    metadata_json    TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS digital_brain_state (
     state_id       TEXT PRIMARY KEY,
     created_at     TEXT NOT NULL,
@@ -421,3 +434,4 @@ CREATE INDEX IF NOT EXISTS idx_graph_optimizations_scope ON graph_optimization_r
 CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_keeper_jobs_thread ON keeper_jobs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_shadow_traces_thread ON shadow_traces(thread_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_trace_evals_trace ON shadow_trace_evals(shadow_trace_id);

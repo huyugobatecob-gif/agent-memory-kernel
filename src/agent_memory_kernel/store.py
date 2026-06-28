@@ -1986,6 +1986,267 @@ class MemoryStore:
             )
         return traces
 
+    def evaluate_shadow_trace(
+        self,
+        shadow_trace_id: str,
+        *,
+        expected: dict[str, Any] | None = None,
+        actor: str = "reviewer",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Score one shadow trace against expected Router/Keeper behavior."""
+        trace = self._get_shadow_trace(shadow_trace_id)
+        expected = dict(expected or {})
+        metadata = dict(metadata or {})
+        selected_branch_ids = list(trace["selected_branch_ids"])
+        candidate_ids = list(trace["candidate_ids"])
+        source_ids = list(trace["metadata"].get("source_ids", []))
+        token_estimate = int(trace["metadata"].get("token_estimate", 0) or 0)
+        branch_labels = self._shadow_branch_labels(selected_branch_ids)
+        candidate_texts = self._shadow_candidate_texts(candidate_ids)
+
+        checks: list[dict[str, Any]] = []
+
+        def add_check(name: str, passed: bool, detail: str, **extra: Any) -> None:
+            checks.append(
+                {
+                    "name": name,
+                    "passed": bool(passed),
+                    "detail": detail,
+                    **extra,
+                }
+            )
+
+        add_check(
+            "write_policy_propose_only",
+            trace["write_policy"] == "propose_only",
+            f"write_policy={trace['write_policy']}",
+        )
+        add_check(
+            "runtime_ids_present",
+            bool(trace["router_run_id"] and trace["keeper_job_id"]),
+            f"router={trace['router_run_id']} keeper={trace['keeper_job_id']}",
+        )
+
+        expected_branch_ids = self._expected_list(expected, "expected_branch_ids")
+        if expected_branch_ids:
+            missing = [item for item in expected_branch_ids if item not in selected_branch_ids]
+            add_check(
+                "expected_branch_ids",
+                not missing,
+                "all expected branch ids selected" if not missing else f"missing: {missing}",
+                missing=missing,
+            )
+
+        forbidden_branch_ids = self._expected_list(expected, "forbidden_branch_ids")
+        if forbidden_branch_ids:
+            present = [item for item in forbidden_branch_ids if item in selected_branch_ids]
+            add_check(
+                "forbidden_branch_ids",
+                not present,
+                "no forbidden branch ids selected" if not present else f"present: {present}",
+                present=present,
+            )
+
+        expected_branch_labels = self._expected_list(expected, "expected_branch_labels")
+        if expected_branch_labels:
+            missing = [
+                item for item in expected_branch_labels if not self._contains_any(branch_labels, item)
+            ]
+            add_check(
+                "expected_branch_labels",
+                not missing,
+                "all expected branch labels matched" if not missing else f"missing: {missing}",
+                labels=branch_labels,
+                missing=missing,
+            )
+
+        forbidden_branch_labels = self._expected_list(expected, "forbidden_branch_labels")
+        if forbidden_branch_labels:
+            present = [
+                item for item in forbidden_branch_labels if self._contains_any(branch_labels, item)
+            ]
+            add_check(
+                "forbidden_branch_labels",
+                not present,
+                "no forbidden branch labels matched" if not present else f"present: {present}",
+                labels=branch_labels,
+                present=present,
+            )
+
+        expected_candidate_text = self._expected_list(expected, "expected_candidate_text")
+        if expected_candidate_text:
+            missing = [
+                item for item in expected_candidate_text if not self._contains_any(candidate_texts, item)
+            ]
+            add_check(
+                "expected_candidate_text",
+                not missing,
+                "all expected candidate text matched" if not missing else f"missing: {missing}",
+                missing=missing,
+            )
+
+        forbidden_candidate_text = self._expected_list(expected, "forbidden_candidate_text")
+        if forbidden_candidate_text:
+            present = [
+                item for item in forbidden_candidate_text if self._contains_any(candidate_texts, item)
+            ]
+            add_check(
+                "forbidden_candidate_text",
+                not present,
+                "no forbidden candidate text matched" if not present else f"present: {present}",
+                present=present,
+            )
+
+        expected_source_ids = self._expected_list(expected, "expected_source_ids")
+        if expected_source_ids:
+            missing = [item for item in expected_source_ids if item not in source_ids]
+            add_check(
+                "expected_source_ids",
+                not missing,
+                "all expected source ids present" if not missing else f"missing: {missing}",
+                missing=missing,
+            )
+
+        forbidden_source_ids = self._expected_list(expected, "forbidden_source_ids")
+        if forbidden_source_ids:
+            present = [item for item in forbidden_source_ids if item in source_ids]
+            add_check(
+                "forbidden_source_ids",
+                not present,
+                "no forbidden source ids present" if not present else f"present: {present}",
+                present=present,
+            )
+
+        if "max_token_estimate" in expected:
+            max_tokens = int(expected.get("max_token_estimate") or 0)
+            add_check(
+                "max_token_estimate",
+                token_estimate <= max_tokens,
+                f"token_estimate={token_estimate} max={max_tokens}",
+            )
+
+        if "max_selected_branches" in expected:
+            max_branches = int(expected.get("max_selected_branches") or 0)
+            add_check(
+                "max_selected_branches",
+                len(selected_branch_ids) <= max_branches,
+                f"selected={len(selected_branch_ids)} max={max_branches}",
+            )
+
+        if "require_candidates" in expected:
+            require_candidates = bool(expected.get("require_candidates"))
+            passed = bool(candidate_ids) if require_candidates else not candidate_ids
+            add_check(
+                "require_candidates",
+                passed,
+                f"candidate_count={len(candidate_ids)} required={require_candidates}",
+            )
+
+        if "require_memory_allowed" in expected:
+            required = bool(expected.get("require_memory_allowed"))
+            actual = bool(trace["metadata"].get("memory_allowed", False))
+            add_check(
+                "require_memory_allowed",
+                actual == required,
+                f"memory_allowed={actual} required={required}",
+            )
+
+        passed_count = sum(1 for check in checks if check["passed"])
+        score = round(passed_count / len(checks), 4) if checks else 1.0
+        findings = [
+            {
+                "check": check["name"],
+                "detail": check["detail"],
+            }
+            for check in checks
+            if not check["passed"]
+        ]
+        status = "pass" if not findings else "fail"
+        eval_id = new_id("eval")
+        self.conn.execute(
+            """
+            INSERT INTO shadow_trace_evals
+              (eval_id, shadow_trace_id, created_at, actor, status, score,
+               expected_json, checks_json, findings_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                eval_id,
+                shadow_trace_id,
+                now_iso(),
+                actor,
+                status,
+                score,
+                json.dumps(expected, sort_keys=True),
+                json.dumps(checks, sort_keys=True),
+                json.dumps(findings, sort_keys=True),
+                json.dumps(metadata, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "evaluate_shadow_trace",
+            "shadow_trace",
+            shadow_trace_id,
+            actor=actor,
+            details={"eval_id": eval_id, "status": status, "score": score},
+        )
+        self.conn.commit()
+        return {
+            "eval_id": eval_id,
+            "shadow_trace_id": shadow_trace_id,
+            "status": status,
+            "score": score,
+            "checks": checks,
+            "findings": findings,
+            "expected": expected,
+            "trace": trace,
+        }
+
+    def list_shadow_evals(
+        self,
+        *,
+        shadow_trace_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List stored shadow trace evaluations."""
+        clauses = []
+        params: list[Any] = []
+        if shadow_trace_id:
+            clauses.append("shadow_trace_id = ?")
+            params.append(shadow_trace_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT eval_id, shadow_trace_id, created_at, actor, status, score,
+                   expected_json, checks_json, findings_json, metadata_json
+            FROM shadow_trace_evals
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        return [
+            {
+                "eval_id": row["eval_id"],
+                "shadow_trace_id": row["shadow_trace_id"],
+                "created_at": row["created_at"],
+                "actor": row["actor"],
+                "status": row["status"],
+                "score": row["score"],
+                "expected": self._loads_json(row["expected_json"], {}),
+                "checks": self._loads_json(row["checks_json"], []),
+                "findings": self._loads_json(row["findings_json"], []),
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for row in rows
+        ]
+
     def process_keeper_jobs(self, *, limit: int = 10, actor: str = "worker") -> dict[str, Any]:
         """Process queued Keeper jobs outside the user-facing response path."""
         rows = self.conn.execute(
@@ -3144,6 +3405,103 @@ class MemoryStore:
             return json.loads(value or "")
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    def _get_shadow_trace(self, shadow_trace_id: str) -> dict[str, Any]:
+        row = self.conn.execute(
+            """
+            SELECT shadow_trace_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, mode, query, router_run_id,
+                   keeper_job_id, selected_branch_ids_json, candidate_ids_json,
+                   saved_turn_ids_json, write_policy, status, warnings_json,
+                   metadata_json
+            FROM shadow_traces
+            WHERE shadow_trace_id = ?
+            """,
+            (shadow_trace_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"shadow trace not found: {shadow_trace_id}")
+        return {
+            "shadow_trace_id": row["shadow_trace_id"],
+            "created_at": row["created_at"],
+            "thread_id": row["thread_id"],
+            "scope": row["scope"],
+            "user_id": row["user_id"],
+            "agent_id": row["agent_id"],
+            "model_id": row["model_id"],
+            "mode": row["mode"],
+            "query": row["query"],
+            "router_run_id": row["router_run_id"],
+            "keeper_job_id": row["keeper_job_id"],
+            "selected_branch_ids": self._loads_json(row["selected_branch_ids_json"], []),
+            "candidate_ids": self._loads_json(row["candidate_ids_json"], []),
+            "saved_turn_ids": self._loads_json(row["saved_turn_ids_json"], []),
+            "write_policy": row["write_policy"],
+            "status": row["status"],
+            "warnings": self._loads_json(row["warnings_json"], []),
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _shadow_branch_labels(self, branch_ids: list[str]) -> list[str]:
+        branch_ids = [str(item) for item in branch_ids if item]
+        if not branch_ids:
+            return []
+        placeholders = ",".join("?" for _ in branch_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT graph_node_id, node_type, group_label, label
+            FROM memory_graph_nodes
+            WHERE graph_node_id IN ({placeholders})
+            """,
+            branch_ids,
+        ).fetchall()
+        labels = []
+        for row in rows:
+            labels.append(
+                " / ".join(
+                    part
+                    for part in [
+                        str(row["group_label"] or "").strip(),
+                        str(row["node_type"] or "").strip(),
+                        str(row["label"] or "").strip(),
+                    ]
+                    if part
+                )
+            )
+        return labels
+
+    def _shadow_candidate_texts(self, candidate_ids: list[str]) -> list[str]:
+        candidate_ids = [str(item) for item in candidate_ids if item]
+        if not candidate_ids:
+            return []
+        placeholders = ",".join("?" for _ in candidate_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT proposed_text
+            FROM candidate_memories
+            WHERE candidate_id IN ({placeholders})
+            """,
+            candidate_ids,
+        ).fetchall()
+        return [str(row["proposed_text"] or "") for row in rows]
+
+    @staticmethod
+    def _expected_list(expected: dict[str, Any], key: str) -> list[str]:
+        value = expected.get(key, [])
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, (list, tuple, set)):
+            return [str(item) for item in value if str(item)]
+        return [str(value)] if str(value) else []
+
+    @staticmethod
+    def _contains_any(haystacks: list[str], needle: str) -> bool:
+        needle = str(needle or "").strip().lower()
+        if not needle:
+            return True
+        return any(needle in str(haystack or "").lower() for haystack in haystacks)
 
     @staticmethod
     def _dedupe_entities(entities: list[dict[str, str]]) -> list[dict[str, str]]:

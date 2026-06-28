@@ -201,6 +201,35 @@ def cmd_shadow_traces(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_shadow_eval(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.evaluate_shadow_trace(
+            args.shadow_trace_id,
+            expected=json.loads(args.expected_json),
+            actor=args.actor,
+            metadata=json.loads(args.metadata_json),
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_shadow_evals(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_shadow_evals(
+            shadow_trace_id=args.shadow_trace_id,
+            status=args.status,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_tree_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -658,6 +687,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=50)
     p.set_defaults(func=cmd_shadow_traces)
+
+    p = sub.add_parser("shadow-eval", help="Evaluate a shadow trace against expected Router/Keeper behavior")
+    add_common_db(p)
+    p.add_argument("shadow_trace_id")
+    p.add_argument("--expected-json", default="{}")
+    p.add_argument("--actor", default="reviewer")
+    p.add_argument("--metadata-json", default="{}")
+    p.set_defaults(func=cmd_shadow_eval)
+
+    p = sub.add_parser("shadow-evals", help="List stored shadow trace evaluations")
+    add_common_db(p)
+    p.add_argument("--shadow-trace-id")
+    p.add_argument("--status", choices=["pass", "fail"])
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_shadow_evals)
 
     p = sub.add_parser("tree-pack", help="Build a branch-oriented memory tree pack for an agent")
     add_common_db(p)

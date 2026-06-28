@@ -160,6 +160,34 @@ class HermesMemoryProvider:
     ) -> list[dict[str, Any]]:
         return self.store.list_shadow_traces(thread_id=thread_id, scope=scope, limit=limit)
 
+    def evaluate_shadow_trace(
+        self,
+        shadow_trace_id: str,
+        *,
+        expected: dict[str, Any] | None = None,
+        actor: str = "reviewer",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.evaluate_shadow_trace(
+            shadow_trace_id,
+            expected=expected,
+            actor=actor,
+            metadata=metadata,
+        )
+
+    def shadow_evals(
+        self,
+        *,
+        shadow_trace_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_shadow_evals(
+            shadow_trace_id=shadow_trace_id,
+            status=status,
+            limit=limit,
+        )
+
     def process_keeper_jobs(self, limit: int = 10, actor: str = "hermes-worker") -> dict[str, Any]:
         return self.store.process_keeper_jobs(limit=limit, actor=actor)
 

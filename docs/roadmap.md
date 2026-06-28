@@ -86,6 +86,10 @@ Shadow rollout traces are implemented through `agent-memory shadow-turn`,
 provider wrapper. These traces link Router selections and Keeper proposals with
 `write_policy=propose_only` so real Hermes traffic can be reviewed before live
 memory writes.
+Baseline shadow evals are implemented through `agent-memory shadow-eval`,
+`agent-memory shadow-evals`, `/shadow-eval`, `/shadow-evals`, and the Hermes
+provider wrapper. They turn reviewed traces into stored pass/fail checks for
+branch selection, candidate text, source IDs, token budget, and access mode.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters

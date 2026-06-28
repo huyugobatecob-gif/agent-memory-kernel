@@ -316,6 +316,11 @@ agent-memory shadow-turn "Plan the next SEO loop" \
   --assistant-text "Use the prior successful refresh pattern."
 
 agent-memory shadow-traces --thread-id seo-demo
+
+agent-memory shadow-eval trace_xxxxxxxxxxxxxxxx \
+  --expected-json '{"expected_branch_labels":["seo-demo"],"require_candidates":true}'
+
+agent-memory shadow-evals --shadow-trace-id trace_xxxxxxxxxxxxxxxx
 ```
 
 The first command returns a provider-neutral prompt envelope with a selected
@@ -327,7 +332,9 @@ Use `shadow-turn` before a production rollout. It links one Router run and one
 Keeper job into a reviewable trace with `write_policy=propose_only`: turns and
 candidate memories are recorded, but nothing is auto-approved into active
 memory. Reviewing the first traces is the fastest way to build Router/Keeper
-eval fixtures.
+eval fixtures. `shadow-eval` stores repeatable quality checks for a trace:
+expected or forbidden branch labels, candidate text, source IDs, token budget,
+and whether Keeper candidates were expected.
 
 ## Implementation Plan
 

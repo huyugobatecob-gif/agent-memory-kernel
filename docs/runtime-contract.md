@@ -157,6 +157,49 @@ Required behavior:
 - make the trace listable for human review and future eval fixtures;
 - never promote candidates into active memory automatically.
 
+### `evaluate_shadow_trace`
+
+Called after a human or QA process reviews a shadow trace.
+
+Input:
+
+```json
+{
+  "shadow_trace_id": "trace_...",
+  "expected": {
+    "expected_branch_labels": ["demo-site"],
+    "forbidden_branch_labels": ["personal"],
+    "expected_candidate_text": ["successful refresh pattern"],
+    "max_token_estimate": 4000,
+    "require_candidates": true,
+    "require_memory_allowed": true
+  },
+  "actor": "reviewer"
+}
+```
+
+Output:
+
+```json
+{
+  "eval_id": "eval_...",
+  "shadow_trace_id": "trace_...",
+  "status": "pass",
+  "score": 1.0,
+  "checks": [],
+  "findings": []
+}
+```
+
+Required behavior:
+
+- compare selected branch IDs and labels with expected/forbidden branches;
+- compare Keeper candidate text with expected/forbidden snippets;
+- check selected source IDs, token budget, candidate presence, and access mode
+  when requested;
+- store pass/fail checks and findings so the trace becomes a repeatable
+  regression fixture.
+
 ## Router Contract
 
 Router inputs:
