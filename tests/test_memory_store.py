@@ -213,6 +213,32 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(listed["policies"][0]["action"], "auto_approve")
             store.close()
 
+    def test_http_read_policy_endpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            result = handle_api_request(
+                store,
+                "/read-policy/set",
+                {
+                    "agent_id": "api-reader",
+                    "scope": "personal",
+                    "action": "inject",
+                    "decision": "deny",
+                    "reason": "api personal memory blocked",
+                },
+            )
+            self.assertEqual(result["decision"], "deny")
+            listed = handle_api_request(
+                store,
+                "/read-policy/list",
+                {"agent_id": "api-reader", "scope": "personal"},
+            )
+            self.assertEqual(len(listed["policies"]), 1)
+            self.assertEqual(listed["policies"][0]["action"], "inject")
+            store.close()
+
     def test_secret_like_content_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -1024,6 +1050,67 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(allowed["prompt_envelope"]["metadata"]["memory_allowed"])
             self.assertTrue(allowed["selected_branch_ids"])
             self.assertIn("concise memory review updates", allowed_content)
+            store.close()
+
+    def test_before_model_call_enforces_stored_read_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: project read-policy-site canonical CMS is Statamic.",
+                scope="professional",
+                auto_approve=True,
+            )
+            store.set_read_policy(
+                agent_id="blocked-reader",
+                scope="professional",
+                action="inject",
+                decision="deny",
+                reason="agent cannot inject professional memory",
+            )
+
+            denied = store.before_model_call(
+                "What CMS does read-policy-site use?",
+                scope="professional",
+                agent_id="blocked-reader",
+            )
+            denied_text = "\n".join(
+                message["content"] for message in denied["prompt_envelope"]["messages"]
+            )
+            self.assertFalse(denied["prompt_envelope"]["metadata"]["memory_allowed"])
+            self.assertEqual(denied["selected_branch_ids"], [])
+            self.assertEqual(denied["prompt_envelope"]["metadata"]["source_ids"], [])
+            self.assertIn("memory access denied by read policy", " ".join(denied["warnings"]))
+            self.assertEqual(
+                denied["prompt_envelope"]["metadata"]["read_policy"]["decision"],
+                "deny",
+            )
+            self.assertTrue(
+                any(
+                    item["decision"] == "deny"
+                    and item.get("policy_id")
+                    and item.get("action") == "inject"
+                    for item in denied["access_decisions"]
+                )
+            )
+            self.assertNotIn("Statamic", denied_text)
+
+            allowed = store.before_model_call(
+                "What CMS does read-policy-site use?",
+                scope="professional",
+                agent_id="allowed-reader",
+            )
+            allowed_text = "\n".join(
+                message["content"] for message in allowed["prompt_envelope"]["messages"]
+            )
+            self.assertTrue(allowed["prompt_envelope"]["metadata"]["memory_allowed"])
+            self.assertIn("Statamic", allowed_text)
+
+            audit_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM audit_log WHERE action = 'read_denied'"
+            ).fetchone()["count"]
+            self.assertEqual(audit_count, 1)
             store.close()
 
     def test_after_saved_turn_is_idempotent_for_sync_keeper_retry(self) -> None:

@@ -424,6 +424,12 @@ class MemoryStore:
             WHERE idempotency_key != ''
             """
         )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_memory_read_policies_lookup
+            ON memory_read_policies(agent_id, scope, action)
+            """
+        )
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.commit()
 
@@ -566,6 +572,143 @@ class MemoryStore:
     def resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
         """Return the most-specific write policy decision for an actor/scope/action."""
         return self._resolve_write_policy(actor, scope, action)
+
+    def set_read_policy(
+        self,
+        *,
+        agent_id: str = "*",
+        scope: str = "*",
+        action: str = "inject",
+        decision: str = "allow",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        """Set a persistent read/injection capability rule for agents."""
+        agent_id = (agent_id or "*").strip() or "*"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        action = (action or "inject").strip().lower() or "inject"
+        decision = (decision or "allow").strip().lower()
+        if decision not in {"allow", "deny"}:
+            raise ValueError("decision must be allow or deny")
+        ts = now_iso()
+        existing = self.conn.execute(
+            """
+            SELECT policy_id
+            FROM memory_read_policies
+            WHERE agent_id = ? AND scope = ? AND action = ?
+            """,
+            (agent_id, scope, action),
+        ).fetchone()
+        policy_id = existing["policy_id"] if existing else new_id("rpol")
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE memory_read_policies
+                SET updated_at = ?, decision = ?, reason = ?, metadata_json = ?
+                WHERE policy_id = ?
+                """,
+                (
+                    ts,
+                    decision,
+                    reason,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    policy_id,
+                ),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO memory_read_policies
+                  (policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    policy_id,
+                    ts,
+                    ts,
+                    agent_id,
+                    scope,
+                    action,
+                    decision,
+                    reason,
+                    json.dumps(metadata or {}, sort_keys=True),
+                ),
+            )
+        self._audit(
+            "set_read_policy",
+            "read_policy",
+            policy_id,
+            actor=actor,
+            details={
+                "agent_id": agent_id,
+                "scope": scope,
+                "action": action,
+                "decision": decision,
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        return {
+            "policy_id": policy_id,
+            "agent_id": agent_id,
+            "scope": scope,
+            "action": action,
+            "decision": decision,
+            "reason": reason,
+            "metadata": metadata or {},
+        }
+
+    def list_read_policies(
+        self,
+        *,
+        agent_id: str | None = None,
+        scope: str | None = None,
+        action: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if agent_id:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if scope:
+            clauses.append("scope = ?")
+            params.append("*" if scope == "*" else normalize_scope(scope))
+        if action:
+            clauses.append("action = ?")
+            params.append(action.strip().lower())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json
+            FROM memory_read_policies
+            {where}
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 100), 500))),
+        ).fetchall()
+        return [
+            {
+                "policy_id": row["policy_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "agent_id": row["agent_id"],
+                "scope": row["scope"],
+                "action": row["action"],
+                "decision": row["decision"],
+                "reason": row["reason"],
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for row in rows
+        ]
+
+    def resolve_read_policy(self, actor: str, scope: str, action: str = "inject") -> dict[str, Any]:
+        """Return the most-specific read/injection policy decision."""
+        return self._resolve_read_policy(actor, scope, action)
 
     def remember(
         self,
@@ -2133,6 +2276,37 @@ class MemoryStore:
             allowed_scopes=allowed_scopes,
             denied_scopes=denied_scopes,
         )
+        read_policy = self.resolve_read_policy(agent_id, scope, "inject")
+        if read_policy["decision"] == "deny":
+            memory_allowed = False
+            warning = f"memory access denied by read policy for scope: {scope}"
+            if warning not in warnings:
+                warnings.append(warning)
+            access_decisions = [
+                item
+                for item in access_decisions
+                if not (item.get("scope") == scope and item.get("decision") == "allow")
+            ]
+            access_decisions.append(
+                {
+                    "scope": scope,
+                    "decision": "deny",
+                    "reason": read_policy["reason"] or "stored read policy denied injection",
+                    "policy_id": read_policy["policy_id"],
+                    "action": "inject",
+                }
+            )
+            self._audit(
+                "read_denied",
+                "memory_read_policy",
+                read_policy["policy_id"],
+                actor=agent_id,
+                details={
+                    "scope": scope,
+                    "action": "inject",
+                    "decision": read_policy,
+                },
+            )
         lanes = [item["scope"] for item in access_decisions]
 
         tree = (
@@ -2213,6 +2387,7 @@ class MemoryStore:
                 "memory_allowed": memory_allowed,
                 "allowed_scopes": allowed_scopes or [scope],
                 "denied_scopes": denied_scopes or [],
+                "read_policy": read_policy,
                 "selected_branch_ids": selected_branch_ids,
                 "selection_decisions": selection_decisions,
                 "truncated_branch_count": int(tree.get("retrieval", {}).get("truncated_count", 0) or 0),
@@ -4929,6 +5104,62 @@ class MemoryStore:
                 score += 2
             if row["action"] == action:
                 score += 1
+            return score, str(row["updated_at"]), str(row["created_at"])
+
+        row = max(rows, key=specificity)
+        return {
+            "policy_id": row["policy_id"],
+            "decision": row["decision"],
+            "reason": row["reason"],
+            "agent_id": row["agent_id"],
+            "scope": row["scope"],
+            "action": row["action"],
+            "matched": True,
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _resolve_read_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
+        actor = (actor or "agent").strip() or "agent"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        action = (action or "inject").strip().lower() or "inject"
+        action_candidates = [action]
+        if action == "inject":
+            action_candidates.append("read")
+        action_candidates.append("*")
+        placeholders = ",".join("?" for _ in action_candidates)
+        rows = self.conn.execute(
+            f"""
+            SELECT policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json
+            FROM memory_read_policies
+            WHERE agent_id IN (?, '*')
+              AND scope IN (?, '*')
+              AND action IN ({placeholders})
+            """,
+            (actor, scope, *action_candidates),
+        ).fetchall()
+        if not rows:
+            return {
+                "policy_id": "",
+                "decision": "allow",
+                "reason": "no matching policy",
+                "agent_id": actor,
+                "scope": scope,
+                "action": action,
+                "matched": False,
+                "metadata": {},
+            }
+
+        def specificity(row: sqlite3.Row) -> tuple[int, str, str]:
+            score = 0
+            if row["agent_id"] == actor:
+                score += 4
+            if row["scope"] == scope:
+                score += 2
+            if row["action"] == action:
+                score += 1
+            elif action == "inject" and row["action"] == "read":
+                score += 0
             return score, str(row["updated_at"]), str(row["created_at"])
 
         row = max(rows, key=specificity)

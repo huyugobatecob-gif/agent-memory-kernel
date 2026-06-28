@@ -267,10 +267,10 @@ affect retrieval, Keeper writes stay reviewable, and write policy blocks
 unauthorized promotion.
 
 The conformance suite is the public compatibility layer. It checks named
-scenarios for professional memory injection, personal-lane isolation, resolved
-conflict suppression, deleted-memory absence, unsafe-memory absence, and
-reviewable/idempotent Keeper writes. Adapters can use it as the first "does this
-behave like Agent Memory Kernel?" gate.
+scenarios for professional memory injection, stored read-policy denial,
+personal-lane isolation, resolved conflict suppression, deleted-memory absence,
+unsafe-memory absence, and reviewable/idempotent Keeper writes. Adapters can use
+it as the first "does this behave like Agent Memory Kernel?" gate.
 
 Record profile and usage metadata:
 
@@ -300,6 +300,23 @@ memory stays as a review candidate. Destructive or lifecycle actions such as
 `approve`, `correct`, `delete`, `distrust`, `expire`, `conflict`, and
 `supersede` are blocked with an audited `write_denied` event when policy denies
 them.
+
+Configure agent read/injection authority:
+
+```bash
+agent-memory read-policy --db .memory/demo.db set \
+  --agent-id writer \
+  --scope personal \
+  --action inject \
+  --decision deny \
+  --reason "writer cannot inject personal memory"
+
+agent-memory read-policy --db .memory/demo.db list --agent-id writer
+```
+
+When `inject` is denied, `before-model-call` returns a no-memory envelope for
+that scope, logs a `read_denied` audit event, and records the matched policy in
+prompt metadata.
 
 Use a model-backed extractor from an application:
 

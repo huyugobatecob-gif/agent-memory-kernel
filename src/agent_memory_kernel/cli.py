@@ -94,6 +94,38 @@ def cmd_write_policy_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_read_policy_set(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.set_read_policy(
+        agent_id=args.agent_id,
+        scope=args.scope,
+        action=args.action,
+        decision=args.decision,
+        reason=args.reason,
+        metadata=json.loads(args.metadata_json),
+        actor=args.actor,
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
+def cmd_read_policy_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_read_policies(
+            agent_id=args.agent_id,
+            scope=args.scope,
+            action=args.action,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_review_list(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -937,6 +969,27 @@ def build_parser() -> argparse.ArgumentParser:
     wp.add_argument("--action")
     wp.add_argument("--limit", type=int, default=100)
     wp.set_defaults(func=cmd_write_policy_list)
+
+    p = sub.add_parser("read-policy", help="Configure agent read/injection authority")
+    add_common_db(p)
+    read_policy_sub = p.add_subparsers(dest="read_policy_command", required=True)
+
+    rp = read_policy_sub.add_parser("set", help="Set an allow/deny read policy")
+    rp.add_argument("--agent-id", default="*", help="Agent id or * wildcard")
+    rp.add_argument("--scope", default="*", choices=["*", "personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--action", default="inject", help="Action name such as read, inject, export, or * wildcard")
+    rp.add_argument("--decision", default="allow", choices=["allow", "deny"])
+    rp.add_argument("--reason", default="")
+    rp.add_argument("--metadata-json", default="{}")
+    rp.add_argument("--actor", default="user")
+    rp.set_defaults(func=cmd_read_policy_set)
+
+    rp = read_policy_sub.add_parser("list", help="List configured read policies")
+    rp.add_argument("--agent-id")
+    rp.add_argument("--scope", choices=["*", "personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--action")
+    rp.add_argument("--limit", type=int, default=100)
+    rp.set_defaults(func=cmd_read_policy_list)
 
     p = sub.add_parser("review", help="Review candidate memories")
     add_common_db(p)

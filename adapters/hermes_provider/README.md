@@ -37,6 +37,8 @@ The adapter should:
 - record structured loop outcomes and retrieve outcome packs before planning;
 - configure write policies so agents can propose memory without auto-approving
   or mutating durable memory outside their authority;
+- configure read policies so agents cannot inject scopes they are not allowed
+  to see;
 - leave durable promotion to policy or review;
 - expose pending memory review to the user or operator.
 
@@ -108,6 +110,18 @@ provider.set_write_policy(
     action="auto_approve",
     decision="deny",
     reason="writer proposes memory; reviewer approves",
+)
+```
+
+Set read/injection authority for scopes that should not enter an agent prompt:
+
+```python
+provider.set_read_policy(
+    agent_id="writer",
+    scope="personal",
+    action="inject",
+    decision="deny",
+    reason="writer uses professional memory only",
 )
 ```
 

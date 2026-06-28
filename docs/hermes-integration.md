@@ -139,6 +139,8 @@ Useful endpoints:
 - `POST /remember`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
+- `POST /read-policy/set`
+- `POST /read-policy/list`
 - `POST /search`
 - `POST /review/list`
 - `POST /brain/style`
@@ -175,9 +177,9 @@ agent-memory conformance assert --db .memory/hermes-memory.db
 
 This suite names the behavior Hermes must preserve: selected professional
 memory enters the prompt with provenance, personal memory stays out of
-professional prompts, resolved conflict losers are suppressed, deleted and
-unsafe memory stay absent, and Keeper writes remain reviewable and retry-safe
-by default.
+professional prompts, stored read policies can deny injection, resolved conflict
+losers are suppressed, deleted and unsafe memory stay absent, and Keeper writes
+remain reviewable and retry-safe by default.
 
 ## Where To Hook It
 

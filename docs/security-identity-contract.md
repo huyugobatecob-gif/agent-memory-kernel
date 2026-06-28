@@ -50,6 +50,9 @@ Rules:
 Implemented local runtime behavior:
 
 - `before_model_call` accepts `allowed_scopes` and `denied_scopes`;
+- `memory_read_policies` can allow or deny read/inject/export capability by
+  `agent_id`, `scope`, and `action`, with `*` wildcards and most-specific match
+  precedence;
 - a denied active scope returns a no-memory prompt envelope;
 - denied scopes produce `access_decisions` and warnings;
 - the main model never receives profile notes, thread messages, graph branches,
@@ -60,6 +63,8 @@ Implemented local runtime behavior:
   as review candidates;
 - denied review, lifecycle, outcome, conflict, and supersession actions raise
   `PermissionError` before mutation and record `write_denied` audit events.
+- denied prompt injection records `read_denied` audit events and exposes the
+  matched read policy in prompt envelope metadata.
 - correction and rollback history is stored in `memory_revisions` so operators
   can inspect and restore prior memory text without erasing audit history.
 

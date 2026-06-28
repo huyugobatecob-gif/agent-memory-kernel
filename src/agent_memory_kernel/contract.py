@@ -79,6 +79,12 @@ WRITE_ACTIONS = [
     "supersede",
 ]
 
+READ_ACTIONS = [
+    "read",
+    "inject",
+    "export",
+]
+
 TRUST_LEVELS = {
     "trusted": "Direct user/profile/manual source or explicitly approved memory.",
     "user": "Direct user-owned identity flow.",
@@ -204,6 +210,7 @@ def memory_contract() -> dict[str, Any]:
         "lanes": LANES,
         "memory_kinds": MEMORY_KINDS,
         "write_actions": WRITE_ACTIONS,
+        "read_actions": READ_ACTIONS,
         "trust_levels": TRUST_LEVELS,
         "sensitivity_levels": SENSITIVITY_LEVELS,
         "derived_prompt_surfaces": DERIVED_PROMPT_SURFACES,
@@ -229,6 +236,7 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "professional_lane_present": "professional" in data.get("lanes", {}),
         "project_extension_present": "project" in data.get("lanes", {}),
         "write_actions_present": set(WRITE_ACTIONS).issubset(set(data.get("write_actions", []))),
+        "read_actions_present": set(READ_ACTIONS).issubset(set(data.get("read_actions", []))),
         "acceptance_gates_present": len(data.get("acceptance_gates", [])) >= 6,
         "governed_read_time_policy_present": "governed_read_time_policy" in gate_names,
         "derived_memory_invalidation_present": "derived_memory_invalidation" in gate_names,

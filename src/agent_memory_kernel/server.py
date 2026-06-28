@@ -128,6 +128,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 100) or 100),
             )
         }
+    if path == "/read-policy/set":
+        return store.set_read_policy(**payload)
+    if path == "/read-policy/list":
+        return {
+            "policies": store.list_read_policies(
+                agent_id=payload.get("agent_id"),
+                scope=payload.get("scope"),
+                action=payload.get("action"),
+                limit=int(payload.get("limit", 100) or 100),
+            )
+        }
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}

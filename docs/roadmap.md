@@ -114,6 +114,9 @@ through `agent-memory router-feedback`, `agent-memory memory-quality`,
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.
+Agent read-policy enforcement is implemented for prompt-facing memory injection
+through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
+`prompt_envelope.metadata.read_policy`.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs and `agent-memory worker --once` are implemented for
@@ -147,8 +150,8 @@ The first public conformance suite is exposed through `agent-memory conformance
 spec/seed/run/assert` and `/conformance/spec`, `/conformance/seed`,
 `/conformance/run`, `/conformance/assert`. It defines named adapter scenarios
 for professional memory injection, personal-lane isolation, current-best
-conflict suppression, deleted-memory absence, unsafe-memory absence, and
-reviewable/idempotent Keeper writes.
+conflict suppression, stored read-policy denial, deleted-memory absence,
+unsafe-memory absence, and reviewable/idempotent Keeper writes.
 
 ## v0.3: Adapters
 

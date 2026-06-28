@@ -41,6 +41,14 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "stored_read_policy_denies_injection",
+                "requires": [
+                    "persistent read policy can deny prompt-facing memory injection",
+                    "denied agent receives a no-memory envelope",
+                    "read denial is visible in prompt metadata and access decisions",
+                ],
+            },
+            {
                 "id": "resolved_conflict_suppresses_loser",
                 "requires": [
                     "resolved current-best winner is injected",
@@ -180,6 +188,37 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         "personal_lane_is_withheld",
         "quiet personal replies" not in professional_content,
         {"scope": CONFORMANCE_SCOPE},
+    )
+    read_policy = store.set_read_policy(
+        agent_id="blocked-conformance-reader",
+        scope=CONFORMANCE_SCOPE,
+        action="inject",
+        decision="deny",
+        reason="conformance read policy blocks injection",
+        actor="conformance",
+    )
+    denied_by_policy = store.before_model_call(
+        "conformance-site CMS",
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        allowed_scopes=[CONFORMANCE_SCOPE],
+        agent_id="blocked-conformance-reader",
+        model_id="conformance-model",
+    )
+    denied_policy_content = _envelope_content(denied_by_policy)
+    _append_result(
+        results,
+        "stored_read_policy_denies_injection",
+        not denied_by_policy["prompt_envelope"]["metadata"].get("memory_allowed", True)
+        and denied_by_policy.get("selected_branch_ids") == []
+        and "Statamic" not in denied_policy_content
+        and denied_by_policy["prompt_envelope"]["metadata"]["read_policy"]["policy_id"]
+        == read_policy["policy_id"],
+        {
+            "policy_id": read_policy["policy_id"],
+            "access_decisions": denied_by_policy.get("access_decisions", []),
+            "warnings": denied_by_policy.get("warnings", []),
+        },
     )
 
     conflict = store.before_model_call(
@@ -326,6 +365,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
     required = {
         "professional_memory_injected_with_provenance",
         "personal_lane_is_withheld",
+        "stored_read_policy_denies_injection",
         "resolved_conflict_suppresses_loser",
         "deleted_memory_absent",
         "unsafe_memory_absent",

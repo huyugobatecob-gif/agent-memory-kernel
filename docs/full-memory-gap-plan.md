@@ -231,7 +231,7 @@ Remaining for full memory:
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review UI or inbox.
 - Hosted identity, tenancy, and capability rules beyond the local
-  agent/scope/action write policy.
+  agent/scope/action read and write policies.
 - Automatic conflict detection heuristics and production current-best-answer
   resolution beyond the baseline explicit-conflict resolver.
 - Broader provider adapters for the prompt envelope.

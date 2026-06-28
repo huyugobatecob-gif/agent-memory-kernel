@@ -80,6 +80,19 @@ CREATE TABLE IF NOT EXISTS memory_write_policies (
     UNIQUE(agent_id, scope, action)
 );
 
+CREATE TABLE IF NOT EXISTS memory_read_policies (
+    policy_id     TEXT PRIMARY KEY,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    agent_id      TEXT NOT NULL DEFAULT '*',
+    scope         TEXT NOT NULL DEFAULT '*',
+    action        TEXT NOT NULL DEFAULT 'inject',
+    decision      TEXT NOT NULL DEFAULT 'allow',
+    reason        TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(agent_id, scope, action)
+);
+
 CREATE TABLE IF NOT EXISTS conversation_turns (
     turn_id        TEXT PRIMARY KEY,
     thread_id      TEXT NOT NULL DEFAULT 'default',
@@ -490,6 +503,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status ON memory_conflicts(statu
 CREATE INDEX IF NOT EXISTS idx_memory_conflicts_scope ON memory_conflicts(scope);
 CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id);
 CREATE INDEX IF NOT EXISTS idx_memory_write_policies_lookup ON memory_write_policies(agent_id, scope, action);
+CREATE INDEX IF NOT EXISTS idx_memory_read_policies_lookup ON memory_read_policies(agent_id, scope, action);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_turns_thread ON conversation_turns(thread_id);
