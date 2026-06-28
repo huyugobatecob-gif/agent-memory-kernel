@@ -9,6 +9,9 @@ instead of duplicating memory storage logic.
 
 The adapter should:
 
+- run `shadow_turn()` during rollout to collect reviewable Router/Keeper traces;
+- call `before_model_call()` before a main agent/model answers;
+- call `after_saved_turn()` after the exchange is persisted;
 - build Memory Tree Packs before an agent plans work;
 - build full context builder packs for tasks that need profile, summaries,
   recent messages, and graph branches together;
@@ -33,13 +36,19 @@ See `hermes_provider.py` for the minimal provider shape.
 Recommended planning call:
 
 ```python
-memory = provider.context_builder_pack(
+trace = provider.shadow_turn(
     "planning SEO content refresh loop for demo-site",
     scope="professional",
     thread_id="seo-demo",
+    user_text="Plan the next refresh loop.",
+    assistant_text="Reuse the prior successful refresh pattern.",
 )
 ```
 
-Pass the returned markdown to the agent with the task. After the run, call
-`record_turn()` for raw conversation history and `remember()` with a session
-summary, outcome, decision, or gotcha.
+Use shadow traces first. They connect a Router run and Keeper proposal with
+`write_policy=propose_only`, so Hermes can review real traffic without
+auto-approving new active memory.
+
+Production runtime should then use `before_model_call()` to get the prompt
+envelope and `after_saved_turn()` to save the exchange and create reviewable
+Keeper candidates.

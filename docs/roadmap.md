@@ -81,6 +81,11 @@ auth and MCP are still backlog. Runtime scope allow/deny enforcement is
 implemented for Router retrieval.
 Queued Keeper jobs and `agent-memory worker --once` are implemented for
 background post-turn processing.
+Shadow rollout traces are implemented through `agent-memory shadow-turn`,
+`agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and the Hermes
+provider wrapper. These traces link Router selections and Keeper proposals with
+`write_policy=propose_only` so real Hermes traffic can be reviewed before live
+memory writes.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters

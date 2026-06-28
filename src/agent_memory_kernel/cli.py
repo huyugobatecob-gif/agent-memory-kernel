@@ -158,6 +158,49 @@ def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_shadow_turn(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    metadata = json.loads(args.metadata_json)
+    print_json(
+        store.shadow_turn(
+            args.query,
+            thread_id=args.thread_id,
+            scope=args.scope,
+            user_id=args.user_id,
+            agent_id=args.agent_id,
+            model_id=args.model_id,
+            mode=args.mode,
+            token_budget=args.token_budget,
+            requested_lanes=parse_csv(args.requested_lanes),
+            allowed_scopes=parse_csv(args.allowed_scopes),
+            denied_scopes=parse_csv(args.denied_scopes),
+            limit=args.limit,
+            recent_messages=args.recent_messages,
+            user_text=args.user_text,
+            assistant_text=args.assistant_text,
+            keeper_mode=args.keeper_mode,
+            metadata=metadata,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_shadow_traces(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_shadow_traces(
+            thread_id=args.thread_id,
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_tree_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -587,6 +630,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keeper-mode", default="sync", choices=["sync", "queued"], help="Run Keeper now or queue it")
     p.add_argument("--metadata-json", default="{}")
     p.set_defaults(func=cmd_after_saved_turn)
+
+    p = sub.add_parser("shadow-turn", help="Run a propose-only Router/Keeper trace for shadow rollout")
+    add_common_db(p)
+    p.add_argument("query")
+    p.add_argument("--thread-id", default="default")
+    p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--user-id", default="user_default")
+    p.add_argument("--agent-id", default="agent")
+    p.add_argument("--model-id", default="")
+    p.add_argument("--mode", default="shadow")
+    p.add_argument("--token-budget", type=int, default=12000)
+    p.add_argument("--requested-lanes", default="", help="Comma-separated memory lanes")
+    p.add_argument("--allowed-scopes", default="", help="Comma-separated scopes allowed for retrieval")
+    p.add_argument("--denied-scopes", default="", help="Comma-separated scopes denied for retrieval")
+    p.add_argument("--limit", type=int, default=8)
+    p.add_argument("--recent-messages", type=int, default=6)
+    p.add_argument("--user-text", default="")
+    p.add_argument("--assistant-text", default="")
+    p.add_argument("--keeper-mode", default="sync", choices=["sync", "queued"], help="Run Keeper now or queue it")
+    p.add_argument("--metadata-json", default="{}")
+    p.set_defaults(func=cmd_shadow_turn)
+
+    p = sub.add_parser("shadow-traces", help="List recorded shadow-mode traces")
+    add_common_db(p)
+    p.add_argument("--thread-id")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_shadow_traces)
 
     p = sub.add_parser("tree-pack", help="Build a branch-oriented memory tree pack for an agent")
     add_common_db(p)

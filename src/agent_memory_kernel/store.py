@@ -1786,6 +1786,206 @@ class MemoryStore:
             "warnings": sorted(set(warnings)),
         }
 
+    def shadow_turn(
+        self,
+        query: str = "",
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "shadow",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
+        limit: int = 8,
+        recent_messages: int = 6,
+        user_text: str = "",
+        assistant_text: str = "",
+        keeper_mode: str = "sync",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one propose-only Router/Keeper trace for shadow Hermes rollout.
+
+        Shadow mode still records turns and Keeper candidates for review, but it
+        never auto-approves candidates into active memory.
+        """
+        query_text = (query or user_text or "").strip()
+        if not query_text:
+            raise ValueError("query or user_text must not be empty")
+        scope = normalize_scope(scope)
+        metadata = dict(metadata or {})
+        before = self.before_model_call(
+            query_text,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode or "shadow",
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+            limit=limit,
+            recent_messages=recent_messages,
+        )
+        after = self.after_saved_turn(
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            user_text=user_text or query_text,
+            assistant_text=assistant_text,
+            auto_approve=False,
+            keeper_mode=keeper_mode,
+            metadata={
+                **metadata,
+                "shadow_trace": True,
+                "write_policy": "propose_only",
+                "router_run_id": before["router_run_id"],
+            },
+        )
+        warnings = sorted(
+            set(
+                list(before.get("warnings", []))
+                + list(after.get("warnings", []))
+                + ["shadow mode: Keeper writes stay pending or queued"]
+            )
+        )
+        shadow_trace_id = new_id("trace")
+        selected_branch_ids = list(before.get("selected_branch_ids", []))
+        candidate_ids = list(after.get("candidate_ids", []))
+        saved_turn_ids = list(after.get("saved_turn_ids", []))
+        trace_metadata = {
+            **metadata,
+            "write_policy": "propose_only",
+            "memory_allowed": before["prompt_envelope"]["metadata"].get("memory_allowed", False),
+            "source_ids": before["prompt_envelope"]["metadata"].get("source_ids", []),
+            "token_estimate": before["prompt_envelope"]["metadata"].get("token_estimate", 0),
+            "keeper_mode": after.get("mode", keeper_mode),
+        }
+        self.conn.execute(
+            """
+            INSERT INTO shadow_traces
+              (shadow_trace_id, created_at, thread_id, scope, user_id, agent_id,
+               model_id, mode, query, router_run_id, keeper_job_id,
+               selected_branch_ids_json, candidate_ids_json, saved_turn_ids_json,
+               write_policy, status, warnings_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                shadow_trace_id,
+                now_iso(),
+                thread_id,
+                scope,
+                user_id,
+                agent_id,
+                model_id,
+                mode or "shadow",
+                query_text,
+                before["router_run_id"],
+                after["keeper_job_id"],
+                json.dumps(selected_branch_ids, sort_keys=True),
+                json.dumps(candidate_ids, sort_keys=True),
+                json.dumps(saved_turn_ids, sort_keys=True),
+                "propose_only",
+                "recorded",
+                json.dumps(warnings, sort_keys=True),
+                json.dumps(trace_metadata, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "shadow_turn",
+            "shadow_trace",
+            shadow_trace_id,
+            actor=agent_id,
+            details={
+                "thread_id": thread_id,
+                "scope": scope,
+                "router_run_id": before["router_run_id"],
+                "keeper_job_id": after["keeper_job_id"],
+                "selected_branch_ids": selected_branch_ids,
+                "candidate_ids": candidate_ids,
+                "write_policy": "propose_only",
+            },
+        )
+        self.conn.commit()
+        return {
+            "shadow_trace_id": shadow_trace_id,
+            "status": "recorded",
+            "mode": "shadow",
+            "write_policy": "propose_only",
+            "router_run_id": before["router_run_id"],
+            "keeper_job_id": after["keeper_job_id"],
+            "selected_branch_ids": selected_branch_ids,
+            "candidate_ids": candidate_ids,
+            "saved_turn_ids": saved_turn_ids,
+            "warnings": warnings,
+            "prompt_envelope": before["prompt_envelope"],
+            "keeper": after,
+        }
+
+    def list_shadow_traces(
+        self,
+        *,
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List recorded shadow-mode traces for review and eval building."""
+        clauses = []
+        params: list[Any] = []
+        if thread_id:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT shadow_trace_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, mode, query, router_run_id,
+                   keeper_job_id, selected_branch_ids_json, candidate_ids_json,
+                   saved_turn_ids_json, write_policy, status, warnings_json,
+                   metadata_json
+            FROM shadow_traces
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        traces = []
+        for row in rows:
+            traces.append(
+                {
+                    "shadow_trace_id": row["shadow_trace_id"],
+                    "created_at": row["created_at"],
+                    "thread_id": row["thread_id"],
+                    "scope": row["scope"],
+                    "user_id": row["user_id"],
+                    "agent_id": row["agent_id"],
+                    "model_id": row["model_id"],
+                    "mode": row["mode"],
+                    "query": row["query"],
+                    "router_run_id": row["router_run_id"],
+                    "keeper_job_id": row["keeper_job_id"],
+                    "selected_branch_ids": self._loads_json(row["selected_branch_ids_json"], []),
+                    "candidate_ids": self._loads_json(row["candidate_ids_json"], []),
+                    "saved_turn_ids": self._loads_json(row["saved_turn_ids_json"], []),
+                    "write_policy": row["write_policy"],
+                    "status": row["status"],
+                    "warnings": self._loads_json(row["warnings_json"], []),
+                    "metadata": self._loads_json(row["metadata_json"], {}),
+                }
+            )
+        return traces
+
     def process_keeper_jobs(self, *, limit: int = 10, actor: str = "worker") -> dict[str, Any]:
         """Process queued Keeper jobs outside the user-facing response path."""
         rows = self.conn.execute(

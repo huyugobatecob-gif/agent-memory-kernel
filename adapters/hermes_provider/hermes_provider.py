@@ -112,6 +112,54 @@ class HermesMemoryProvider:
             metadata=metadata,
         )
 
+    def shadow_turn(
+        self,
+        query: str,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "shadow",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
+        limit: int = 8,
+        user_text: str = "",
+        assistant_text: str = "",
+        keeper_mode: str = "sync",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.shadow_turn(
+            query,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode,
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+            limit=limit,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            keeper_mode=keeper_mode,
+            metadata=metadata,
+        )
+
+    def shadow_traces(
+        self,
+        *,
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_shadow_traces(thread_id=thread_id, scope=scope, limit=limit)
+
     def process_keeper_jobs(self, limit: int = 10, actor: str = "hermes-worker") -> dict[str, Any]:
         return self.store.process_keeper_jobs(limit=limit, actor=actor)
 

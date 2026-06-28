@@ -93,6 +93,8 @@ Already present:
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
+- Shadow rollout traces that link Router selection and Keeper proposals with
+  `write_policy=propose_only`.
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
@@ -108,6 +110,7 @@ Remaining for full memory:
 - Deeper prompt budget adapters per model provider.
 - Guarded brain/style system-prompt append derived from graph analytics.
 - Production Hermes runtime hooks that call memory before and after agent work.
+- Router/Keeper eval harness built from real shadow traces.
 - Production daemon mode for long-running Keeper workers.
 - MCP server for agents that should not use CLI or HTTP directly.
 - Provider embeddings and semantic reranking.

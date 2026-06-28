@@ -40,6 +40,10 @@ user task
   -> review/policy promotes safe memory
 ```
 
+Before enabling this as live memory, Hermes should run the same loop in shadow
+mode. Shadow mode records the Router selection and Keeper proposal as one trace
+with `write_policy=propose_only`; no candidate is auto-approved.
+
 The concrete contracts live in:
 
 - [runtime-contract.md](runtime-contract.md)
@@ -107,6 +111,8 @@ Useful endpoints:
 - `GET /health`
 - `POST /before-model-call`
 - `POST /after-saved-turn`
+- `POST /shadow-turn`
+- `POST /shadow-traces`
 - `POST /remember`
 - `POST /search`
 - `POST /review/list`
@@ -166,6 +172,38 @@ agent-memory context-pack "planning SEO content refresh loop" --scope profession
 Use `context-pack` as the short form and `tree-pack` as the planning form.
 Use `build-context` when the task needs rules, profile, thread summary, recent
 messages, and the Memory Tree supplement together.
+
+### Shadow Rollout
+
+For first Hermes integration, prefer shadow mode:
+
+```bash
+agent-memory shadow-turn "planning SEO content refresh loop" \
+  --scope professional \
+  --thread-id seo-demo \
+  --agent-id writer \
+  --model-id gpt-4.1-mini \
+  --user-text "Plan the next SEO content refresh loop." \
+  --assistant-text "I will reuse the prior successful refresh pattern."
+```
+
+This does both sides of the runtime loop in propose-only mode:
+
+- calls Router and records a `router_run_id`;
+- saves the exchange;
+- runs or queues Keeper with `auto_approve=false`;
+- records `shadow_trace_id`, selected branches, candidate IDs, warnings, and
+  token metadata.
+
+Review traces with:
+
+```bash
+agent-memory shadow-traces --thread-id seo-demo
+```
+
+The first production gate should be manual review of real shadow traces:
+selected branch quality, missed memory, stale memory, candidate quality,
+leakage, and overlong prompt context.
 
 ### During Work
 

@@ -112,6 +112,51 @@ Required behavior:
 - never promote untrusted external content directly into active rules;
 - record extraction failures as audit events.
 
+### `shadow_turn`
+
+Called during rollout before granting production write authority.
+
+Input:
+
+```json
+{
+  "thread_id": "seo-demo",
+  "scope": "professional",
+  "user_id": "user_default",
+  "agent_id": "writer",
+  "model_id": "gpt-4.1-mini",
+  "query": "Plan the next SEO loop",
+  "user_text": "Plan the next SEO loop",
+  "assistant_text": "Reuse the prior successful refresh pattern.",
+  "keeper_mode": "sync",
+  "metadata": {}
+}
+```
+
+Output:
+
+```json
+{
+  "shadow_trace_id": "trace_...",
+  "write_policy": "propose_only",
+  "router_run_id": "router_...",
+  "keeper_job_id": "kjob_...",
+  "selected_branch_ids": ["node_..."],
+  "candidate_ids": ["cand_..."],
+  "warnings": []
+}
+```
+
+Required behavior:
+
+- call the same Router path as `before_model_call`;
+- call the same Keeper path as `after_saved_turn`;
+- force `auto_approve=false`;
+- record one trace that links Router decisions, selected branches, saved turns,
+  Keeper job, candidate IDs, warnings, and token metadata;
+- make the trace listable for human review and future eval fixtures;
+- never promote candidates into active memory automatically.
+
 ## Router Contract
 
 Router inputs:

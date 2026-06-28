@@ -298,6 +298,27 @@ CREATE TABLE IF NOT EXISTS keeper_jobs (
     metadata_json      TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS shadow_traces (
+    shadow_trace_id         TEXT PRIMARY KEY,
+    created_at              TEXT NOT NULL,
+    thread_id               TEXT NOT NULL DEFAULT 'default',
+    scope                   TEXT NOT NULL DEFAULT 'professional',
+    user_id                 TEXT NOT NULL DEFAULT '',
+    agent_id                TEXT NOT NULL DEFAULT '',
+    model_id                TEXT NOT NULL DEFAULT '',
+    mode                    TEXT NOT NULL DEFAULT 'shadow',
+    query                   TEXT NOT NULL,
+    router_run_id           TEXT NOT NULL DEFAULT '',
+    keeper_job_id           TEXT NOT NULL DEFAULT '',
+    selected_branch_ids_json TEXT NOT NULL DEFAULT '[]',
+    candidate_ids_json      TEXT NOT NULL DEFAULT '[]',
+    saved_turn_ids_json     TEXT NOT NULL DEFAULT '[]',
+    write_policy            TEXT NOT NULL DEFAULT 'propose_only',
+    status                  TEXT NOT NULL DEFAULT 'recorded',
+    warnings_json           TEXT NOT NULL DEFAULT '[]',
+    metadata_json           TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS digital_brain_state (
     state_id       TEXT PRIMARY KEY,
     created_at     TEXT NOT NULL,
@@ -399,3 +420,4 @@ CREATE INDEX IF NOT EXISTS idx_llm_usage_scope_thread ON llm_usage_stats(scope, 
 CREATE INDEX IF NOT EXISTS idx_graph_optimizations_scope ON graph_optimization_runs(scope);
 CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_keeper_jobs_thread ON keeper_jobs(thread_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_traces_thread ON shadow_traces(thread_id);

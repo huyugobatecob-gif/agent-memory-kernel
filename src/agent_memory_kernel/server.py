@@ -21,6 +21,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return store.before_model_call(**payload)
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
+    if path == "/shadow-turn":
+        query = str(payload.pop("query", ""))
+        return store.shadow_turn(query, **payload)
+    if path == "/shadow-traces":
+        return {
+            "traces": store.list_shadow_traces(
+                thread_id=payload.get("thread_id"),
+                scope=payload.get("scope"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)

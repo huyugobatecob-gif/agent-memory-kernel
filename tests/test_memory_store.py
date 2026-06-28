@@ -527,6 +527,56 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(second["processed"], 0)
             store.close()
 
+    def test_shadow_turn_records_trace_without_activating_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: project shadow-site uses the old SEO refresh pattern.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            trace = store.shadow_turn(
+                "Plan shadow-site next SEO refresh.",
+                thread_id="shadow-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="shadow-agent",
+                model_id="gpt-test",
+                user_text="Plan shadow-site next SEO refresh.",
+                assistant_text="Try the shadow-only test marker and review it later.",
+            )
+
+            self.assertTrue(trace["shadow_trace_id"].startswith("trace_"))
+            self.assertEqual(trace["write_policy"], "propose_only")
+            self.assertTrue(trace["router_run_id"].startswith("router_"))
+            self.assertTrue(trace["keeper_job_id"].startswith("kjob_"))
+            self.assertTrue(trace["selected_branch_ids"])
+            self.assertTrue(trace["candidate_ids"])
+            self.assertIn("shadow mode: Keeper writes stay pending or queued", trace["warnings"])
+            self.assertEqual(store.search("shadow-only test marker", scope="professional"), [])
+            self.assertTrue(
+                any(
+                    "shadow-only test marker" in candidate["proposed_text"]
+                    for candidate in store.list_candidates("pending")
+                )
+            )
+
+            traces = store.list_shadow_traces(thread_id="shadow-thread")
+            self.assertEqual(len(traces), 1)
+            self.assertEqual(traces[0]["shadow_trace_id"], trace["shadow_trace_id"])
+            self.assertEqual(traces[0]["write_policy"], "propose_only")
+            self.assertEqual(traces[0]["candidate_ids"], trace["candidate_ids"])
+            self.assertEqual(traces[0]["metadata"]["keeper_mode"], "sync")
+
+            shadow_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM shadow_traces"
+            ).fetchone()["count"]
+            self.assertEqual(shadow_count, 1)
+            store.close()
+
     def test_executable_vertical_slice_seed_run_assert(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -586,6 +636,18 @@ class MemoryStoreTests(unittest.TestCase):
                 },
             )
             worker = handle_api_request(store, "/worker/run", {"limit": 1, "actor": "api-worker"})
+            shadow = handle_api_request(
+                store,
+                "/shadow-turn",
+                {
+                    "query": "Plan the shadow API turn.",
+                    "thread_id": "api-shadow",
+                    "scope": "professional",
+                    "user_text": "Plan the shadow API turn.",
+                    "assistant_text": "Record this as a shadow API candidate.",
+                },
+            )
+            traces = handle_api_request(store, "/shadow-traces", {"thread_id": "api-shadow"})
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -596,6 +658,8 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
             self.assertEqual(queued["status"], "queued")
             self.assertEqual(worker["processed"], 1)
+            self.assertTrue(shadow["shadow_trace_id"].startswith("trace_"))
+            self.assertEqual(len(traces["traces"]), 1)
             store.close()
 
 
