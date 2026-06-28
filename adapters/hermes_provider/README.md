@@ -9,6 +9,8 @@ instead of duplicating memory storage logic.
 
 The adapter should:
 
+- expose the Memory Contract and acceptance gate as a preflight before live
+  memory rollout;
 - run `shadow_turn()` during rollout to collect reviewable Router/Keeper traces;
 - run `evaluate_shadow_trace()` after review to keep regression fixtures;
 - call `before_model_call()` before a main agent/model answers;
@@ -37,6 +39,19 @@ The adapter should not:
 - store private project-specific logic in the public kernel.
 
 See `hermes_provider.py` for the minimal provider shape.
+
+Preflight the shared contract before enabling live memory:
+
+```bash
+agent-memory contract assert
+agent-memory acceptance seed --db .memory/hermes-memory.db
+agent-memory acceptance assert --db .memory/hermes-memory.db
+```
+
+This proves the deterministic minimum: selected memory beats no-memory,
+personal memory does not leak into professional prompts, unsafe memory stays
+out, source ids are logged, rollback affects retrieval, Keeper writes remain
+reviewable, and write policy blocks unauthorized approval.
 
 Hermes can pass a configured extractor into the provider:
 

@@ -303,3 +303,19 @@ Keeper quality gates:
 A system implements this contract when an external model can be completely
 stateless and still behave memory-aware because the orchestrator injects only
 the memory envelope returned by the kernel.
+
+## Acceptance Gate
+
+The runtime contract is backed by the formal Memory Contract in
+[memory-contract.md](memory-contract.md). The deterministic gate is:
+
+```bash
+agent-memory contract assert
+agent-memory acceptance seed --db /tmp/amk-acceptance.db
+agent-memory acceptance assert --db /tmp/amk-acceptance.db
+```
+
+This gate proves the minimum closed-loop behavior for local development:
+contract shape, Router/Keeper vertical slice, selected memory versus no-memory
+baseline, lane isolation, unsafe-memory exclusion, source logging, rollback
+retrieval, reviewable Keeper writes, and write-policy enforcement.

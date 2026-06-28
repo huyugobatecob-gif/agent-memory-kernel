@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
+from .contract import assert_contract_shape, memory_contract
 from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
@@ -687,6 +689,43 @@ def cmd_slice_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_contract(args: argparse.Namespace) -> int:
+    print_json(memory_contract())
+    return 0
+
+
+def cmd_contract_assert(args: argparse.Namespace) -> int:
+    result = assert_contract_shape()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
+def cmd_acceptance_seed(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(seed_acceptance_fixture(store))
+    store.close()
+    return 0
+
+
+def cmd_acceptance_run(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = run_acceptance_suite(store)
+    store.close()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
+def cmd_acceptance_assert(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = assert_acceptance_suite(store)
+    store.close()
+    print_json(result)
+    return 0
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1154,6 +1193,28 @@ def build_parser() -> argparse.ArgumentParser:
     sp = slice_sub.add_parser("assert", help="Assert the slice fixture satisfies runtime gates")
     add_common_db(sp)
     sp.set_defaults(func=cmd_slice_assert)
+
+    p = sub.add_parser("contract", help="Show or validate the formal memory contract")
+    contract_sub = p.add_subparsers(dest="contract_command")
+    p.set_defaults(func=cmd_contract)
+
+    cp = contract_sub.add_parser("assert", help="Validate the public memory contract shape")
+    cp.set_defaults(func=cmd_contract_assert)
+
+    p = sub.add_parser("acceptance", help="Run the full-memory acceptance harness")
+    acceptance_sub = p.add_subparsers(dest="acceptance_command", required=True)
+
+    ap = acceptance_sub.add_parser("seed", help="Seed the full-memory acceptance fixture")
+    add_common_db(ap)
+    ap.set_defaults(func=cmd_acceptance_seed)
+
+    ap = acceptance_sub.add_parser("run", help="Run the acceptance suite and return pass/fail JSON")
+    add_common_db(ap)
+    ap.set_defaults(func=cmd_acceptance_run)
+
+    ap = acceptance_sub.add_parser("assert", help="Run acceptance and fail the command on any failed gate")
+    add_common_db(ap)
+    ap.set_defaults(func=cmd_acceptance_assert)
 
     p = sub.add_parser("worker", help="Process queued Keeper jobs")
     add_common_db(p)

@@ -110,6 +110,12 @@ Already present:
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
 - Local stdlib HTTP API service for runtime hooks and review/list operations.
 - CLI and tests.
+- Formal machine-readable Memory Contract with lane, trust, sensitivity, write
+  action, closed-loop, and acceptance gate definitions.
+- Deterministic full-memory acceptance harness exposed through CLI and HTTP:
+  contract shape, vertical slice, memory-vs-no-memory baseline, lane isolation,
+  unsafe-memory exclusion, source logging, rollback retrieval, reviewable Keeper
+  writes, and write-policy enforcement.
 
 Remaining for full memory:
 
@@ -135,6 +141,8 @@ Remaining for full memory:
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.
+- Real production acceptance traces proving behavior improvement on live agent
+  tasks beyond the deterministic local fixture.
 
 ---
 
@@ -160,6 +168,9 @@ following contracts are real and tested:
 5. End-to-end vertical slice:
    [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md) defines the
    first scenario that must pass before the system can be called complete.
+6. Memory contract:
+   [memory-contract.md](memory-contract.md) defines lane precedence,
+   read/write policy, typed memory, and deterministic acceptance gates.
 
 The biggest risk is not graph shape. The biggest risk is letting untrusted or
 unauthorized memory become prompt context without provenance, correction,
@@ -189,7 +200,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 `after_saved_turn`, Router result, Keeper job result, prompt envelope, lifecycle
 mutations, access decisions, and poisoning/correction fixtures.
 
-**Result:** Future agents know exactly what data enters memory, what data comes out, and where it is injected into the main agent prompt.
+**Result:** Baseline implemented, including a machine-readable Memory Contract
+and deterministic acceptance harness. Future work should expand these fixtures
+with production traces, provider adapters, and semantic Router/Keeper evals.
 
 ### Step 2: Add Automatic Memory Job Tables
 

@@ -9,7 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agent_memory_kernel import MemoryStore
+from agent_memory_kernel import (
+    MemoryStore,
+    assert_acceptance_suite,
+    assert_contract_shape,
+    memory_contract,
+    run_acceptance_suite,
+    seed_acceptance_fixture,
+)
 
 
 class HermesMemoryProvider:
@@ -18,6 +25,21 @@ class HermesMemoryProvider:
     def __init__(self, db_path: str | Path = ".memory/hermes-memory.db", *, extractor: Any = None):
         self.store = MemoryStore(db_path, extractor=extractor)
         self.store.init_db()
+
+    def memory_contract(self) -> dict[str, Any]:
+        return memory_contract()
+
+    def assert_contract(self) -> dict[str, Any]:
+        return assert_contract_shape()
+
+    def seed_acceptance(self) -> dict[str, Any]:
+        return seed_acceptance_fixture(self.store)
+
+    def run_acceptance(self) -> dict[str, Any]:
+        return run_acceptance_suite(self.store)
+
+    def assert_acceptance(self) -> dict[str, Any]:
+        return assert_acceptance_suite(self.store)
 
     def context_pack(self, query: str, scope: str | None = None, limit: int = 8) -> str:
         return self.store.context_pack(query, scope=scope, limit=limit)

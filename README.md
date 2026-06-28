@@ -44,6 +44,7 @@ Included now:
 - Active memory search.
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
+- Formal machine-readable Memory Contract and acceptance harness.
 - Scope access enforcement for runtime memory retrieval.
 - Agent write-policy enforcement for record, auto-approve, review, lifecycle,
   outcome, conflict, and supersession paths.
@@ -205,6 +206,21 @@ Build the richer context that Hermes would pass to an agent:
 ```bash
 agent-memory build-context --db .memory/demo.db "planning an SEO loop" --scope professional
 ```
+
+Inspect the formal memory contract and run the deterministic full-memory gate:
+
+```bash
+agent-memory contract
+agent-memory contract assert
+agent-memory acceptance seed --db .memory/acceptance.db
+agent-memory acceptance assert --db .memory/acceptance.db
+```
+
+The acceptance harness checks the minimum closed-loop behavior: selected memory
+beats a no-memory baseline, personal memory does not leak into professional
+prompts, unsafe memory is absent, source ids are logged, correction/rollback
+affect retrieval, Keeper writes stay reviewable, and write policy blocks
+unauthorized promotion.
 
 Record profile and usage metadata:
 

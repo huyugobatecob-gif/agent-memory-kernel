@@ -24,6 +24,7 @@ Status: implemented in this template.
 - Context builder packs.
 - Agent write-policy enforcement.
 - Memory revision history and rollback.
+- Formal Memory Contract and deterministic acceptance harness.
 - OpenAI-compatible lightweight extractor adapter.
 - Markdown vault export.
 - Tests.
@@ -78,6 +79,8 @@ tested:
   scopes, permissions, audit, redaction, and poisoning defense.
 - [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md): executable
   save-retrieve-ingest scenario with permission and poisoning checks.
+- [memory-contract.md](memory-contract.md): lane rules, typed memory, write
+  actions, closed-loop requirements, and deterministic acceptance gates.
 
 Current status: the first local runtime hook slice exists through
 `before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
@@ -113,6 +116,10 @@ planning.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 Corrections now record `memory_revisions`; `agent-memory revisions` and
 `agent-memory rollback` expose operator-visible rollback.
+The formal contract is exposed through `agent-memory contract` and
+`/contract`; the deterministic full-memory gate is exposed through
+`agent-memory acceptance seed/run/assert` and `/acceptance/seed`,
+`/acceptance/run`, `/acceptance/assert`.
 
 ## v0.3: Adapters
 
@@ -153,6 +160,8 @@ Requirements:
 - documented migration path;
 - stable schema;
 - stable provider interface;
+- stable Memory Contract and passing acceptance harness;
+- production eval traces proving memory improves real agent behavior;
 - security review;
 - import/export format;
 - production examples.

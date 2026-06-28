@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
+from .contract import assert_contract_shape, memory_contract
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
 
@@ -17,6 +19,10 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     path = _normalize_path(path)
     if path == "/health":
         return {"status": "ok"}
+    if path == "/contract":
+        return memory_contract()
+    if path == "/contract/assert":
+        return assert_contract_shape()
     if path == "/before-model-call":
         return store.before_model_call(**payload)
     if path == "/after-saved-turn":
@@ -123,6 +129,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return run_vertical_slice(store)
     if path == "/slice/assert":
         return assert_vertical_slice(store)
+    if path == "/acceptance/seed":
+        return seed_acceptance_fixture(store)
+    if path == "/acceptance/run":
+        return run_acceptance_suite(store)
+    if path == "/acceptance/assert":
+        return assert_acceptance_suite(store)
     if path == "/worker/run":
         return store.process_keeper_jobs(
             limit=int(payload.get("limit", 10) or 10),

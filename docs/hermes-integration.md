@@ -51,6 +51,7 @@ The concrete contracts live in:
 - [cross-model-context-contract.md](cross-model-context-contract.md)
 - [security-identity-contract.md](security-identity-contract.md)
 - [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md)
+- [memory-contract.md](memory-contract.md)
 
 Hermes should call these hooks through an adapter or service. The main agent
 should receive a selected prompt envelope, not direct graph traversal rights.
@@ -115,6 +116,8 @@ agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
 Useful endpoints:
 
 - `GET /health`
+- `POST /contract`
+- `POST /contract/assert`
 - `POST /before-model-call`
 - `POST /after-saved-turn`
 - `POST /shadow-turn`
@@ -135,7 +138,18 @@ Useful endpoints:
 - `POST /outcome/list`
 - `POST /outcome/pack`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
+- `POST /acceptance/seed`, `/acceptance/run`, `/acceptance/assert`
 - `POST /worker/run`
+
+Before enabling live memory in Hermes, run the deterministic gate:
+
+```bash
+agent-memory acceptance seed --db .memory/hermes-memory.db
+agent-memory acceptance assert --db .memory/hermes-memory.db
+```
+
+Passing this gate does not mean production memory is complete, but failing it
+means the runtime loop is not safe enough for live pre-turn prompt injection.
 
 ## Where To Hook It
 
