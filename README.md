@@ -392,6 +392,9 @@ The first command returns a provider-neutral prompt envelope with a selected
 reviewable Keeper candidates in sync mode or queues the Keeper job in queued
 mode. The worker command processes queued Keeper jobs.
 
+For a CLI walkthrough of the full policy/review loop, see
+[examples/hermes-e2e-demo/README.md](examples/hermes-e2e-demo/README.md).
+
 Use `shadow-turn` before a production rollout. It links one Router run and one
 Keeper job into a reviewable trace with `write_policy=propose_only`: turns and
 candidate memories are recorded, but nothing is auto-approved into active
@@ -482,6 +485,7 @@ docs/
 examples/
   personal-professional-demo/
   agent-loop-demo/
+  hermes-e2e-demo/
 templates/
   vault/
 tests/

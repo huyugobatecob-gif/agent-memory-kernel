@@ -767,6 +767,81 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(second["processed"], 0)
             store.close()
 
+    def test_hermes_policy_review_e2e_promotes_queued_keeper_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Pattern: project demo-site successful refresh loops improve internal links.",
+                scope="professional",
+                actor="reviewer",
+                auto_approve=True,
+            )
+            before = store.before_model_call(
+                "Plan a demo-site internal link refresh.",
+                thread_id="hermes-e2e",
+                scope="professional",
+                user_id="user-1",
+                agent_id="writer",
+                model_id="gpt-test",
+                mode="planning",
+            )
+            before_text = "\n".join(
+                message["content"] for message in before["prompt_envelope"]["messages"]
+            )
+            self.assertIn("successful refresh loops", before_text)
+
+            store.set_write_policy(
+                agent_id="writer",
+                scope="professional",
+                action="auto_approve",
+                decision="deny",
+                reason="writer proposes memory for review",
+            )
+            queued = store.after_saved_turn(
+                thread_id="hermes-e2e",
+                scope="professional",
+                user_id="user-1",
+                agent_id="writer",
+                model_id="gpt-test",
+                user_text="Decision: project demo-site should reuse the refresh-loop playbook.",
+                assistant_text="I will track outcome memory after the loop.",
+                auto_approve=True,
+                keeper_mode="queued",
+            )
+            self.assertEqual(queued["status"], "queued")
+            self.assertEqual(queued["candidate_ids"], [])
+
+            processed = store.process_keeper_jobs(limit=1, actor="hermes-worker")
+            job = processed["jobs"][0]
+            self.assertEqual(job["status"], "completed")
+            self.assertTrue(job["candidate_ids"])
+            self.assertTrue(
+                any("auto_approve denied" in warning for warning in job["warnings"])
+            )
+            self.assertEqual(store.search("refresh-loop playbook", scope="professional"), [])
+
+            candidate_id = job["candidate_ids"][0]
+            promoted_memory_id = store.approve_candidate(candidate_id, actor="reviewer")
+            self.assertTrue(promoted_memory_id.startswith("mem_"))
+
+            after_review = store.before_model_call(
+                "What should demo-site reuse?",
+                thread_id="hermes-e2e",
+                scope="professional",
+                user_id="user-1",
+                agent_id="writer",
+                model_id="gpt-test",
+                mode="planning",
+            )
+            after_text = "\n".join(
+                message["content"] for message in after_review["prompt_envelope"]["messages"]
+            )
+            self.assertIn("refresh-loop playbook", after_text)
+            self.assertTrue(after_review["selected_branch_ids"])
+            store.close()
+
     def test_shadow_turn_records_trace_without_activating_memory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

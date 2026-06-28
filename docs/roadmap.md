@@ -90,6 +90,8 @@ implemented for Router retrieval.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.
+The Hermes-style policy/review acceptance path is covered by tests and
+`examples/hermes-e2e-demo`.
 Queued Keeper jobs and `agent-memory worker --once` are implemented for
 background post-turn processing.
 Shadow rollout traces are implemented through `agent-memory shadow-turn`,
