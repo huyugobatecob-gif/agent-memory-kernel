@@ -204,6 +204,17 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def operational_status(
+        self,
+        *,
+        max_db_bytes: int = 512 * 1024 * 1024,
+        integrity_check: bool = True,
+    ) -> dict[str, Any]:
+        return self.store.operational_status(
+            max_db_bytes=max_db_bytes,
+            integrity_check=integrity_check,
+        )
+
     def before_model_call(
         self,
         query: str,

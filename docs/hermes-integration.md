@@ -129,6 +129,9 @@ class HermesMemoryProvider:
 
     def derived_invalidations(self, memory_id: str = "", scope: str | None = None) -> dict:
         ...
+
+    def operational_status(self) -> dict:
+        ...
 ```
 
 The provider should call `MemoryOrchestrator`/`MemoryStore`, not duplicate
@@ -156,14 +159,16 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_before_turn`, `memory_build_prompt_context`, `memory_after_saved_turn`,
 `memory_after_turn`, `memory_retrieve_context`, `memory_ingest_graph`,
 `memory_changes`, `memory_tree_pack`, `memory_capability_check`,
-`memory_derived_invalidations`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, and `memory_worker_run`.
+`memory_derived_invalidations`, `memory_operational_status`,
+`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_worker_run`.
 
 Useful endpoints:
 
 - `GET /health`
 - `POST /contract`
 - `POST /contract/assert`
+- `POST /operational/status`
 - `POST /conformance/spec`
 - `POST /conformance/spec/assert`
 - `POST /before-turn`

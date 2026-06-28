@@ -27,6 +27,11 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     path = _normalize_path(path)
     if path == "/health":
         return {"status": "ok"}
+    if path in {"/operational/status", "/operational-status"}:
+        return store.operational_status(
+            max_db_bytes=int(payload.get("max_db_bytes", 512 * 1024 * 1024) or 0),
+            integrity_check=bool(payload.get("integrity_check", True)),
+        )
     if path == "/contract":
         return memory_contract()
     if path == "/contract/assert":

@@ -365,6 +365,22 @@ Keeper quality gates:
   for review.
 - `poisoning_detected`: quarantine the source and prevent graph mutation.
 
+Baseline implementation:
+
+- `before_model_call` catches Router/context retrieval failures by default,
+  writes a `memory_unavailable` Router audit entry, and returns a no-memory
+  prompt envelope with `metadata.operational_failure`.
+- `after_saved_turn` saves the raw user/assistant turns first. If Keeper
+  extraction fails, it rolls back the failed Keeper ingest, records a failed
+  Keeper job with `metadata.operational_failure`, and keeps the saved turns
+  inspectable through `memory-changes`.
+- `/operational/status`, the Hermes provider wrapper, and MCP
+  `memory_operational_status` expose local health checks for required tables,
+  SQLite quick check, storage size, and configured fallback behavior.
+
+Still production work: latency SLOs, backup/restore, migration recovery,
+hosted health checks, long-running worker supervision, and alerting.
+
 ## End State
 
 A system implements this contract when an external model can be completely

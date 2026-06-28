@@ -39,6 +39,8 @@ The adapter should:
   permissions before delegating work to an agent;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
   after correction, rollback, delete, distrust, expire, or supersede;
+- expose `operational_status()` so Hermes can check local memory health and
+  fallback behavior before routing critical work through memory;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;

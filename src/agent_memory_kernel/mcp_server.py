@@ -205,6 +205,16 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_operational_status": {
+        "endpoint": "/operational/status",
+        "description": "Report local runtime memory health and configured failure fallback behavior.",
+        "inputSchema": _schema(
+            {
+                "max_db_bytes": _integer("Warn when the SQLite file exceeds this size.", 536870912),
+                "integrity_check": _boolean("Run SQLite quick_check.", True),
+            }
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

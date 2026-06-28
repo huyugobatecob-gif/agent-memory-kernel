@@ -179,6 +179,11 @@ Already present:
   and MCP `memory_derived_invalidations`; correction, rollback, delete,
   distrust, expire, and supersede actions record affected graph, evidence,
   prompt-pack, export, and graph-derived style surfaces.
+- Baseline operational failure behavior through `operational_status`,
+  `/operational/status`, the Hermes provider wrapper, and MCP
+  `memory_operational_status`; Router/context failures return a no-memory
+  envelope with `metadata.operational_failure`, and Keeper extraction failures
+  keep saved turns while marking the Keeper job failed.
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
@@ -269,8 +274,10 @@ Remaining for full memory:
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.
-- Operational failure behavior for slow, unavailable, corrupted, partially
-  migrated, or oversized memory stores.
+- Production operational failure behavior beyond the local baseline for slow,
+  unavailable, corrupted, partially migrated, or oversized memory stores,
+  including latency budgets, backup/restore, migration recovery, worker
+  supervision, and hosted alerting.
 - Real production acceptance traces proving behavior improvement on live agent
   tasks beyond the deterministic local fixture.
 

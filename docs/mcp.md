@@ -46,6 +46,9 @@ Runtime tools:
 - `memory_derived_invalidations`: inspect derived surfaces refreshed or
   invalidated after correction, rollback, delete, distrust, expire, or
   supersede.
+- `memory_operational_status`: report local memory health, required table
+  checks, storage size warning, and configured no-memory/failed-Keeper fallback
+  behavior.
 
 Retrieval tools:
 

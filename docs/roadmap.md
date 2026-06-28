@@ -139,6 +139,12 @@ derived-invalidations`, `/derived-invalidations`, the Hermes provider wrapper,
 and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,
 expire, and supersede lifecycle actions record graph/evidence/prompt-pack/export
 surfaces that were refreshed or invalidated.
+Baseline operational failure handling is implemented through
+`operational_status`, `/operational/status`, the Hermes provider wrapper, and
+MCP `memory_operational_status`. Prompt retrieval failures return a no-memory
+envelope with `metadata.operational_failure`; Keeper extraction failures keep
+saved turns and mark the Keeper job failed. Production SLOs, backup/restore,
+migration recovery, worker supervision, and hosted alerting are still backlog.
 Post-turn memory-change inspection is implemented through `agent-memory
 memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted
