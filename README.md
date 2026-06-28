@@ -298,6 +298,21 @@ reference-memory findings to the missing repository layers: automatic Keeper,
 Memory Router, prompt envelope, Hermes hooks, API/MCP service mode, review, and
 security hardening.
 
+The full-memory work is split into hard contracts so contributors can implement
+it without relying on the original planning conversation:
+
+- [docs/runtime-contract.md](docs/runtime-contract.md) defines the live
+  `before_model_call` / `after_saved_turn` loop.
+- [docs/memory-lifecycle-contract.md](docs/memory-lifecycle-contract.md)
+  defines create, correct, delete, distrust, expire, conflict, and export
+  behavior.
+- [docs/cross-model-context-contract.md](docs/cross-model-context-contract.md)
+  defines the provider-neutral prompt envelope and Memory Tree Supplement.
+- [docs/security-identity-contract.md](docs/security-identity-contract.md)
+  defines identity, permissions, trust, audit, and leakage controls.
+- [docs/end-to-end-vertical-slice.md](docs/end-to-end-vertical-slice.md)
+  defines the first executable full-memory scenario.
+
 ## Safety Model
 
 The kernel is intentionally conservative:
@@ -338,6 +353,11 @@ src/agent_memory_kernel/
 docs/
   implementation-plan.md  phased build plan
   full-memory-gap-plan.md  gap plan for automatic full memory
+  runtime-contract.md      pre-call router and post-turn keeper contract
+  memory-lifecycle-contract.md  durable memory lifecycle contract
+  cross-model-context-contract.md  provider-neutral prompt context contract
+  security-identity-contract.md  identity, permissions, and trust contract
+  end-to-end-vertical-slice.md  first full-memory acceptance scenario
   memory-tree-pack.md     tree-shaped retrieval format
   v0-memory-contract.md  lifecycle and data contract
   hermes-integration.md  adapter architecture

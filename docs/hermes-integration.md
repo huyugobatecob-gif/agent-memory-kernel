@@ -24,6 +24,33 @@ sequenceDiagram
     U->>M: approve / reject / correct
 ```
 
+## Full Memory Runtime Hooks
+
+For full automatic memory, Hermes should treat the kernel as a runtime memory
+service:
+
+```text
+user task
+  -> Hermes before_model_call
+  -> Memory Router builds prompt envelope with MEMORY_TREE_SUPPLEMENT
+  -> main agent/model answers without graph access
+  -> Hermes saves the exchange
+  -> Hermes after_saved_turn
+  -> Keeper extracts candidate graph updates
+  -> review/policy promotes safe memory
+```
+
+The concrete contracts live in:
+
+- [runtime-contract.md](runtime-contract.md)
+- [memory-lifecycle-contract.md](memory-lifecycle-contract.md)
+- [cross-model-context-contract.md](cross-model-context-contract.md)
+- [security-identity-contract.md](security-identity-contract.md)
+- [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md)
+
+Hermes should call these hooks through an adapter or service. The main agent
+should receive a selected prompt envelope, not direct graph traversal rights.
+
 ## Adapter Boundary
 
 A Hermes adapter should be thin.

@@ -18,6 +18,23 @@ The project should remain universal by default:
 The key rule: domain-specific intelligence should be built as extensions over
 the kernel, not hard-coded into the kernel.
 
+## Full Memory Contract Gate
+
+The project is not allowed to claim full automatic memory until these contracts
+are implemented and verified:
+
+- `docs/runtime-contract.md` for the live Router/Keeper hooks.
+- `docs/memory-lifecycle-contract.md` for correction, deletion, distrust,
+  expiration, conflict, and export behavior.
+- `docs/cross-model-context-contract.md` for provider-neutral prompt context.
+- `docs/security-identity-contract.md` for identity, scope, permission, trust,
+  and audit rules.
+- `docs/end-to-end-vertical-slice.md` for the first complete scenario.
+
+This gate keeps the open-source template universal: basic users can keep the
+personal/professional memory model, while Hermes and other orchestrators can add
+automatic runtime memory on top.
+
 ## Phase 0: Repository Baseline
 
 Goal: make the project understandable and safe to publish.

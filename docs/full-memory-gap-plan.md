@@ -107,10 +107,43 @@ Missing for full memory:
 - Provider embeddings and semantic reranking.
 - First-class outcome memory for success/failure loops.
 - Human review UI or inbox.
+- Explicit identity, scope, permission, and tenancy rules.
+- Memory lifecycle propagation for correct, delete, distrust, expire, and
+  conflict operations across summaries, graph nodes, and cached context packs.
+- Provider-neutral prompt context that can be adapted across main models.
+- End-to-end fixture proving save, route, inject, answer, ingest, review, and
+  correction behavior.
 - Stronger prompt-injection, source trust, and secret handling.
 - Migration, observability, and cost accounting around all LLM memory calls.
 
 ---
+
+## Council Hardening Addendum
+
+The architecture is directionally correct, but it is not full memory until the
+following contracts are real and tested:
+
+1. Runtime contract:
+   [runtime-contract.md](runtime-contract.md) defines `before_model_call`,
+   `after_saved_turn`, Router output, Keeper output, and failure behavior.
+2. Memory lifecycle contract:
+   [memory-lifecycle-contract.md](memory-lifecycle-contract.md) defines create,
+   correct, delete, distrust, expire, conflict, export, and derived-memory
+   invalidation.
+3. Cross-model context contract:
+   [cross-model-context-contract.md](cross-model-context-contract.md) defines
+   the provider-neutral prompt envelope, token-budget adapters, and
+   `MEMORY_TREE_SUPPLEMENT`.
+4. Security and identity contract:
+   [security-identity-contract.md](security-identity-contract.md) defines
+   identity, scopes, permissions, redaction, audit, and poisoning defense.
+5. End-to-end vertical slice:
+   [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md) defines the
+   first scenario that must pass before the system can be called complete.
+
+The biggest risk is not graph shape. The biggest risk is letting untrusted or
+unauthorized memory become prompt context without provenance, correction,
+deletion, redaction, and audit controls.
 
 ### Step 1: Lock The Full Memory Contract
 
@@ -120,7 +153,11 @@ Missing for full memory:
 
 - Modify `docs/v0-memory-contract.md`.
 - Modify `docs/hermes-integration.md`.
-- Add `docs/prompt-envelope.md`.
+- Add/maintain `docs/runtime-contract.md`.
+- Add/maintain `docs/memory-lifecycle-contract.md`.
+- Add/maintain `docs/cross-model-context-contract.md`.
+- Add/maintain `docs/security-identity-contract.md`.
+- Add/maintain `docs/end-to-end-vertical-slice.md`.
 
 **Commands:**
 
@@ -128,7 +165,9 @@ Missing for full memory:
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Docs include concrete JSON examples for `before_turn`, `after_turn`, `router_result`, and `prompt_envelope`.
+**Verification:** Docs include concrete JSON examples for `before_model_call`,
+`after_saved_turn`, Router result, Keeper job result, prompt envelope, lifecycle
+mutations, access decisions, and poisoning/correction fixtures.
 
 **Result:** Future agents know exactly what data enters memory, what data comes out, and where it is injected into the main agent prompt.
 
@@ -476,4 +515,11 @@ The repository has full memory when all of these are true:
 - Humans can review, correct, reject, delete, and export memory.
 - All active memory has provenance.
 - Untrusted content cannot silently become durable instructions.
+- Identity, scope, permissions, and audit are present on every read/write path.
+- Corrected, deleted, distrusted, expired, or conflicted memory cannot keep
+  leaking through summaries, graph nodes, embeddings, or cached context packs.
+- Prompt-boundary tests prove memory context remains subordinate to higher
+  instructions and is not provider-specific.
+- A vertical slice proves the whole loop from saved turn to Keeper update to
+  Router injection to next answer.
 - Memory-related model calls are auditable by cost, token use, source turn, and selected graph branches.

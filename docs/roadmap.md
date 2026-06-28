@@ -56,6 +56,20 @@ production layers around the local kernel:
 - background worker;
 - review and security hardening.
 
+Before v0.2 can be called full memory, these contracts must be implemented and
+tested:
+
+- [runtime-contract.md](runtime-contract.md): pre-call Router, post-turn Keeper,
+  and failure behavior.
+- [memory-lifecycle-contract.md](memory-lifecycle-contract.md): create,
+  correct, delete, distrust, expire, conflict, and export behavior.
+- [cross-model-context-contract.md](cross-model-context-contract.md):
+  provider-neutral prompt envelope and `MEMORY_TREE_SUPPLEMENT`.
+- [security-identity-contract.md](security-identity-contract.md): identity,
+  scopes, permissions, audit, redaction, and poisoning defense.
+- [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md): executable
+  save-retrieve-ingest scenario with permission and poisoning checks.
+
 ## v0.3: Adapters
 
 Goal: let agent frameworks use the kernel without copy-pasting logic.
