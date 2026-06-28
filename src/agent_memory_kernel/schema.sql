@@ -393,6 +393,29 @@ CREATE TABLE IF NOT EXISTS memory_export_records (
     purge_reason       TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS memory_notifications (
+    notification_id TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'open',
+    severity        TEXT NOT NULL DEFAULT 'info',
+    topic           TEXT NOT NULL,
+    scope           TEXT NOT NULL DEFAULT 'professional',
+    actor           TEXT NOT NULL DEFAULT 'system',
+    target_type     TEXT NOT NULL DEFAULT '',
+    target_id       TEXT NOT NULL DEFAULT '',
+    title           TEXT NOT NULL DEFAULT '',
+    message         TEXT NOT NULL DEFAULT '',
+    action_path     TEXT NOT NULL DEFAULT '',
+    dedupe_key      TEXT NOT NULL DEFAULT '',
+    metadata_json   TEXT NOT NULL DEFAULT '{}',
+    acknowledged_at TEXT,
+    acknowledged_by TEXT NOT NULL DEFAULT '',
+    resolved_at     TEXT,
+    resolved_by     TEXT NOT NULL DEFAULT '',
+    resolve_reason  TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS router_runs (
     router_run_id            TEXT PRIMARY KEY,
     created_at               TEXT NOT NULL,
@@ -560,6 +583,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_write_policies_lookup ON memory_write_poli
 CREATE INDEX IF NOT EXISTS idx_memory_read_policies_lookup ON memory_read_policies(agent_id, scope, action);
 CREATE INDEX IF NOT EXISTS idx_memory_export_approvals_status ON memory_export_approvals(status, scope);
 CREATE INDEX IF NOT EXISTS idx_memory_export_records_status ON memory_export_records(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_memory_notifications_status ON memory_notifications(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_memory_notifications_scope ON memory_notifications(scope, status);
+CREATE INDEX IF NOT EXISTS idx_memory_notifications_target ON memory_notifications(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_turns_thread ON conversation_turns(thread_id);

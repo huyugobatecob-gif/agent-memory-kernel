@@ -171,6 +171,125 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(store.search("corrected", scope="professional"), [])
             store.close()
 
+    def test_notification_queue_tracks_review_actions_http_and_mcp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "memory.db"
+            store = MemoryStore(db, extractor=InboxExtractor())
+            store.init_db()
+            candidate_id = store.remember(
+                "Decision: inbox-site notification queue should alert reviewers.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+
+            notifications = store.list_notifications(topic="review_candidate")
+            self.assertEqual(notifications["version"], "notification-queue-v0.1")
+            self.assertEqual(notifications["count"], 1)
+            notification = notifications["notifications"][0]
+            self.assertEqual(notification["target_id"], candidate_id)
+            self.assertEqual(notification["status"], "open")
+            self.assertEqual(
+                notification["operator_handles"]["ack"]["http"]["path"],
+                "/notifications/ack",
+            )
+
+            acknowledged = handle_api_request(
+                store,
+                "/notifications/ack",
+                {
+                    "notification_id": notification["notification_id"],
+                    "actor": "reviewer",
+                    "reason": "review started",
+                },
+            )
+            self.assertEqual(acknowledged["status"], "acknowledged")
+
+            mcp_server = MCPMemoryServer(db)
+            mcp_list = mcp_server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_notifications_list",
+                        "arguments": {"status": "acknowledged"},
+                    },
+                }
+            )
+            self.assertFalse(mcp_list["result"]["isError"])
+            self.assertEqual(
+                mcp_list["result"]["structuredContent"]["notifications"][0]["target_id"],
+                candidate_id,
+            )
+
+            store.approve_candidate(candidate_id, actor="reviewer")
+            open_after_approval = store.list_notifications(
+                status="open",
+                target_type="candidate",
+                target_id=candidate_id,
+            )
+            self.assertEqual(open_after_approval["count"], 0)
+            resolved = store.list_notifications(
+                status="resolved",
+                target_type="candidate",
+                target_id=candidate_id,
+            )
+            self.assertEqual(resolved["count"], 1)
+            self.assertEqual(resolved["notifications"][0]["resolved_by"], "reviewer")
+            store.close()
+
+    def test_export_notifications_cover_approval_and_retention(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db", extractor=InboxExtractor())
+            store.init_db()
+            store.remember(
+                "Decision: personal export notification fixture.",
+                scope="personal",
+                actor="user",
+                source_type="manual",
+                auto_approve=True,
+            )
+            approval = store.request_export_approval(
+                actor="reviewer",
+                requested_by="operator",
+                scope="personal",
+                redaction_profile="full",
+                reason="portable personal export",
+            )
+            self.assertEqual(approval["status"], "pending")
+            approval_notifications = store.list_notifications(topic="export_approval")
+            self.assertEqual(approval_notifications["count"], 1)
+            self.assertEqual(
+                approval_notifications["notifications"][0]["target_id"],
+                approval["approval_id"],
+            )
+
+            store.approve_export_approval(
+                approval["approval_id"],
+                actor="reviewer",
+                reason="explicit user request",
+            )
+            self.assertEqual(store.list_notifications(topic="export_approval")["count"], 0)
+
+            exported = store.export_profile(
+                scope="professional",
+                actor="reviewer",
+                redaction_profile="safe",
+                retention_days=0,
+                artifact_ref="memory://retention-test",
+            )
+            enforced = store.enforce_export_retention(actor="janitor")
+            self.assertEqual(enforced["expired_count"], 1)
+            retention_notification = store.list_notifications(topic="export_retention")
+            self.assertEqual(retention_notification["count"], 1)
+            export_id = exported["export_metadata"]["retention"]["export_id"]
+            self.assertEqual(retention_notification["notifications"][0]["target_id"], export_id)
+
+            store.purge_export_record(export_id, actor="janitor", reason="artifact removed")
+            self.assertEqual(store.list_notifications(topic="export_retention")["count"], 0)
+            store.close()
+
     def test_review_batch_dry_run_and_per_item_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db", extractor=InboxExtractor())
@@ -287,7 +406,16 @@ class ReviewInboxTests(unittest.TestCase):
 
             inbox = provider.review_inbox(status="open")
             self.assertEqual(inbox["items"][0]["candidate"]["candidate_id"], candidate_id)
+            notifications = provider.notifications(status="open", topic="review_candidate")
+            self.assertEqual(notifications["count"], 1)
+            acknowledged = provider.ack_notification(
+                notifications["notifications"][0]["notification_id"],
+                actor="reviewer",
+                reason="provider review started",
+            )
+            self.assertEqual(acknowledged["status"], "acknowledged")
             approved = provider.approve_candidate(candidate_id, actor="reviewer")
+            self.assertEqual(provider.notifications(status="open")["count"], 0)
             corrected = provider.correct_memory(
                 approved["memory_id"],
                 "Decision: inbox-site provider wrapper is corrected.",

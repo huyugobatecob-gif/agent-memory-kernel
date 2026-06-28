@@ -102,6 +102,7 @@ OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
+NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -1000,6 +1001,15 @@ class MemoryStore:
                 memory_id = self._activate_candidate(candidate_id, actor=actor)
             else:
                 memory_id = None
+                self._notify_candidate_review_required(
+                    candidate_id=candidate_id,
+                    scope=scope,
+                    status=policy.status,
+                    reason=policy.reason,
+                    actor=actor,
+                    source_trust=policy.source_trust,
+                    sensitivity=policy.sensitivity,
+                )
             candidates.append(
                 {
                     "candidate_id": candidate_id,
@@ -1121,6 +1131,15 @@ class MemoryStore:
         if policy.status == "approved":
             memory_id = self._activate_candidate(candidate_id, actor=actor)
         else:
+            self._notify_candidate_review_required(
+                candidate_id=candidate_id,
+                scope=scope,
+                status=policy.status,
+                reason=policy.reason,
+                actor=actor,
+                source_trust=policy.source_trust,
+                sensitivity=policy.sensitivity,
+            )
             for command in commands:
                 self.conn.execute(
                     """
@@ -1508,6 +1527,142 @@ class MemoryStore:
             "summary": summary,
             "items": items,
         }
+
+    def list_notifications(
+        self,
+        *,
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Return operator notifications for review, export, and maintenance work."""
+        status = (status or "open").strip().lower()
+        allowed_statuses = {"open", "acknowledged", "resolved", "all"}
+        if status not in allowed_statuses:
+            raise ValueError(
+                "notification status must be open, acknowledged, resolved, or all"
+            )
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status != "all":
+            clauses.append("status = ?")
+            params.append(status)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        if topic:
+            clauses.append("topic = ?")
+            params.append(topic.strip().lower())
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity.strip().lower())
+        if target_type:
+            clauses.append("target_type = ?")
+            params.append(target_type.strip().lower())
+        if target_id:
+            clauses.append("target_id = ?")
+            params.append(target_id.strip())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT *
+            FROM memory_notifications
+            {where}
+            ORDER BY
+                CASE severity
+                    WHEN 'critical' THEN 0
+                    WHEN 'high' THEN 1
+                    WHEN 'warning' THEN 2
+                    ELSE 3
+                END,
+                updated_at DESC,
+                created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        notifications = [self._notification_to_dict(row) for row in rows]
+        summary: dict[str, int] = {}
+        for item in notifications:
+            item_status = str(item["status"])
+            summary[item_status] = summary.get(item_status, 0) + 1
+        return {
+            "version": NOTIFICATION_QUEUE_VERSION,
+            "status_filter": status,
+            "scope": scope or "all",
+            "topic": topic or "all",
+            "count": len(notifications),
+            "summary": summary,
+            "notifications": notifications,
+        }
+
+    def ack_notification(
+        self,
+        notification_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        row = self._notification_row(notification_id)
+        if row["status"] == "resolved":
+            return self._notification_to_dict(row)
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_notifications
+            SET updated_at = ?, status = 'acknowledged',
+                acknowledged_at = COALESCE(acknowledged_at, ?),
+                acknowledged_by = CASE
+                    WHEN acknowledged_by = '' THEN ?
+                    ELSE acknowledged_by
+                END
+            WHERE notification_id = ?
+            """,
+            (ts, ts, actor, row["notification_id"]),
+        )
+        self._audit(
+            "notification_acknowledged",
+            "memory_notification",
+            row["notification_id"],
+            actor=actor,
+            details={"reason": reason},
+        )
+        self.conn.commit()
+        return self._notification_to_dict(self._notification_row(notification_id))
+
+    def resolve_notification(
+        self,
+        notification_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        row = self._notification_row(notification_id)
+        if row["status"] == "resolved":
+            return self._notification_to_dict(row)
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_notifications
+            SET updated_at = ?, status = 'resolved', resolved_at = ?,
+                resolved_by = ?, resolve_reason = ?
+            WHERE notification_id = ?
+            """,
+            (ts, ts, actor, reason, row["notification_id"]),
+        )
+        self._audit(
+            "notification_resolved",
+            "memory_notification",
+            row["notification_id"],
+            actor=actor,
+            details={"reason": reason},
+        )
+        self.conn.commit()
+        return self._notification_to_dict(self._notification_row(notification_id))
 
     def review_batch(
         self,
@@ -1970,6 +2125,12 @@ class MemoryStore:
             """,
             (new_id("rev"), now_iso(), candidate_id, "approve", actor, reason),
         )
+        self._resolve_notifications_for_target(
+            target_type="candidate",
+            target_id=candidate_id,
+            actor=actor,
+            reason=reason or "candidate approved",
+        )
         self.conn.commit()
         return memory_id
 
@@ -1997,6 +2158,12 @@ class MemoryStore:
             (new_id("rev"), now_iso(), candidate_id, "reject", actor, reason),
         )
         self._audit("reject", "candidate", candidate_id, actor=actor, details={"reason": reason})
+        self._resolve_notifications_for_target(
+            target_type="candidate",
+            target_id=candidate_id,
+            actor=actor,
+            reason=reason or "candidate rejected",
+        )
         self.conn.commit()
 
     def search(
@@ -3246,6 +3413,29 @@ class MemoryStore:
                 "reason": reason,
             },
         )
+        if status == "pending":
+            self._create_notification(
+                topic="export_approval",
+                target_type="memory_export_approval",
+                target_id=approval_id,
+                title="Sensitive export approval required",
+                message=(
+                    f"Export approval {approval_id} is pending for "
+                    f"{scope or 'all'} scope with {redaction_profile} redaction."
+                ),
+                severity="high",
+                scope=scope or "all",
+                actor=requested_by,
+                action_path="/export/approval/list",
+                dedupe_key=f"export_approval:{approval_id}",
+                metadata={
+                    "approval_id": approval_id,
+                    "export_kind": export_kind,
+                    "redaction_profile": redaction_profile,
+                    "approval_reasons": assessment["approval_reasons"],
+                    "risk_flags": assessment["risk_flags"],
+                },
+            )
         self.conn.commit()
         row = self._get_export_approval_row(approval_id)
         return self._export_approval_to_dict(row, assessment=assessment)
@@ -3378,6 +3568,27 @@ class MemoryStore:
                 actor=actor,
                 details={"expires_at": row["expires_at"]},
             )
+            self._create_notification(
+                topic="export_retention",
+                target_type="memory_export_record",
+                target_id=row["export_id"],
+                title="Export artifact retention expired",
+                message=(
+                    f"Export {row['export_id']} expired at {row['expires_at']}; "
+                    "external artifact cleanup should be confirmed."
+                ),
+                severity="warning",
+                scope=row["scope"],
+                actor=actor,
+                action_path="/export/retention/list",
+                dedupe_key=f"export_retention:{row['export_id']}",
+                metadata={
+                    "export_id": row["export_id"],
+                    "expires_at": row["expires_at"],
+                    "artifact_ref": row["artifact_ref"],
+                    "redaction_profile": row["redaction_profile"],
+                },
+            )
             expired.append(self._export_record_to_dict(row, status_override="expired", updated_at=ts))
         self.conn.commit()
         return {
@@ -3422,6 +3633,12 @@ class MemoryStore:
                 "artifact_ref": row["artifact_ref"],
                 "external_artifact_cleanup_required": bool(row["artifact_ref"]),
             },
+        )
+        self._resolve_notifications_for_target(
+            target_type="memory_export_record",
+            target_id=row["export_id"],
+            actor=actor,
+            reason=reason or "export artifact purged",
         )
         self.conn.commit()
         return self._export_record_to_dict(
@@ -8059,6 +8276,12 @@ class MemoryStore:
             actor=actor,
             details={"reason": reason, "previous_status": row["status"]},
         )
+        self._resolve_notifications_for_target(
+            target_type="memory_export_approval",
+            target_id=approval_id,
+            actor=actor,
+            reason=reason or f"export approval {status}",
+        )
         self.conn.commit()
         return self._export_approval_to_dict(self._get_export_approval_row(approval_id))
 
@@ -10341,6 +10564,263 @@ class MemoryStore:
             },
             "branches": [],
         }
+
+    def _notify_candidate_review_required(
+        self,
+        *,
+        candidate_id: str,
+        scope: str,
+        status: str,
+        reason: str,
+        actor: str,
+        source_trust: str,
+        sensitivity: str,
+    ) -> dict[str, Any]:
+        severity = "high" if status == "quarantined" or sensitivity == "secret" else "warning"
+        title = (
+            "Quarantined memory candidate needs review"
+            if status == "quarantined"
+            else "Memory candidate needs review"
+        )
+        message = (
+            f"Candidate {candidate_id} is {status}; "
+            f"trust={source_trust}, sensitivity={sensitivity}."
+        )
+        if reason:
+            message += f" Reason: {reason}"
+        return self._create_notification(
+            topic="review_candidate",
+            target_type="candidate",
+            target_id=candidate_id,
+            title=title,
+            message=message,
+            severity=severity,
+            scope=scope,
+            actor=actor,
+            action_path="/review/inbox",
+            dedupe_key=f"review_candidate:{candidate_id}",
+            metadata={
+                "candidate_id": candidate_id,
+                "candidate_status": status,
+                "reason": reason,
+                "source_trust": source_trust,
+                "sensitivity": sensitivity,
+            },
+        )
+
+    def _create_notification(
+        self,
+        *,
+        topic: str,
+        target_type: str,
+        target_id: str,
+        title: str,
+        message: str,
+        severity: str = "info",
+        scope: str = "professional",
+        actor: str = "system",
+        action_path: str = "",
+        dedupe_key: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        topic = (topic or "general").strip().lower()
+        target_type = (target_type or "").strip().lower()
+        target_id = (target_id or "").strip()
+        severity = (severity or "info").strip().lower()
+        if severity not in {"info", "warning", "high", "critical"}:
+            raise ValueError("notification severity must be info, warning, high, or critical")
+        scope = normalize_scope(scope) if scope and scope != "all" else "all"
+        dedupe_key = dedupe_key or f"{topic}:{target_type}:{target_id}"
+        existing = None
+        if dedupe_key:
+            existing = self.conn.execute(
+                """
+                SELECT *
+                FROM memory_notifications
+                WHERE dedupe_key = ?
+                  AND status IN ('open', 'acknowledged')
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (dedupe_key,),
+            ).fetchone()
+        ts = now_iso()
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE memory_notifications
+                SET updated_at = ?, severity = ?, title = ?, message = ?,
+                    action_path = ?, metadata_json = ?
+                WHERE notification_id = ?
+                """,
+                (
+                    ts,
+                    severity,
+                    title,
+                    message,
+                    action_path,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    existing["notification_id"],
+                ),
+            )
+            return self._notification_to_dict(
+                self.conn.execute(
+                    "SELECT * FROM memory_notifications WHERE notification_id = ?",
+                    (existing["notification_id"],),
+                ).fetchone()
+            )
+
+        notification_id = new_id("ntf")
+        self.conn.execute(
+            """
+            INSERT INTO memory_notifications
+              (notification_id, created_at, updated_at, status, severity, topic,
+               scope, actor, target_type, target_id, title, message, action_path,
+               dedupe_key, metadata_json)
+            VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                notification_id,
+                ts,
+                ts,
+                severity,
+                topic,
+                scope,
+                actor,
+                target_type,
+                target_id,
+                title,
+                message,
+                action_path,
+                dedupe_key,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "notification_created",
+            "memory_notification",
+            notification_id,
+            actor=actor,
+            details={
+                "topic": topic,
+                "severity": severity,
+                "target_type": target_type,
+                "target_id": target_id,
+            },
+        )
+        return self._notification_to_dict(self._notification_row(notification_id))
+
+    def _resolve_notifications_for_target(
+        self,
+        *,
+        target_type: str,
+        target_id: str,
+        actor: str,
+        reason: str,
+    ) -> None:
+        rows = self.conn.execute(
+            """
+            SELECT notification_id
+            FROM memory_notifications
+            WHERE target_type = ?
+              AND target_id = ?
+              AND status IN ('open', 'acknowledged')
+            """,
+            ((target_type or "").strip().lower(), (target_id or "").strip()),
+        ).fetchall()
+        ts = now_iso()
+        for row in rows:
+            self.conn.execute(
+                """
+                UPDATE memory_notifications
+                SET updated_at = ?, status = 'resolved', resolved_at = ?,
+                    resolved_by = ?, resolve_reason = ?
+                WHERE notification_id = ?
+                """,
+                (ts, ts, actor, reason, row["notification_id"]),
+            )
+            self._audit(
+                "notification_resolved",
+                "memory_notification",
+                row["notification_id"],
+                actor=actor,
+                details={"reason": reason, "target_type": target_type, "target_id": target_id},
+            )
+
+    def _notification_row(self, notification_id: str) -> sqlite3.Row:
+        row = self.conn.execute(
+            "SELECT * FROM memory_notifications WHERE notification_id = ?",
+            ((notification_id or "").strip(),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"notification not found: {notification_id}")
+        return row
+
+    def _notification_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            raise KeyError("notification not found")
+        result = {
+            "version": NOTIFICATION_QUEUE_VERSION,
+            "notification_id": row["notification_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "status": row["status"],
+            "severity": row["severity"],
+            "topic": row["topic"],
+            "scope": row["scope"],
+            "actor": row["actor"],
+            "target_type": row["target_type"],
+            "target_id": row["target_id"],
+            "title": row["title"],
+            "message": row["message"],
+            "action_path": row["action_path"],
+            "dedupe_key": row["dedupe_key"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+            "acknowledged_at": row["acknowledged_at"],
+            "acknowledged_by": row["acknowledged_by"],
+            "resolved_at": row["resolved_at"],
+            "resolved_by": row["resolved_by"],
+            "resolve_reason": row["resolve_reason"],
+        }
+        result["operator_handles"] = self._notification_operator_handles(result)
+        return result
+
+    @staticmethod
+    def _notification_operator_handles(notification: dict[str, Any]) -> dict[str, Any]:
+        notification_id = notification["notification_id"]
+        handles: dict[str, Any] = {
+            "ack": {
+                "cli": f"agent-memory notifications ack {notification_id} --actor reviewer",
+                "http": {"path": "/notifications/ack", "notification_id": notification_id},
+                "mcp": {"tool": "memory_notification_ack", "notification_id": notification_id},
+            },
+            "resolve": {
+                "cli": f"agent-memory notifications resolve {notification_id} --actor reviewer",
+                "http": {"path": "/notifications/resolve", "notification_id": notification_id},
+                "mcp": {"tool": "memory_notification_resolve", "notification_id": notification_id},
+            },
+        }
+        target_type = notification.get("target_type", "")
+        target_id = notification.get("target_id", "")
+        if target_type == "candidate":
+            handles["target"] = {
+                "cli": "agent-memory review inbox --status open",
+                "http": {"path": "/review/inbox", "candidate_id": target_id},
+                "mcp": {"tool": "memory_review_inbox", "candidate_id": target_id},
+            }
+        elif target_type == "memory_export_approval":
+            handles["target"] = {
+                "cli": "agent-memory export-approval list --status pending",
+                "http": {"path": "/export/approval/list", "approval_id": target_id},
+                "mcp": {"tool": "memory_export_approval_list", "approval_id": target_id},
+            }
+        elif target_type == "memory_export_record":
+            handles["target"] = {
+                "cli": "agent-memory export-retention list --status expired",
+                "http": {"path": "/export/retention/list", "export_id": target_id},
+                "mcp": {"tool": "memory_export_retention_list", "export_id": target_id},
+            }
+        return handles
 
     def _audit(
         self,

@@ -145,6 +145,28 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             limit=int(payload.get("limit", 20) or 20),
         )
+    if path in {"/notifications/list", "/notifications"}:
+        return store.list_notifications(
+            status=str(payload.get("status", "open")),
+            scope=payload.get("scope"),
+            topic=payload.get("topic"),
+            severity=payload.get("severity"),
+            target_type=payload.get("target_type"),
+            target_id=payload.get("target_id"),
+            limit=int(payload.get("limit", 50) or 50),
+        )
+    if path == "/notifications/ack":
+        return store.ack_notification(
+            str(payload.get("notification_id", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            reason=str(payload.get("reason", "")),
+        )
+    if path == "/notifications/resolve":
+        return store.resolve_notification(
+            str(payload.get("notification_id", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            reason=str(payload.get("reason", "")),
+        )
     if path == "/derived-invalidations":
         return store.derived_invalidations(
             memory_id=str(payload.get("memory_id", "")),

@@ -219,6 +219,11 @@ Already present:
 - Baseline batch review through `agent-memory review batch`, `/review/batch`,
   Hermes `review_batch()`, and MCP `memory_review_batch`; approve/reject
   batches support dry-run and per-candidate results.
+- Baseline operator notification queue through `agent-memory notifications`,
+  `/notifications/*`, Hermes notification wrappers, and MCP
+  `memory_notifications_list` / `memory_notification_ack` /
+  `memory_notification_resolve`; review candidates, sensitive export approvals,
+  and expired export artifacts produce open notifications with operator handles.
 - Baseline export governance through `agent-memory export-control`,
   `/export/control`, Hermes `export_control_report()`, and MCP
   `memory_export_control`; export previews show policy decisions, aggregate
@@ -315,8 +320,9 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review web UI, graph browser, batch correction, and notification queue
-  beyond the baseline machine-readable review inbox and approve/reject batch
+- Human review web UI, graph browser, batch correction, reviewer assignment,
+  push/email/web notification transports, and SLAs beyond the baseline
+  machine-readable review inbox, notification queue, and approve/reject batch
   flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
@@ -700,13 +706,16 @@ machine-readable operator queue with source preview, risk flags, graph preview,
 review history, audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose
 correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch` provide
-approve/reject batches with dry-run and per-item results. Remaining work is a
-browser review UI, graph browser, batch correction, hosted key-management
-controls, and reviewer notifications.
+approve/reject batches with dry-run and per-item results. `agent-memory
+notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
+notification tools provide a baseline operator notification queue for review,
+export approval, and retention cleanup. Remaining work is a browser review UI,
+graph browser, batch correction, reviewer assignment, notification transports,
+hosted key-management controls, and reviewer SLAs.
 Export-control, redaction-profile, sensitive-export approval, export retention,
 and encrypted profile export baselines are implemented, but browser UI, graph
-browser, reviewer notifications, and hosted key-management/off-host encryption
-remain production backlog.
+browser, reviewer assignment/transports, and hosted key-management/off-host
+encryption remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

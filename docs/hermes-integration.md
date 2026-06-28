@@ -103,6 +103,15 @@ class HermesMemoryProvider:
     def review_inbox(self, status: str = "open", scope: str | None = None, limit: int = 50) -> dict:
         ...
 
+    def notifications(self, status: str = "open", scope: str | None = None, topic: str | None = None) -> dict:
+        ...
+
+    def ack_notification(self, notification_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def resolve_notification(self, notification_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
     def review_batch(self, action: str, candidate_ids: list[str], actor: str = "reviewer", reason: str = "") -> dict:
         ...
 
@@ -249,6 +258,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
 `memory_graph_edges`, `memory_export_control`, `memory_export_profile`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
+`memory_notifications_list`, `memory_notification_ack`,
+`memory_notification_resolve`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
 `memory_export_retention_list`, `memory_export_retention_enforce`,
@@ -287,6 +298,9 @@ Useful endpoints:
 - `POST /observability`
 - `POST /current-best`
 - `POST /memory-changes`
+- `POST /notifications/list`
+- `POST /notifications/ack`
+- `POST /notifications/resolve`
 - `POST /derived-invalidations`
 - `POST /remember`
 - `POST /graph/items`
@@ -449,6 +463,11 @@ agent-memory review --db .memory/hermes-memory.db inbox --status open --scope pr
 or MCP `memory_review_inbox`. The inbox returns candidate source previews,
 risk flags, graph previews, review history, audit trail, and CLI/HTTP/MCP
 handles for approve/reject or active-memory correct/delete/distrust/expire.
+Hermes can also call `notifications()` or MCP `memory_notifications_list` for a
+single operator queue across pending memory review, sensitive export approval,
+and export-retention cleanup. A notification can be acknowledged without
+mutating memory, then resolved automatically by the underlying approve/reject or
+purge action, or manually through `resolve_notification()`.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP

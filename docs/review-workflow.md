@@ -35,6 +35,25 @@ The inbox response contains:
 - `review_history` and `audit_trail`.
 - `operator_handles`: CLI, HTTP, and MCP handles for the next safe action.
 
+## Notifications
+
+The baseline notification queue is also machine-readable. It creates open
+notifications for:
+
+- pending or quarantined review candidates;
+- sensitive export approval requests;
+- expired export artifacts that need external cleanup confirmation.
+
+```bash
+agent-memory notifications --db .memory/demo.db list --status open
+agent-memory notifications --db .memory/demo.db ack ntf_xxxxxxxxxxxxxxxx --actor reviewer
+agent-memory notifications --db .memory/demo.db resolve ntf_xxxxxxxxxxxxxxxx --actor reviewer
+```
+
+Approving or rejecting a candidate resolves candidate notifications. Approving
+or rejecting an export approval resolves export approval notifications. Purging
+an export retention record resolves the export retention notification.
+
 ## Actions
 
 Candidate review:
@@ -74,6 +93,9 @@ HTTP endpoints:
 - `POST /memory/delete`
 - `POST /memory/distrust`
 - `POST /memory/expire`
+- `POST /notifications/list`
+- `POST /notifications/ack`
+- `POST /notifications/resolve`
 
 MCP tools:
 
@@ -85,6 +107,9 @@ MCP tools:
 - `memory_delete`
 - `memory_distrust`
 - `memory_expire`
+- `memory_notifications_list`
+- `memory_notification_ack`
+- `memory_notification_resolve`
 
 ## Integration Pattern
 
@@ -93,11 +118,14 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
 1. Call `memory_changes` to inspect what the turn changed.
 2. Call `review inbox --status open` or `memory_review_inbox` to see all
    pending/quarantined candidates in operator form.
-3. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
+3. Call `notifications list --status open` or `memory_notifications_list` when
+   the operator needs one queue across review, export approval, and retention
+   cleanup.
+4. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
    approve/reject policy before mutating memory.
-4. Approve only candidates that are safe, scoped correctly, and useful.
-5. Reject quarantined or low-quality candidates.
-6. Use correct/delete/distrust/expire on already active memories when the
+5. Approve only candidates that are safe, scoped correctly, and useful.
+6. Reject quarantined or low-quality candidates.
+7. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -112,4 +140,4 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - browser-assisted batch approve/reject;
 - conflict warnings inline with candidates;
 - hosted key-management and export custody controls;
-- reviewer assignment and notification queues.
+- reviewer assignment, push/email/web notification transports, and SLAs.

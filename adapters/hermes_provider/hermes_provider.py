@@ -226,6 +226,45 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.review_inbox(status=status, scope=scope, limit=limit)
 
+    def notifications(
+        self,
+        *,
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.list_notifications(
+            status=status,
+            scope=scope,
+            topic=topic,
+            severity=severity,
+            target_type=target_type,
+            target_id=target_id,
+            limit=limit,
+        )
+
+    def ack_notification(
+        self,
+        notification_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.ack_notification(notification_id, actor=actor, reason=reason)
+
+    def resolve_notification(
+        self,
+        notification_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.resolve_notification(notification_id, actor=actor, reason=reason)
+
     def review_batch(
         self,
         *,

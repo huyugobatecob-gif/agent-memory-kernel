@@ -207,6 +207,52 @@ def cmd_review_reject(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_notifications_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_notifications(
+            status=args.status,
+            scope=args.scope,
+            topic=args.topic,
+            severity=args.severity,
+            target_type=args.target_type,
+            target_id=args.target_id,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_notifications_ack(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.ack_notification(
+            args.notification_id,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_notifications_resolve(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.resolve_notification(
+            args.notification_id,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1365,6 +1411,32 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--actor", default="user")
     rp.add_argument("--reason", default="")
     rp.set_defaults(func=cmd_review_reject)
+
+    p = sub.add_parser("notifications", help="Inspect and manage operator notifications")
+    add_common_db(p)
+    notifications_sub = p.add_subparsers(dest="notifications_command", required=True)
+
+    np = notifications_sub.add_parser("list", help="List memory notifications")
+    np.add_argument("--status", default="open", choices=["open", "acknowledged", "resolved", "all"])
+    np.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    np.add_argument("--topic")
+    np.add_argument("--severity", choices=["info", "warning", "high", "critical"])
+    np.add_argument("--target-type")
+    np.add_argument("--target-id")
+    np.add_argument("--limit", type=int, default=50)
+    np.set_defaults(func=cmd_notifications_list)
+
+    np = notifications_sub.add_parser("ack", help="Acknowledge a memory notification")
+    np.add_argument("notification_id")
+    np.add_argument("--actor", default="reviewer")
+    np.add_argument("--reason", default="")
+    np.set_defaults(func=cmd_notifications_ack)
+
+    np = notifications_sub.add_parser("resolve", help="Resolve a memory notification")
+    np.add_argument("notification_id")
+    np.add_argument("--actor", default="reviewer")
+    np.add_argument("--reason", default="")
+    np.set_defaults(func=cmd_notifications_resolve)
 
     p = sub.add_parser("search", help="Search active memories")
     add_common_db(p)

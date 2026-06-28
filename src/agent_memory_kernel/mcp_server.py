@@ -338,6 +338,45 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_notifications_list": {
+        "endpoint": "/notifications/list",
+        "description": "List operator notifications for review, export, and maintenance work.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Notification status: open, acknowledged, resolved, or all.", "open"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "topic": _string("Optional notification topic.", ""),
+                "severity": _string("Optional severity: info, warning, high, or critical.", ""),
+                "target_type": _string("Optional target type filter.", ""),
+                "target_id": _string("Optional target id filter.", ""),
+                "limit": _integer("Maximum notifications.", 50),
+            }
+        ),
+    },
+    "memory_notification_ack": {
+        "endpoint": "/notifications/ack",
+        "description": "Acknowledge an operator notification without resolving it.",
+        "inputSchema": _schema(
+            {
+                "notification_id": _string("Notification id."),
+                "actor": _string("Acknowledging actor.", "reviewer"),
+                "reason": _string("Acknowledgement reason.", ""),
+            },
+            ["notification_id"],
+        ),
+    },
+    "memory_notification_resolve": {
+        "endpoint": "/notifications/resolve",
+        "description": "Resolve an operator notification after the required action is complete.",
+        "inputSchema": _schema(
+            {
+                "notification_id": _string("Notification id."),
+                "actor": _string("Resolving actor.", "reviewer"),
+                "reason": _string("Resolution reason.", ""),
+            },
+            ["notification_id"],
+        ),
+    },
     "memory_review_batch": {
         "endpoint": "/review/batch",
         "description": "Approve or reject multiple review candidates with per-item results.",

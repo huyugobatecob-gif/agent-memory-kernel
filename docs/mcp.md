@@ -79,6 +79,10 @@ Operator and graph tools:
   dry-run and per-item results.
 - `memory_review_approve`: approve a candidate.
 - `memory_review_reject`: reject a candidate.
+- `memory_notifications_list`: list operator notifications for review,
+  export, and maintenance actions.
+- `memory_notification_ack`: acknowledge a notification without resolving it.
+- `memory_notification_resolve`: resolve a notification after action is done.
 - `memory_correct`: correct active memory text.
 - `memory_delete`: soft-delete active memory and suppress retrieval.
 - `memory_distrust`: keep memory for audit but suppress retrieval.
