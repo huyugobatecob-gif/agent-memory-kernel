@@ -52,6 +52,11 @@ Runtime tools:
   behavior.
 - `memory_observability`: summarize Router runs, Keeper jobs, and LLM usage
   tokens/cost for memory operations.
+- `memory_migration_status`: check SQLite schema version, required tables and
+  columns, and migration compatibility.
+- `memory_backup_database`: create a SQLite backup of the memory database.
+- `memory_restore_database`: restore a SQLite backup into a target database
+  path.
 
 Retrieval tools:
 

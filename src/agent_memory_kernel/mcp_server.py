@@ -226,6 +226,40 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_migration_status": {
+        "endpoint": "/migration/status",
+        "description": "Check SQLite schema version, required tables/columns, and migration compatibility.",
+        "inputSchema": _schema(
+            {
+                "integrity_check": _boolean("Run SQLite quick_check.", True),
+            }
+        ),
+    },
+    "memory_backup_database": {
+        "endpoint": "/backup",
+        "description": "Create a SQLite backup of the memory database.",
+        "inputSchema": _schema(
+            {
+                "out_path": _string("Backup database path to create."),
+                "actor": _string("Actor creating the backup.", "mcp"),
+                "overwrite": _boolean("Overwrite an existing backup path.", False),
+            },
+            ["out_path"],
+        ),
+    },
+    "memory_restore_database": {
+        "endpoint": "/restore",
+        "description": "Restore a SQLite backup into a target database path.",
+        "inputSchema": _schema(
+            {
+                "backup_path": _string("Backup database path to restore from."),
+                "target_path": _string("Target database path to create."),
+                "actor": _string("Actor restoring the backup.", "mcp"),
+                "overwrite": _boolean("Overwrite an existing target database.", False),
+            },
+            ["backup_path", "target_path"],
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

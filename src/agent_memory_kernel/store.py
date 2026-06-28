@@ -96,6 +96,7 @@ CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
+SCHEMA_VERSION = 1
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
     "record",
@@ -461,6 +462,7 @@ class MemoryStore:
             """
         )
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
+        self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         self.conn.commit()
 
     def set_write_policy(
@@ -1436,6 +1438,229 @@ class MemoryStore:
                 "before_model_call": "return no-memory envelope on retrieval failure",
                 "after_saved_turn": "persist turns and mark keeper job failed on extraction failure",
             },
+        }
+
+    def migration_status(self, *, integrity_check: bool = True) -> dict[str, Any]:
+        """Report schema compatibility for local migration and adapter gates."""
+        required_schema = {
+            "events": [
+                "event_id",
+                "created_at",
+                "actor",
+                "scope",
+                "content",
+                "metadata_json",
+            ],
+            "candidate_memories": [
+                "candidate_id",
+                "event_id",
+                "proposed_text",
+                "status",
+                "extraction_json",
+            ],
+            "memories": ["memory_id", "candidate_id", "text", "scope", "status"],
+            "memory_items": ["item_id", "memory_id", "text", "status", "metadata_json"],
+            "memory_graph_nodes": [
+                "graph_node_id",
+                "node_type",
+                "label",
+                "canonical_key",
+                "scope",
+                "status",
+                "embedding_json",
+            ],
+            "memory_graph_edges": [
+                "graph_edge_id",
+                "source_graph_node_id",
+                "target_graph_node_id",
+                "edge_type",
+                "status",
+            ],
+            "keeper_jobs": [
+                "keeper_job_id",
+                "thread_id",
+                "turn_ids_json",
+                "status",
+                "idempotency_key",
+                "metadata_json",
+            ],
+            "router_runs": [
+                "router_run_id",
+                "thread_id",
+                "selected_branch_ids_json",
+                "metadata_json",
+            ],
+            "llm_usage_stats": ["usage_id", "provider", "model", "total_tokens", "cost"],
+        }
+        checks: list[dict[str, Any]] = []
+
+        user_version = int(self.conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+        schema_version = int(self.conn.execute("PRAGMA schema_version").fetchone()[0] or 0)
+        checks.append(
+            {
+                "name": "user_version",
+                "passed": user_version >= SCHEMA_VERSION,
+                "severity": "fail",
+                "expected": SCHEMA_VERSION,
+                "actual": user_version,
+            }
+        )
+
+        for table, expected_columns in required_schema.items():
+            rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+            present_columns = {str(row["name"]) for row in rows}
+            missing_columns = [
+                column for column in expected_columns if column not in present_columns
+            ]
+            checks.append(
+                {
+                    "name": f"table:{table}",
+                    "passed": bool(rows) and not missing_columns,
+                    "severity": "fail",
+                    "missing_columns": missing_columns,
+                    "column_count": len(present_columns),
+                }
+            )
+
+        if integrity_check:
+            row = self.conn.execute("PRAGMA quick_check").fetchone()
+            quick_check = str(row[0] if row is not None else "")
+            checks.append(
+                {
+                    "name": "sqlite_quick_check",
+                    "passed": quick_check.lower() == "ok",
+                    "severity": "fail",
+                    "detail": quick_check,
+                }
+            )
+
+        failures = [
+            check for check in checks if not check["passed"] and check["severity"] == "fail"
+        ]
+        return {
+            "version": "migration-status-v0.1",
+            "status": "fail" if failures else "pass",
+            "schema_version": SCHEMA_VERSION,
+            "sqlite_user_version": user_version,
+            "sqlite_schema_version": schema_version,
+            "compatible": not failures,
+            "checks": checks,
+            "failures": failures,
+            "migrations": [
+                {
+                    "version": SCHEMA_VERSION,
+                    "name": "baseline additive sqlite schema",
+                    "status": "applied" if user_version >= SCHEMA_VERSION else "pending",
+                }
+            ],
+        }
+
+    def backup_database(
+        self,
+        out_path: str | Path,
+        *,
+        actor: str = "system",
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Create a SQLite backup file using the SQLite backup API."""
+        destination = Path(out_path).expanduser()
+        if destination.resolve() == self.db_path.resolve():
+            raise ValueError("backup destination must differ from source database")
+        if destination.exists() and not overwrite:
+            raise FileExistsError(f"backup already exists: {destination}")
+        if destination.parent:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+
+        self._audit(
+            "backup_database",
+            "database",
+            str(destination),
+            actor=actor,
+            details={"source": str(self.db_path), "overwrite": bool(overwrite)},
+        )
+        self.conn.commit()
+
+        backup_conn = sqlite3.connect(str(destination))
+        try:
+            self.conn.backup(backup_conn)
+            quick_row = backup_conn.execute("PRAGMA quick_check").fetchone()
+            quick_check = str(quick_row[0] if quick_row is not None else "")
+            user_version = int(backup_conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+        finally:
+            backup_conn.close()
+
+        return {
+            "version": "database-backup-v0.1",
+            "status": "created",
+            "source_path": str(self.db_path),
+            "backup_path": str(destination),
+            "size_bytes": destination.stat().st_size,
+            "sqlite_user_version": user_version,
+            "integrity_check": quick_check,
+            "created_at": now_iso(),
+        }
+
+    @classmethod
+    def restore_database(
+        cls,
+        backup_path: str | Path,
+        target_path: str | Path,
+        *,
+        overwrite: bool = False,
+        actor: str = "system",
+    ) -> dict[str, Any]:
+        """Restore a SQLite backup into a target database path."""
+        source = Path(backup_path).expanduser()
+        target = Path(target_path).expanduser()
+        if not source.exists():
+            raise FileNotFoundError(f"backup not found: {source}")
+        if source.resolve() == target.resolve():
+            raise ValueError("restore target must differ from backup path")
+        if target.exists() and not overwrite:
+            raise FileExistsError(f"target database already exists: {target}")
+        if target.parent:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() and overwrite:
+            target.unlink()
+
+        source_conn = sqlite3.connect(str(source))
+        try:
+            quick_row = source_conn.execute("PRAGMA quick_check").fetchone()
+            quick_check = str(quick_row[0] if quick_row is not None else "")
+            if quick_check.lower() != "ok":
+                raise ValueError(f"backup integrity check failed: {quick_check}")
+            target_conn = sqlite3.connect(str(target))
+            try:
+                source_conn.backup(target_conn)
+            finally:
+                target_conn.close()
+        finally:
+            source_conn.close()
+
+        restored = cls(target)
+        restored.init_db()
+        try:
+            restored._audit(
+                "restore_database",
+                "database",
+                str(target),
+                actor=actor,
+                details={"backup_path": str(source), "overwrite": bool(overwrite)},
+            )
+            restored.conn.commit()
+            migration = restored.migration_status()
+        finally:
+            restored.close()
+
+        return {
+            "version": "database-restore-v0.1",
+            "status": "restored",
+            "backup_path": str(source),
+            "target_path": str(target),
+            "size_bytes": target.stat().st_size,
+            "integrity_check": quick_check,
+            "migration": migration,
+            "restored_at": now_iso(),
         }
 
     def approve_candidate(self, candidate_id: str, *, actor: str = "user", reason: str = "") -> str:

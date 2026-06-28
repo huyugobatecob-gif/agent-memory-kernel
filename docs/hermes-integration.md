@@ -135,6 +135,15 @@ class HermesMemoryProvider:
 
     def observability_report(self, scope: str | None = None, thread_id: str | None = None) -> dict:
         ...
+
+    def migration_status(self) -> dict:
+        ...
+
+    def backup_database(self, out_path: str) -> dict:
+        ...
+
+    def restore_database(self, backup_path: str, target_path: str) -> dict:
+        ...
 ```
 
 The provider should call `MemoryOrchestrator`/`MemoryStore`, not duplicate
@@ -163,7 +172,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_after_turn`, `memory_retrieve_context`, `memory_ingest_graph`,
 `memory_changes`, `memory_tree_pack`, `memory_capability_check`,
 `memory_derived_invalidations`, `memory_operational_status`,
-`memory_observability`, `memory_review_list`, `memory_graph_nodes`,
+`memory_observability`, `memory_migration_status`, `memory_backup_database`,
+`memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
 `memory_graph_edges`, and `memory_worker_run`.
 
 Useful endpoints:
@@ -172,6 +182,9 @@ Useful endpoints:
 - `POST /contract`
 - `POST /contract/assert`
 - `POST /operational/status`
+- `POST /migration/status`
+- `POST /backup`
+- `POST /restore`
 - `POST /conformance/spec`
 - `POST /conformance/spec/assert`
 - `POST /before-turn`
@@ -550,6 +563,13 @@ agent-memory usage record \
   --completion-tokens 300
 
 agent-memory observability --scope professional --thread-id seo-demo
+```
+
+Before migrations or production rollout, Hermes operators should run:
+
+```bash
+agent-memory migration-status --db .memory/hermes-memory.db
+agent-memory backup --db .memory/hermes-memory.db --out .memory/backups/hermes-memory.db
 ```
 
 Workspace profile export:

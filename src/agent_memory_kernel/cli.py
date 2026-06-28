@@ -321,6 +321,40 @@ def cmd_observability(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_migration_status(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.migration_status(integrity_check=not args.skip_integrity_check))
+    store.close()
+    return 0
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.backup_database(
+            args.out,
+            actor=args.actor,
+            overwrite=args.overwrite,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    print_json(
+        MemoryStore.restore_database(
+            args.backup,
+            args.target_db,
+            overwrite=args.overwrite,
+            actor=args.actor,
+        )
+    )
+    return 0
+
+
 def cmd_current_best(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1208,6 +1242,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thread-id")
     p.add_argument("--limit", type=int, default=20)
     p.set_defaults(func=cmd_observability)
+
+    p = sub.add_parser("migration-status", help="Check local schema and migration compatibility")
+    add_common_db(p)
+    p.add_argument("--skip-integrity-check", action="store_true")
+    p.set_defaults(func=cmd_migration_status)
+
+    p = sub.add_parser("backup", help="Create a SQLite backup of the memory database")
+    add_common_db(p)
+    p.add_argument("--out", required=True, help="Backup database path to create")
+    p.add_argument("--actor", default="operator")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_backup)
+
+    p = sub.add_parser("restore", help="Restore a SQLite backup into a target database path")
+    p.add_argument("--backup", required=True, help="Backup database path to restore from")
+    p.add_argument("--target-db", required=True, help="Target database path to create")
+    p.add_argument("--actor", default="operator")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_restore)
 
     p = sub.add_parser("current-best", help="Resolve current-best memory for a query or scope")
     add_common_db(p)

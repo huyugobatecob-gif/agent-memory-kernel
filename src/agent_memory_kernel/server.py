@@ -103,6 +103,23 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             thread_id=payload.get("thread_id"),
             limit=int(payload.get("limit", 20) or 20),
         )
+    if path in {"/migration/status", "/migration-status"}:
+        return store.migration_status(
+            integrity_check=bool(payload.get("integrity_check", True)),
+        )
+    if path == "/backup":
+        return store.backup_database(
+            payload.get("out_path") or payload.get("path"),
+            actor=str(payload.get("actor", "api")),
+            overwrite=bool(payload.get("overwrite", False)),
+        )
+    if path == "/restore":
+        return MemoryStore.restore_database(
+            payload.get("backup_path"),
+            payload.get("target_path"),
+            actor=str(payload.get("actor", "api")),
+            overwrite=bool(payload.get("overwrite", False)),
+        )
     if path == "/current-best":
         return store.current_best_report(
             str(payload.get("query", "")),

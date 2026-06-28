@@ -41,6 +41,8 @@ The adapter should:
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
   fallback behavior before routing critical work through memory;
+- expose `migration_status()`, `backup_database()`, and `restore_database()`
+  for local SQLite recovery and migration compatibility checks;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - inspect `observability_report()` for Router token estimates, Keeper job
   health, and LLM usage tokens/cost;

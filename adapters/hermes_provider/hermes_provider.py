@@ -228,6 +228,37 @@ class HermesMemoryProvider:
             integrity_check=integrity_check,
         )
 
+    def migration_status(self, *, integrity_check: bool = True) -> dict[str, Any]:
+        return self.store.migration_status(integrity_check=integrity_check)
+
+    def backup_database(
+        self,
+        out_path: str | Path,
+        *,
+        actor: str = "hermes",
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.backup_database(
+            out_path,
+            actor=actor,
+            overwrite=overwrite,
+        )
+
+    @staticmethod
+    def restore_database(
+        backup_path: str | Path,
+        target_path: str | Path,
+        *,
+        actor: str = "hermes",
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        return MemoryStore.restore_database(
+            backup_path,
+            target_path,
+            actor=actor,
+            overwrite=overwrite,
+        )
+
     def before_model_call(
         self,
         query: str,

@@ -59,6 +59,7 @@ Included now:
   distrust, expire, and supersede lifecycle actions.
 - Operational status checks and no-memory/failed-Keeper fallbacks for local
   runtime failures.
+- SQLite migration status plus backup/restore commands for local recovery.
 - Conflict and supersession records for truth maintenance.
 - Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
@@ -310,6 +311,9 @@ agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO
 agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
 agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
+agent-memory migration-status --db .memory/demo.db
+agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
+agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory export-profile --db .memory/demo.db --scope professional
 agent-memory import-profile --db .memory/restored.db exported-profile.json
 ```
@@ -600,8 +604,10 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
 `memory_capability_check`, `memory_derived_invalidations`,
-`memory_operational_status`, `memory_observability`, `memory_graph_nodes`,
-`memory_graph_edges`, and `memory_worker_run`.
+`memory_operational_status`, `memory_observability`,
+`memory_migration_status`, `memory_backup_database`,
+`memory_restore_database`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_worker_run`.
 
 ## Implementation Plan
 
@@ -678,6 +684,7 @@ docs/
   full-memory-gap-plan.md  gap plan for automatic full memory
   runtime-contract.md      pre-call router and post-turn keeper contract
   observability.md         Router, Keeper, and usage telemetry report
+  recovery.md              SQLite backup, restore, and migration checks
   memory-lifecycle-contract.md  durable memory lifecycle contract
   keeper-extraction.md    versioned low-cost keeper extraction contract
   cross-model-context-contract.md  provider-neutral prompt context contract
