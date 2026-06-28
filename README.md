@@ -548,6 +548,8 @@ agent-memory write-policy set \
 
 agent-memory worker --db .memory/demo.db --once --limit 10
 
+agent-memory worker --db .memory/demo.db --daemon --poll-interval 5 --limit 10
+
 agent-memory shadow-turn "Plan the next SEO loop" \
   --thread-id seo-demo \
   --scope professional \
@@ -566,6 +568,9 @@ The first command returns a provider-neutral prompt envelope with a selected
 `MEMORY_TREE_SUPPLEMENT`. The second command records the exchange and creates
 reviewable Keeper candidates in sync mode or queues the Keeper job in queued
 mode. The worker command processes queued Keeper jobs.
+Use `--daemon` for a long-running polling worker under a process supervisor;
+`--max-iterations` and `--stop-when-idle` are available for bounded test or
+maintenance runs.
 
 For a CLI walkthrough of the full policy/review loop, see
 [examples/hermes-e2e-demo/README.md](examples/hermes-e2e-demo/README.md).

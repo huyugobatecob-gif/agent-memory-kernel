@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
 from .conformance import (
@@ -20,6 +21,7 @@ from .mcp_server import run_mcp_stdio
 from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
+from .worker import run_keeper_worker_daemon
 
 
 DEFAULT_DB = ".memory/memory.db"
@@ -954,6 +956,23 @@ def cmd_conformance_assert(args: argparse.Namespace) -> int:
 
 
 def cmd_worker(args: argparse.Namespace) -> int:
+    if args.daemon:
+        def emit(report: dict[str, Any]) -> None:
+            if not args.quiet:
+                print(json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
+
+        result = run_keeper_worker_daemon(
+            args.db,
+            limit=args.limit,
+            actor=args.actor,
+            poll_interval=args.poll_interval,
+            max_iterations=args.max_iterations if args.max_iterations > 0 else None,
+            stop_when_idle=args.stop_when_idle,
+            emit=emit,
+        )
+        print_json(result)
+        return 0
+
     store = MemoryStore(args.db)
     store.init_db()
     result = store.process_keeper_jobs(limit=args.limit, actor=args.actor)
@@ -1588,8 +1607,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("worker", help="Process queued Keeper jobs")
     add_common_db(p)
     p.add_argument("--once", action="store_true", help="Process one batch and exit")
+    p.add_argument("--daemon", action="store_true", help="Poll queued Keeper jobs until stopped")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--actor", default="worker")
+    p.add_argument("--poll-interval", type=float, default=5.0)
+    p.add_argument("--max-iterations", type=int, default=0, help="Testing/supervisor limit; 0 means unlimited")
+    p.add_argument("--stop-when-idle", action="store_true", help="Exit daemon mode after an idle poll")
+    p.add_argument("--quiet", action="store_true", help="Suppress per-iteration daemon JSON logs")
     p.set_defaults(func=cmd_worker)
 
     p = sub.add_parser("serve", help="Run the stdlib HTTP API service")

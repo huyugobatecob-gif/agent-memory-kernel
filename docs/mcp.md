@@ -39,7 +39,8 @@ Runtime tools:
 - `memory_after_turn`: orchestrator hook that saves the exchange and runs or
   queues Keeper after an agent turn.
 - `memory_after_saved_turn`: save the exchange and run or queue Keeper.
-- `memory_worker_run`: process queued Keeper jobs.
+- `memory_worker_run`: process one batch of queued Keeper jobs. For a
+  long-running polling process, run the CLI worker with `--daemon`.
 - `memory_changes`: inspect what Keeper changed after a saved turn.
 - `memory_capability_check`: report effective read/write permissions before
   delegating work to an agent.

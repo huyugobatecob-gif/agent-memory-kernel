@@ -377,9 +377,13 @@ Baseline implementation:
 - `/operational/status`, the Hermes provider wrapper, and MCP
   `memory_operational_status` expose local health checks for required tables,
   SQLite quick check, storage size, and configured fallback behavior.
+- `agent-memory worker --daemon` provides a long-running polling Keeper worker;
+  failed queued extraction is recorded as a failed Keeper job instead of
+  crashing the worker path.
 
 Still production work: latency SLOs, backup/restore, migration recovery,
-hosted health checks, long-running worker supervision, and alerting.
+hosted health checks, deployment supervisor recipes, restart policies, and
+alerting.
 
 ## End State
 

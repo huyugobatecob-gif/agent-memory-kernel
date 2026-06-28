@@ -483,9 +483,13 @@ jobs can be processed with:
 
 ```bash
 agent-memory worker --db .memory/hermes-memory.db --once --limit 10
+agent-memory worker --db .memory/hermes-memory.db --daemon --poll-interval 5 --limit 10
 ```
 
 Candidates stay pending unless policy explicitly allows auto-approval.
+Run daemon mode under systemd, launchd, or another supervisor for live Hermes
+traffic; use `--max-iterations` or `--stop-when-idle` for bounded maintenance
+runs.
 
 A reviewer can approve durable memories:
 

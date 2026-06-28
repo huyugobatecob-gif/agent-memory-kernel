@@ -4218,6 +4218,19 @@ class MemoryStore:
                 except PermissionError as exc:
                     status = "denied"
                     warnings.append(str(exc))
+                except Exception as exc:
+                    self.conn.rollback()
+                    status = "failed"
+                    failure = {
+                        "version": OPERATIONAL_FAILURE_VERSION,
+                        "code": "keeper_failed",
+                        "component": "process_keeper_jobs",
+                        "error_type": type(exc).__name__,
+                        "message": str(exc),
+                        "fallback": "queued_job_failed",
+                    }
+                    metadata["operational_failure"] = failure
+                    warnings.append(f"keeper failed: {type(exc).__name__}: {exc}")
                 if memory_result is not None:
                     event_id = memory_result["event_id"]
                     for warning in memory_result.get("warnings", []):

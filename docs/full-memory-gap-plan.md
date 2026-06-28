@@ -208,6 +208,10 @@ Already present:
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
+- Baseline long-running Keeper worker daemon through `agent-memory worker
+  --daemon`, bounded `--max-iterations`/`--stop-when-idle` controls for tests
+  or supervised maintenance, and failed queued-Keeper job recording instead of
+  worker crashes.
 - Shadow rollout traces that link Router selection and Keeper proposals with
   `write_policy=propose_only`.
 - Baseline shadow trace evals for branch selection, Keeper candidate text,
@@ -260,7 +264,9 @@ Remaining for full memory:
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Broader conformance traces for migration, adapter compatibility, and
   real-world memory behavior beyond the baseline public suite.
-- Production daemon mode for long-running Keeper workers.
+- Production worker supervision beyond the baseline daemon loop, including
+  systemd/launchd examples, restart policies, health alerts, and deployment
+  recipes.
 - Broader hosted/remote MCP deployment patterns for agents that should not use
   local stdio.
 - Provider embeddings and production semantic reranking beyond the local

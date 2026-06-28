@@ -152,8 +152,10 @@ memories, affected graph/context surfaces, review or lifecycle handles, and
 audit trail.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
-Queued Keeper jobs and `agent-memory worker --once` are implemented for
-background post-turn processing.
+Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
+--daemon` are implemented for background post-turn processing. Daemon mode can
+poll continuously under an external supervisor and supports bounded
+`--max-iterations`/`--stop-when-idle` runs for tests and maintenance.
 Shadow rollout traces are implemented through `agent-memory shadow-turn`,
 `agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and the Hermes
 provider wrapper. These traces link Router selections and Keeper proposals with
