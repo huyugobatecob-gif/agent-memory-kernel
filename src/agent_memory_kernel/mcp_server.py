@@ -837,6 +837,11 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_keeper_eval": {
+        "endpoint": "/keeper-eval/run",
+        "description": "Run offline Keeper extraction regression evals.",
+        "inputSchema": _schema({}),
+    },
 }
 
 

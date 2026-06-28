@@ -21,6 +21,7 @@ from .conformance import (
     seed_conformance_fixture,
 )
 from .contract import assert_contract_shape, memory_contract
+from .evals import keeper_eval_spec, run_keeper_eval
 from .orchestrator import MemoryOrchestrator
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
@@ -55,6 +56,10 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return conformance_spec()
     if path == "/conformance/spec/assert":
         return assert_conformance_spec_shape()
+    if path == "/keeper-eval/spec":
+        return keeper_eval_spec()
+    if path == "/keeper-eval/run":
+        return run_keeper_eval()
     orchestrator = MemoryOrchestrator(store)
     if path in {"/before-turn", "/orchestrator/before-turn"}:
         query = str(payload.pop("query", ""))

@@ -211,6 +211,9 @@ class HermesMemoryProvider:
     def reject_export_approval(self, approval_id: str, **kwargs) -> dict:
         ...
 
+    def keeper_eval(self) -> dict:
+        ...
+
     def export_retention_records(self, **kwargs) -> list[dict]:
         ...
 

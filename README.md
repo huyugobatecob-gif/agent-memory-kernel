@@ -79,6 +79,8 @@ Included now:
   low-cost model memory writes without requiring a live provider in tests.
 - OpenAI-compatible lightweight extractor adapter with deterministic fallback
   for contract tests and local operation.
+- Offline Keeper extraction eval harness: `keeper-eval`, `/keeper-eval/run`,
+  MCP `memory_keeper_eval`, and Hermes `keeper_eval()`.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report for memory operations.
 - Operator review inbox with source previews, risk flags, inline
@@ -131,7 +133,7 @@ Not included yet:
 - hosted multi-user API server;
 - web UI;
 - approximate-nearest-neighbor indexes and live embedding provider certification;
-- production LLM Keeper eval suite and managed model configuration;
+- live production Keeper traces, prompt tuning, and managed model configuration;
 - production Hermes integration;
 - hosted multi-user auth/RBAC beyond the local bearer-token guard.
 
@@ -733,6 +735,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_notifications_list`, `memory_notification_assign`, `memory_notification_ack`,
 `memory_notification_resolve`, `memory_notification_escalations`,
+`memory_keeper_eval`,
 `memory_correct`, `memory_lifecycle_batch`, `memory_delete`, `memory_distrust`,
 `memory_expire`, `memory_graph_browser`,
 `memory_export_control`, `memory_export_profile`,

@@ -492,7 +492,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. `LLMKeeperExtractor` defines a strict
 `keeper-extraction-v0.1` JSON schema, provider-neutral request shape,
 fallback behavior, metadata preservation, and local contract tests that do not
-require a live model. Remaining work is production prompt tuning, real trace
+require a live model. Offline Keeper evals are exposed through `agent-memory
+keeper-eval`, `/keeper-eval/run`, Hermes `keeper_eval()`, and MCP
+`memory_keeper_eval`. Remaining work is production prompt tuning, live trace
 evals, provider-specific latency/cost tracking, and broader precision/recall
 measurement on natural dialogue.
 

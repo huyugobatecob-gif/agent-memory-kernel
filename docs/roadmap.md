@@ -125,9 +125,11 @@ prompt token estimates, Keeper status/warnings, and LLM usage tokens/cost.
 Production latency, billing reconciliation, dashboards, retention policy, and
 alerts are still backlog.
 Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
-`keeper-extraction-v0.1`, local schema validation, deterministic fallback, and
-candidate extraction metadata. Production Keeper prompt tuning, live provider
-configuration, and trace-based quality evals are still backlog.
+`keeper-extraction-v0.1`, local schema validation, deterministic fallback,
+candidate extraction metadata, and offline Keeper evals through
+`agent-memory keeper-eval`, `/keeper-eval/run`, Hermes `keeper_eval()`, and MCP
+`memory_keeper_eval`. Production Keeper prompt tuning, live provider
+configuration, and real trace evals are still backlog.
 Baseline graph command normalization is implemented through
 `graph-command-v0.1`, `apply_graph_commands`, orchestrator `ingest_graph`,
 reviewable proposed commands, approval-time graph mutation, node/edge evidence,

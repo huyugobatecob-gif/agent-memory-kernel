@@ -23,6 +23,7 @@ from agent_memory_kernel import (
     seed_acceptance_fixture,
     seed_conformance_fixture,
 )
+from agent_memory_kernel.evals import run_keeper_eval
 
 
 class HermesMemoryProvider:
@@ -907,6 +908,9 @@ class HermesMemoryProvider:
 
     def optimize_graph(self, mode: str, scope: str = "professional") -> dict[str, Any]:
         return self.store.optimize_graph(mode, scope=scope)
+
+    def keeper_eval(self) -> dict[str, Any]:
+        return run_keeper_eval(self.store.extractor)
 
     def export_profile(
         self,

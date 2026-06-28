@@ -18,6 +18,7 @@ from .conformance import (
     seed_conformance_fixture,
 )
 from .contract import assert_contract_shape, memory_contract
+from .evals import keeper_eval_spec, run_keeper_eval
 from .mcp_server import run_mcp_stdio
 from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
@@ -1413,6 +1414,15 @@ def cmd_conformance_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_keeper_eval(args: argparse.Namespace) -> int:
+    if args.spec:
+        print_json(keeper_eval_spec())
+        return 0
+    result = run_keeper_eval()
+    print_json(result)
+    return 0 if result.get("status") == "pass" else 1
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     if args.daemon:
         def emit(report: dict[str, Any]) -> None:
@@ -2322,6 +2332,10 @@ def build_parser() -> argparse.ArgumentParser:
     cp = conformance_sub.add_parser("assert", help="Run conformance and fail the command on any failed scenario")
     add_common_db(cp)
     cp.set_defaults(func=cmd_conformance_assert)
+
+    p = sub.add_parser("keeper-eval", help="Run offline Keeper extraction evals")
+    p.add_argument("--spec", action="store_true")
+    p.set_defaults(func=cmd_keeper_eval)
 
     p = sub.add_parser("worker", help="Process queued Keeper jobs")
     add_common_db(p)

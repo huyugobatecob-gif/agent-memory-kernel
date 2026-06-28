@@ -181,6 +181,7 @@ Check the effective capability matrix before starting an agent:
 
 ```python
 provider.capability_report(actor="writer", scope="professional")
+provider.keeper_eval()
 provider.export_control_report(
     actor="writer",
     scope="professional",
