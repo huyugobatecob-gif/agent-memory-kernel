@@ -70,15 +70,20 @@ Minimum permissions:
 - `memory.read`;
 - `memory.write_event`;
 - `memory.propose`;
+- `memory.promote`;
+- `memory.inject`;
 - `memory.approve`;
 - `memory.correct`;
+- `memory.distrust`;
+- `memory.expire`;
 - `memory.delete`;
 - `memory.export`;
 - `memory.admin`;
 
-The Router requires `memory.read` for every branch it injects. The Keeper can
-write events and propose graph commands, but it should not approve high-impact
-rules unless policy grants that permission.
+The Router requires `memory.read` and `memory.inject` for every branch it places
+into a prompt envelope. The Keeper can write events and propose graph commands,
+but it should not promote or approve high-impact rules unless policy grants that
+permission.
 
 Local action names exposed by write policy:
 

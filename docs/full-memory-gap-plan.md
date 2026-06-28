@@ -18,6 +18,68 @@ The memory system described in the transcript has these core properties:
 - After a turn, a keeper extracts topics, facts, entities, relationships, preferences, decisions, and useful context, then updates the graph tree.
 - The main agent should receive a prepared prompt envelope, not spend tokens searching all historical data by itself.
 
+Visible public signals from the reference site support the same direction:
+
+- Memory Tree / Memory Graph are positioned as structured knowledge graphs.
+- Personal understanding, user rules, and profile intro are separate user-facing
+  memory surfaces.
+- Context and memory are described as following the user across model providers.
+- Export/import is positioned as a project profile capability containing memory
+  tree data, chat history, model choices, rules, and settings.
+- Lightweight semantic processing is described for filtering, summaries,
+  metadata, people, events, chronology, and verified entities.
+
+The exact server prompts, graph traversal policy, and Keeper implementation are
+not public. This repository should therefore implement a clear, testable
+Router/Keeper contract instead of implying a private backend clone.
+
+## Council Verdict: Full Memory Completion Bar
+
+The repository now has a strong memory substrate, but the council review did
+not consider it complete full memory yet. The missing core is not another graph
+table. It is governed retrieval, lifecycle correctness, operator control, and
+behavioral proof.
+
+Must-have before claiming full memory:
+
+1. **Read-time decision policy.** Define how Router chooses branches using
+   relevance, recency, scope, source trust, sensitivity, conflict status, graph
+   distance, outcome success, pinned memory, token budget, and whether memory is
+   evidence or instruction.
+2. **Memory quality contract.** Track and evaluate Keeper extraction quality,
+   Router selection quality, stale-memory avoidance, and memory-vs-no-memory
+   task improvement.
+3. **Derived-memory invalidation.** Corrections, deletes, distrust, expiry, and
+   supersession must propagate through summaries, graph edges, tree packs,
+   cached envelopes, outcome lessons, and graph-derived style state.
+4. **Current-best resolver.** Conflicts need a retrieval-time answer based on
+   temporal precedence, source confidence, trust, supersession, and explicit
+   unresolved conflict handling.
+5. **Capability and consent model.** Define who can read, write, promote,
+   inject, distrust, export, or delete each memory under multi-agent
+   orchestration.
+6. **Inspection and explainability.** Provide CLI/HTTP flows for "what do you
+   remember?", "why was this injected?", "what changed after the last turn?",
+   source provenance, undo, distrust, and export.
+7. **Reference orchestration loop.** Provide one runnable Hermes-style demo
+   where memory is saved, extracted, retrieved, injected, corrected, deleted,
+   and then absent from the next prompt.
+8. **Idempotent Keeper and consolidation loop.** Retries must not duplicate
+   facts, edges, outcomes, or evidence; periodic merge/split/decay/compaction
+   should be first-class.
+9. **Prompt-boundary red-team fixtures.** Prove hostile stored evidence, tool
+   output, assistant guesses, and cross-lane content cannot become hidden
+   instructions.
+10. **Style influence governance.** Graph-derived style hints must be scoped,
+    advisory, visible, suppressible, and evaluated separately from factual
+    memory.
+11. **Operational failure model.** Define latency budgets, no-memory fallback,
+    corruption checks, backup/restore, migration behavior, storage growth, and
+    what happens when memory is unavailable or partially inconsistent.
+12. **Plain-language model and glossary.** Explain memory, lane, branch,
+    Router, Keeper, supplement, and profile surfaces with one canonical diagram
+    so open-source users can understand the system without private context.
+
 ## Additional Runtime Architecture Notes
 
 The reference behavior should be implemented as one memory service with two
@@ -95,6 +157,7 @@ Already present:
   lifecycle, outcome, conflict, and supersession paths.
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
+- Guarded brain/style system-prompt append derived from graph analytics.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -122,11 +185,24 @@ Remaining for full memory:
 
 - Automatic pre-turn context retrieval inside each external orchestrator.
 - Automatic post-turn Keeper analysis inside each external orchestrator.
+- A formal read-time decision/ranking policy for branch selection.
+- A memory quality contract with behavioral metrics and golden fixtures.
+- Derived-memory invalidation across summaries, graph links, cached prompt
+  surfaces, outcome lessons, and graph-derived style state.
+- A current-best resolver for stale, conflicting, superseded, or equal-trust
+  claims.
+- A capability and consent model for read/write/promote/inject/export/delete
+  actions under multi-agent orchestration.
+- Inspection and explainability endpoints for recalled memory, provenance,
+  post-turn changes, undo, distrust, and export.
+- A runnable reference loop proving Router -> prompt envelope -> main agent ->
+  Keeper -> graph update across correction, deletion, and outcome recall.
+- Idempotent Keeper write tests and graph consolidation/compaction behavior.
 - Production LLM-backed Keeper eval suite, managed model configuration, and
   reviewed extraction prompts for natural-language graph updates.
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
 - Deeper prompt budget adapters per model provider.
-- Guarded brain/style system-prompt append derived from graph analytics.
+- Production evals for guarded brain/style append across real prompt adapters.
 - Production Hermes runtime hooks that call memory before and after agent work.
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Production daemon mode for long-running Keeper workers.
@@ -137,12 +213,12 @@ Remaining for full memory:
 - Human review UI or inbox.
 - Hosted identity, tenancy, and capability rules beyond the local
   agent/scope/action write policy.
-- Memory lifecycle propagation for correct, delete, distrust, expire, and
-  conflict operations across summaries, graph nodes, and cached context packs.
 - Automatic conflict detection heuristics and current-best-answer resolution.
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.
+- Operational failure behavior for slow, unavailable, corrupted, partially
+  migrated, or oversized memory stores.
 - Real production acceptance traces proving behavior improvement on live agent
   tasks beyond the deterministic local fixture.
 
@@ -356,9 +432,14 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m agent_memory_kernel.cli build-context "plan SEO work" --db /tmp/amk-full-memory.db
 ```
 
-**Verification:** The output shows stable sections, token estimates, memory supplement placement, guarded brain/style placement, source IDs, and final messages ready for a main model call.
+**Verification:** The output shows stable sections, token estimates, memory
+supplement placement, guarded brain/style placement, source IDs, and final
+messages ready for a main model call.
 
-**Result:** Hermes can pass one prepared context object to any main model, so model switching preserves memory without each model owning that memory.
+**Result:** Baseline implemented in `before_model_call`: Hermes can pass one
+prepared context object to any main model, and graph-derived style hints are
+guarded, advisory, omitted on denied memory access, and visible in prompt
+metadata.
 
 ### Step 9: Add Hermes Before/After Hooks
 
@@ -548,21 +629,34 @@ The repository has full memory when all of these are true:
 - Every chat turn can be recorded automatically.
 - A lightweight Keeper can update the graph tree without manual tags.
 - A lightweight Router can select relevant branches before the main model answers.
+- Router selection follows a documented read-time policy for relevance, recency,
+  trust, scope, sensitivity, conflict status, graph distance, outcome value,
+  pinned memory, and token budget.
 - The prompt envelope includes expanded node content, not only branch labels.
 - The same memory context can be passed to different main models.
 - The main agent never has to search the whole graph by itself.
 - Graph-derived style or brain hints are guarded, optional, and subordinate to
-  user instructions and correctness.
+  user instructions and correctness, and can be disabled by runtime policy.
 - Personal and professional lanes work by default.
 - Success/failure loop memory is available as an optional extension.
 - Humans can review, correct, reject, delete, and export memory.
+- Humans and agents can inspect why a memory was injected, what changed after a
+  turn, and which sources support a branch.
 - All active memory has provenance.
 - Untrusted content cannot silently become durable instructions.
 - Identity, scope, permissions, and audit are present on every read/write path.
+- Capability checks cover read, write, promote, inject, distrust, export, and
+  delete actions under multi-agent orchestration.
 - Corrected, deleted, distrusted, expired, or conflicted memory cannot keep
   leaking through summaries, graph nodes, embeddings, or cached context packs.
+- Conflicts have a current-best resolver or are marked unresolved instead of
+  silently returning equal-trust contradictions.
 - Prompt-boundary tests prove memory context remains subordinate to higher
   instructions and is not provider-specific.
 - A vertical slice proves the whole loop from saved turn to Keeper update to
   Router injection to next answer.
+- Golden fixtures measure recall quality, stale-memory avoidance, scope
+  isolation, and memory-vs-no-memory task improvement.
 - Memory-related model calls are auditable by cost, token use, source turn, and selected graph branches.
+- Slow, unavailable, corrupted, partially migrated, or oversized memory stores
+  have defined fallback behavior.

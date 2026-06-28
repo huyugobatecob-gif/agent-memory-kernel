@@ -129,6 +129,7 @@ Useful endpoints:
 - `POST /write-policy/list`
 - `POST /search`
 - `POST /review/list`
+- `POST /brain/style`
 - `POST /conflict/record`
 - `POST /conflict/list`
 - `POST /memory/revisions`
@@ -178,6 +179,18 @@ The response includes `prompt_envelope`, `router_run_id`,
 `selected_branch_ids`, `access_decisions`, and warnings.
 If the active scope is not allowed, the Router returns a no-memory envelope and
 records a denied access decision.
+When graph-level Digital Brain state has enough classified nodes and a clear
+skew, `prompt_envelope.system` also includes a guarded advisory style append.
+The decision is visible in `prompt_envelope.metadata.brain_style`, and no style
+append is emitted when memory access is denied or Hermes disables graph-derived
+style for that call:
+
+```bash
+agent-memory before-model-call "planning SEO content refresh loop" \
+  --scope professional \
+  --allowed-scopes professional \
+  --disable-brain-style
+```
 
 Lower-level context builder call:
 

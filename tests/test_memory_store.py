@@ -799,6 +799,74 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(keeper_job_count, 1)
             store.close()
 
+    def test_before_model_call_adds_guarded_brain_style_when_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: project demo-site keeps structured SEO planning notes.",
+                scope="professional",
+                auto_approve=True,
+            )
+            store.conn.execute(
+                """
+                UPDATE digital_brain_state
+                SET left_count = 8,
+                    right_count = 1,
+                    updated_at = '2026-06-28T00:00:00+00:00'
+                WHERE scope = 'professional'
+                """
+            )
+            store.conn.commit()
+
+            before = store.before_model_call(
+                "Plan demo-site work.",
+                scope="professional",
+                allowed_scopes=["professional"],
+            )
+            system = before["prompt_envelope"]["system"]
+
+            self.assertIn("MEMORY-DERIVED STYLE PREFERENCE", system)
+            self.assertIn("Never let it reduce accuracy", system)
+            self.assertTrue(before["prompt_envelope"]["metadata"]["brain_style"]["enabled"])
+            self.assertEqual(
+                before["prompt_envelope"]["metadata"]["brain_style"]["skew"],
+                "structured",
+            )
+            api_style = handle_api_request(store, "/brain/style", {"scope": "professional"})
+            self.assertTrue(api_style["enabled"])
+            self.assertEqual(api_style["skew"], "structured")
+            self.assertIn("MEMORY-DERIVED STYLE PREFERENCE", api_style["append"])
+
+            denied = store.before_model_call(
+                "Plan demo-site work.",
+                scope="professional",
+                denied_scopes=["professional"],
+            )
+            self.assertNotIn("MEMORY-DERIVED STYLE PREFERENCE", denied["prompt_envelope"]["system"])
+            self.assertFalse(denied["prompt_envelope"]["metadata"]["brain_style"]["enabled"])
+            self.assertEqual(
+                denied["prompt_envelope"]["metadata"]["brain_style"]["reason"],
+                "memory access denied",
+            )
+            disabled = store.before_model_call(
+                "Plan demo-site work.",
+                scope="professional",
+                allowed_scopes=["professional"],
+                enable_brain_style=False,
+            )
+            self.assertNotIn(
+                "MEMORY-DERIVED STYLE PREFERENCE",
+                disabled["prompt_envelope"]["system"],
+            )
+            self.assertFalse(disabled["prompt_envelope"]["metadata"]["brain_style"]["enabled"])
+            self.assertEqual(
+                disabled["prompt_envelope"]["metadata"]["brain_style"]["reason"],
+                "brain style disabled by runtime policy",
+            )
+            store.close()
+
     def test_before_model_call_enforces_scope_access_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

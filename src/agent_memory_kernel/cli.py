@@ -163,6 +163,7 @@ def cmd_before_model_call(args: argparse.Namespace) -> int:
             denied_scopes=parse_csv(args.denied_scopes),
             limit=args.limit,
             recent_messages=args.recent_messages,
+            enable_brain_style=not args.disable_brain_style,
         )
     )
     store.close()
@@ -214,6 +215,7 @@ def cmd_shadow_turn(args: argparse.Namespace) -> int:
             user_text=args.user_text,
             assistant_text=args.assistant_text,
             keeper_mode=args.keeper_mode,
+            enable_brain_style=not args.disable_brain_style,
             metadata=metadata,
         )
     )
@@ -440,6 +442,14 @@ def cmd_graph_brain(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
     print_json(store.digital_brain_state(scope=args.scope))
+    store.close()
+    return 0
+
+
+def cmd_graph_brain_style(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.brain_style_append(scope=args.scope))
     store.close()
     return 0
 
@@ -850,6 +860,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--denied-scopes", default="", help="Comma-separated scopes denied for retrieval")
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--recent-messages", type=int, default=6)
+    p.add_argument("--disable-brain-style", action="store_true", help="Omit graph-derived style hints")
     p.set_defaults(func=cmd_before_model_call)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
@@ -885,6 +896,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--user-text", default="")
     p.add_argument("--assistant-text", default="")
     p.add_argument("--keeper-mode", default="sync", choices=["sync", "queued"], help="Run Keeper now or queue it")
+    p.add_argument("--disable-brain-style", action="store_true", help="Omit graph-derived style hints")
     p.add_argument("--metadata-json", default="{}")
     p.set_defaults(func=cmd_shadow_turn)
 
@@ -1032,6 +1044,10 @@ def build_parser() -> argparse.ArgumentParser:
     gp = graph_sub.add_parser("brain", help="Show digital brain calibration state")
     gp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     gp.set_defaults(func=cmd_graph_brain)
+
+    gp = graph_sub.add_parser("brain-style", help="Show guarded Digital Brain style append")
+    gp.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    gp.set_defaults(func=cmd_graph_brain_style)
 
     gp = graph_sub.add_parser("tree", help="Build a Memory Tree Pack from graph nodes")
     gp.add_argument("query")

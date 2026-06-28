@@ -87,6 +87,8 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/tree-pack":
         query = str(payload.pop("query"))
         return {"tree": store.memory_tree_pack(query, **payload)}
+    if path == "/brain/style":
+        return store.brain_style_append(scope=str(payload.get("scope", "professional")))
     if path == "/review/list":
         return {"candidates": store.list_candidates(str(payload.get("status", "pending")))}
     if path == "/review/approve":

@@ -79,6 +79,40 @@ Rules:
 - stale or conflicted memory must be marked;
 - unauthorized or secret memory must be absent, not merely hidden by text.
 
+## Guarded Brain/Style Append
+
+Graph-level Digital Brain state may add a soft style preference to the system
+section when a scope has enough classified graph nodes and a clear left/right
+skew.
+
+Rules:
+
+- it is advisory only;
+- it must be visible in `prompt_envelope.metadata.brain_style`;
+- it must never override higher-priority instructions, user format requests,
+  safety, or factual accuracy;
+- it must be omitted when memory access is denied;
+- adapters may suppress it with runtime policy;
+- balanced or insufficient graph state should produce no append.
+
+The local implementation exposes this via:
+
+```bash
+agent-memory graph brain-style --scope professional
+```
+
+and:
+
+```text
+POST /brain/style
+```
+
+Runtime prompt calls can suppress this layer:
+
+```bash
+agent-memory before-model-call "plan work" --disable-brain-style
+```
+
 ## Token Budget Adapters
 
 Provider adapters must accept:

@@ -93,6 +93,22 @@ SENSITIVITY_LEVELS = {
     "secret": "Never retrieve into prompts; quarantine or redact.",
 }
 
+DERIVED_PROMPT_SURFACES = {
+    "brain_style": {
+        "priority": "advisory_system_append",
+        "source": "digital_brain_state",
+        "guardrail": (
+            "Never override higher-priority instructions, user format requests, "
+            "safety, or factual accuracy."
+        ),
+        "omit_when": [
+            "memory access denied",
+            "insufficient classified graph nodes",
+            "balanced graph state",
+        ],
+    }
+}
+
 ACCEPTANCE_GATES = [
     {
         "gate": "automatic_runtime_loop",
@@ -142,6 +158,38 @@ ACCEPTANCE_GATES = [
             "review decisions are regression-testable",
         ],
     },
+    {
+        "gate": "governed_read_time_policy",
+        "requires": [
+            "Router ranking accounts for relevance, recency, trust, scope, sensitivity, conflict status, and token budget",
+            "retrieved memory is marked as evidence, rule, preference, or advisory style before entering the prompt",
+            "operators can explain why a branch was selected, skipped, or truncated",
+        ],
+    },
+    {
+        "gate": "derived_memory_invalidation",
+        "requires": [
+            "correction, deletion, distrust, expiry, and supersession invalidate derived summaries and graph surfaces",
+            "stale derived prompt surfaces such as graph-derived style are suppressible",
+            "cached envelopes or exports do not reintroduce inactive memory",
+        ],
+    },
+    {
+        "gate": "capability_and_consent",
+        "requires": [
+            "read, write, promote, inject, export, distrust, and delete actions are policy-checkable",
+            "multi-agent access is scoped by user, project, agent, source trust, and delegation",
+            "audits can replay which memory an agent saw and why it was allowed",
+        ],
+    },
+    {
+        "gate": "operational_failure_model",
+        "requires": [
+            "slow, unavailable, corrupted, partially migrated, or oversized memory has defined fallback behavior",
+            "no-memory mode is explicit and auditable",
+            "schema and contract versions are visible to adapters",
+        ],
+    },
 ]
 
 
@@ -156,6 +204,7 @@ def memory_contract() -> dict[str, Any]:
         "write_actions": WRITE_ACTIONS,
         "trust_levels": TRUST_LEVELS,
         "sensitivity_levels": SENSITIVITY_LEVELS,
+        "derived_prompt_surfaces": DERIVED_PROMPT_SURFACES,
         "acceptance_gates": ACCEPTANCE_GATES,
         "closed_loop": [
             "observe",
@@ -171,6 +220,7 @@ def memory_contract() -> dict[str, Any]:
 def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, Any]:
     """Validate enough shape for adapters and docs to depend on it."""
     data = contract or memory_contract()
+    gate_names = {str(item.get("gate")) for item in data.get("acceptance_gates", [])}
     checks = {
         "version_present": bool(data.get("version")),
         "personal_lane_present": "personal" in data.get("lanes", {}),
@@ -178,7 +228,12 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "project_extension_present": "project" in data.get("lanes", {}),
         "write_actions_present": set(WRITE_ACTIONS).issubset(set(data.get("write_actions", []))),
         "acceptance_gates_present": len(data.get("acceptance_gates", [])) >= 6,
+        "governed_read_time_policy_present": "governed_read_time_policy" in gate_names,
+        "derived_memory_invalidation_present": "derived_memory_invalidation" in gate_names,
+        "capability_and_consent_present": "capability_and_consent" in gate_names,
+        "operational_failure_model_present": "operational_failure_model" in gate_names,
         "closed_loop_present": len(data.get("closed_loop", [])) >= 6,
+        "brain_style_surface_present": "brain_style" in data.get("derived_prompt_surfaces", {}),
     }
     failed = [name for name, passed in checks.items() if not passed]
     return {

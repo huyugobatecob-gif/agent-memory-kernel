@@ -22,6 +22,10 @@ The adapter should:
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
 - inspect graph nodes and Keeper runs while debugging retrieval;
+- inspect `brain_style_append()` while debugging guarded Digital Brain prompt
+  influence;
+- disable graph-derived style hints per call when orchestration policy requires
+  memory content without style influence;
 - record conflicts or supersede stale memory when newer user/project truth wins;
 - record structured loop outcomes and retrieve outcome packs before planning;
 - configure write policies so agents can propose memory without auto-approving

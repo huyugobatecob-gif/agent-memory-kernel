@@ -105,6 +105,19 @@ Default stance:
 - secret-like or prompt-injection-like content is quarantined;
 - destructive lifecycle mutations require explicit authority.
 
+## Graph-Derived Style
+
+Digital Brain style is a derived prompt preference, not a durable user rule.
+
+Rules:
+
+- emit it only when memory access is allowed;
+- include the decision in prompt metadata;
+- keep it advisory and guarded;
+- make it suppressible by runtime policy;
+- never let it override explicit user instructions, safety, factual accuracy,
+  or requested output format.
+
 ## Acceptance Gates
 
 The built-in acceptance harness is the minimum deterministic gate:
@@ -135,6 +148,11 @@ The harness checks:
 - Keeper writes stay reviewable;
 - write policy blocks unauthorized approval.
 
+The machine-readable contract also names the completion gates for governed
+read-time policy, derived-memory invalidation, capability and consent, and
+operational failure behavior. These gates are part of the full-memory bar even
+when the deterministic local fixture only checks a smaller starter scenario.
+
 This harness does not replace production evals. It is the first hard gate that
 prevents the project from drifting back into "tables plus CLI" without proving
 the behavior that makes memory useful.
@@ -146,8 +164,20 @@ real shadow traces prove that memory:
 
 - automatically runs before and after agent turns;
 - retrieves the right branch for real tasks;
+- explains the read-time decision policy: relevance, recency, trust, scope,
+  sensitivity, conflict status, graph distance, outcome value, and token budget;
 - avoids stale, unsafe, and unauthorized branches;
 - explains provenance and why memory was selected;
 - supports correction, rollback, deletion, distrust, expiry, and supersession;
+- invalidates derived summaries, graph surfaces, cached packs, outcome lessons,
+  and graph-derived style when underlying memory changes;
+- resolves current-best answers or marks unresolved conflicts instead of
+  silently surfacing equal-trust contradictions;
+- exposes who may read, write, promote, inject, distrust, export, and delete
+  memory under multi-agent orchestration;
+- supports inspection flows for remembered facts, prompt injections, last-turn
+  changes, provenance, undo, distrust, and export;
 - improves behavior compared with no-memory baseline;
-- remains provider-neutral across model adapters.
+- remains provider-neutral across model adapters;
+- defines fallback behavior for slow, unavailable, corrupted, partially
+  migrated, or oversized memory stores.

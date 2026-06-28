@@ -74,6 +74,9 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def brain_style_append(self, scope: str = "professional") -> dict[str, Any]:
+        return self.store.brain_style_append(scope=scope)
+
     def before_model_call(
         self,
         query: str,
@@ -89,6 +92,7 @@ class HermesMemoryProvider:
         allowed_scopes: list[str] | None = None,
         denied_scopes: list[str] | None = None,
         limit: int = 8,
+        enable_brain_style: bool = True,
     ) -> dict[str, Any]:
         return self.store.before_model_call(
             query,
@@ -103,6 +107,7 @@ class HermesMemoryProvider:
             allowed_scopes=allowed_scopes,
             denied_scopes=denied_scopes,
             limit=limit,
+            enable_brain_style=enable_brain_style,
         )
 
     def after_saved_turn(
@@ -152,6 +157,7 @@ class HermesMemoryProvider:
         user_text: str = "",
         assistant_text: str = "",
         keeper_mode: str = "sync",
+        enable_brain_style: bool = True,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.store.shadow_turn(
@@ -170,6 +176,7 @@ class HermesMemoryProvider:
             user_text=user_text,
             assistant_text=assistant_text,
             keeper_mode=keeper_mode,
+            enable_brain_style=enable_brain_style,
             metadata=metadata,
         )
 

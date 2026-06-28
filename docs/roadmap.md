@@ -19,6 +19,7 @@ Status: implemented in this template.
 - Profile notes, project profile metadata, and profile export.
 - LLM usage stats.
 - Graph groups, optimization runs, and Digital Brain calibration.
+- Guarded Digital Brain style append in prompt envelopes.
 - Context packs.
 - Memory Tree Packs.
 - Context builder packs.
@@ -66,6 +67,14 @@ production layers around the local kernel:
 - API/MCP service mode;
 - background worker;
 - review and security hardening.
+- governed read-time ranking and current-best conflict resolution;
+- memory quality evals and usefulness feedback;
+- derived-memory invalidation for summaries, graph surfaces, cached packs,
+  outcome lessons, and graph-derived style;
+- capability and consent model for read/write/promote/inject/export/delete;
+- inspection and explainability flows for why memory was recalled or changed;
+- operational failure model for slow, unavailable, corrupted, migrated, or
+  oversized memory stores.
 
 Before v0.2 can be called full memory, these contracts must be implemented and
 tested:
@@ -163,7 +172,11 @@ Requirements:
 - stable schema;
 - stable provider interface;
 - stable Memory Contract and passing acceptance harness;
+- governed retrieval and lifecycle invalidation gates;
+- reference orchestration loop with real before/after memory behavior;
 - production eval traces proving memory improves real agent behavior;
+- inspect/edit/delete/distrust/export control surface;
+- defined operational failure and migration behavior;
 - security review;
 - import/export format;
 - production examples.

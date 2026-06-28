@@ -43,6 +43,7 @@ Input:
   "mode": "planning",
   "token_budget": 12000,
   "requested_lanes": ["professional"],
+  "enable_brain_style": true,
   "metadata": {}
 }
 ```
@@ -65,6 +66,8 @@ Required behavior:
 - retrieve summaries, recent messages, active memories, graph nodes, graph
   neighbors, and raw provenance;
 - enforce access control before anything enters the prompt;
+- allow orchestration policy to suppress graph-derived style influence while
+  still retrieving allowed memory;
 - return expanded node content, not only tags;
 - fit the output to token budget;
 - record why each branch was selected or skipped;

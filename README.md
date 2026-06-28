@@ -66,6 +66,7 @@ Included now:
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
+- Guarded Digital Brain style append in provider-neutral prompt envelopes.
 - Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
@@ -199,6 +200,7 @@ agent-memory graph --db .memory/demo.db edges --scope professional
 agent-memory graph --db .memory/demo.db groups --scope professional
 agent-memory graph --db .memory/demo.db analyses --scope professional
 agent-memory graph --db .memory/demo.db keeper-runs
+agent-memory graph --db .memory/demo.db brain-style --scope professional
 agent-memory graph --db .memory/demo.db optimize --mode record_linkage --scope professional
 ```
 
@@ -206,6 +208,15 @@ Build the richer context that Hermes would pass to an agent:
 
 ```bash
 agent-memory build-context --db .memory/demo.db "planning an SEO loop" --scope professional
+```
+
+Runtime prompt envelopes can suppress graph-derived style hints when an
+orchestrator policy wants memory content but not style influence:
+
+```bash
+agent-memory before-model-call --db .memory/demo.db "planning an SEO loop" \
+  --scope professional \
+  --disable-brain-style
 ```
 
 Inspect the formal memory contract and run the deterministic full-memory gate:
