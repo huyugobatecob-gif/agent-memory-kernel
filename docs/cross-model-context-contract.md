@@ -26,6 +26,7 @@ The memory kernel returns a provider-neutral object:
     "scope": "professional",
     "selected_branch_ids": [],
     "selection_decisions": [],
+    "current_best": {},
     "read_time_policy": {},
     "truncated_branch_count": 0,
     "source_ids": [],
@@ -80,6 +81,8 @@ Rules:
 - expanded content is the grounding material;
 - source trust must be visible;
 - stale or conflicted memory must be marked;
+- resolved conflict losers must be absent from prompt-facing context when a
+  current-best winner is known;
 - unauthorized or secret memory must be absent, not merely hidden by text.
 
 ## Guarded Brain/Style Append

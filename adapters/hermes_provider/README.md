@@ -21,6 +21,8 @@ The adapter should:
 - use compact context packs for small tasks;
 - expose `read_time_policy()`, `router_runs()`, and `explain_router_run()` for
   prompt-facing memory audit;
+- expose `current_best_report()` so Hermes can inspect resolved winners,
+  suppressed loser memories, and unresolved conflicts before prompt injection;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
@@ -119,6 +121,8 @@ Keeper candidates.
 When a later decision replaces an older memory, call `supersede_memory()` rather
 than leaving both facts active. If the winner is unclear, call
 `record_memory_conflict()` and leave the conflict open for review.
+Use `current_best_report(query, scope=...)` to verify which memory will be
+selected for a live prompt when a resolved conflict has a winner.
 
 If a correction was wrong, inspect `memory_revisions()` and call
 `rollback_memory()` instead of overwriting memory silently. Rollback restores

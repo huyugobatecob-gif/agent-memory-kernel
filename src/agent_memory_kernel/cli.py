@@ -248,6 +248,20 @@ def cmd_memory_quality(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_current_best(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.current_best_report(
+            args.query or "",
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -991,6 +1005,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=10)
     p.set_defaults(func=cmd_memory_quality)
+
+    p = sub.add_parser("current-best", help="Resolve current-best memory for a query or scope")
+    add_common_db(p)
+    p.add_argument("query", nargs="?", default="")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--limit", type=int, default=8)
+    p.set_defaults(func=cmd_current_best)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
     add_common_db(p)

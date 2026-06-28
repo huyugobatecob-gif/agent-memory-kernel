@@ -430,6 +430,71 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertNotIn("weekly", active_graph_text)
             store.close()
 
+    def test_current_best_resolver_suppresses_resolved_conflict_loser(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            stale = store.remember(
+                "Decision: project resolver-site owner is Alice.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            current = store.remember(
+                "Decision: project resolver-site owner is Bob.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            conflict = store.record_memory_conflict(
+                stale,
+                current,
+                winner_memory_id=current,
+                actor="qa",
+                reason="Bob is the current owner",
+            )
+
+            self.assertEqual(conflict["status"], "resolved")
+            tree = store.retrieve_tree("resolver-site owner Alice", scope="professional")
+            tree_text = str(tree)
+            self.assertIn("Bob", tree_text)
+            self.assertNotIn("Alice.", tree_text)
+            current_best = tree["retrieval"]["current_best"]
+            self.assertEqual(current_best["resolved"][0]["winner_memory_id"], current)
+            self.assertEqual(current_best["resolved"][0]["suppressed_memory_id"], stale)
+            self.assertEqual(
+                current_best["suppressed_decisions"][0]["decision"],
+                "suppressed_current_best_loser",
+            )
+
+            before = store.before_model_call(
+                "resolver-site owner Alice",
+                scope="professional",
+            )
+            prompt_text = "\n".join(
+                message["content"] for message in before["prompt_envelope"]["messages"]
+            )
+            self.assertIn("Bob", prompt_text)
+            self.assertNotIn("Alice.", prompt_text)
+            self.assertEqual(
+                before["prompt_envelope"]["metadata"]["current_best"]["resolved"][0][
+                    "winner_memory_id"
+                ],
+                current,
+            )
+
+            report = store.current_best_report(
+                "resolver-site owner Alice",
+                scope="professional",
+            )
+            self.assertEqual(report["current_best"]["resolved"][0]["winner_memory_id"], current)
+            api_report = handle_api_request(
+                store,
+                "/current-best",
+                {"query": "resolver-site owner Alice", "scope": "professional"},
+            )
+            self.assertEqual(api_report["current_best"]["resolved"][0]["winner_memory_id"], current)
+            store.close()
+
     def test_outcome_records_create_loop_memory_pack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

@@ -99,6 +99,9 @@ class HermesMemoryProvider:
 
     def review_pending(self) -> list[dict]:
         ...
+
+    def current_best_report(self, query: str = "", scope: str | None = None) -> dict:
+        ...
 ```
 
 The provider should call `MemoryStore`, not duplicate storage logic.
@@ -130,6 +133,7 @@ Useful endpoints:
 - `POST /router-feedback/record`
 - `POST /router-feedback/list`
 - `POST /memory-quality`
+- `POST /current-best`
 - `POST /remember`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
@@ -186,8 +190,9 @@ The response includes `prompt_envelope`, `router_run_id`,
 If the active scope is not allowed, the Router returns a no-memory envelope and
 records a denied access decision.
 The prompt envelope metadata includes `read_time_policy`,
-`selection_decisions`, and `truncated_branch_count`, so Hermes can audit why a
-memory branch entered the prompt.
+`selection_decisions`, `current_best`, and `truncated_branch_count`, so Hermes
+can audit why a memory branch entered the prompt and which resolved conflicts
+suppressed stale loser memories.
 When graph-level Digital Brain state has enough classified nodes and a clear
 skew, `prompt_envelope.system` also includes a guarded advisory style append.
 The decision is visible in `prompt_envelope.metadata.brain_style`, and no style
@@ -218,11 +223,15 @@ agent-memory router-feedback record router_xxxxxxxxxxxxxxxx \
   --reason "the selected branch grounded the SEO loop plan"
 
 agent-memory memory-quality --scope professional
+agent-memory current-best --scope professional "planning SEO content refresh loop"
 ```
 
 Feedback is a quality signal only. It does not automatically approve, delete, or
 rewrite memory; later Router evals and reviewers can use it to tune ranking and
 find stale or harmful branches.
+`current-best` is the truth-maintenance readout: with a query it shows selected
+branches plus resolved winners, suppressed losers, and unresolved conflicts; with
+no query it summarizes open and resolved conflict counts.
 
 Lower-level context builder call:
 
@@ -399,11 +408,15 @@ trail instead of leaving both as equal active facts:
 agent-memory conflict record mem_old mem_new --reason "project rule changed"
 agent-memory supersede mem_old mem_new --reason "newer user-stated rule wins"
 agent-memory conflict list --status resolved
+agent-memory current-best "project rule changed" --scope professional
 ```
 
 Hermes should use `conflict record` when a contradiction needs review and
 `supersede` only when the winning memory is explicit enough to suppress the old
 memory from retrieval.
+If a conflict is already resolved with a winner, prompt-facing tree retrieval
+uses that winner and suppresses the loser even when the query matches the stale
+loser text.
 
 This keeps memory quality high and makes the system auditable.
 

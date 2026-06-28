@@ -58,6 +58,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             limit=int(payload.get("limit", 10) or 10),
         )
+    if path == "/current-best":
+        return store.current_best_report(
+            str(payload.get("query", "")),
+            scope=payload.get("scope"),
+            limit=int(payload.get("limit", 8) or 8),
+        )
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":

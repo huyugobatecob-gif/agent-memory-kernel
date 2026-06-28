@@ -294,6 +294,12 @@ Router output:
     "version": "read-time-policy-v0.1",
     "ranking_order": ["task relevance", "semantic rerank", "scope filters"]
   },
+  "current_best": {
+    "policy": "resolved winner suppresses loser at retrieval; open conflict is marked unresolved",
+    "resolved": [],
+    "unresolved": [],
+    "suppressed": []
+  },
   "token_estimate": 1800
 }
 ```
@@ -305,6 +311,8 @@ Router quality gates:
 - prefer direct user-stated facts over inferred or assistant-generated facts;
 - suppress stale memory when newer conflicting memory exists;
 - suppress `superseded` memory from prompt-facing retrieval;
+- when an explicit resolved conflict has a winner, select the winner and report
+  the loser as `suppressed_current_best_loser`;
 - preserve unresolved conflict records for review instead of silently choosing
   between equal-trust memories;
 - log selected, skipped, and truncated branches;

@@ -79,6 +79,10 @@ Must-have before claiming full memory:
 12. **Plain-language model and glossary.** Explain memory, lane, branch,
     Router, Keeper, supplement, and profile surfaces with one canonical diagram
     so open-source users can understand the system without private context.
+13. **Versioned conformance spec.** Publish golden conversation traces,
+    expected memory mutations, expected retrieval/refusal behavior, migration
+    compatibility checks, and adapter conformance tests so outside projects can
+    prove they implement the memory behavior instead of only copying the API.
 
 ## Additional Runtime Architecture Notes
 
@@ -194,8 +198,8 @@ Remaining for full memory:
   fixtures.
 - Derived-memory invalidation across summaries, graph links, cached prompt
   surfaces, outcome lessons, and graph-derived style state.
-- A current-best resolver for stale, conflicting, superseded, or equal-trust
-  claims.
+- Production current-best heuristics for stale, conflicting, superseded, or
+  equal-trust claims beyond explicit resolved conflicts.
 - A capability and consent model for read/write/promote/inject/export/delete
   actions under multi-agent orchestration.
 - Broader inspection flows for post-turn changes, undo, distrust, and export
@@ -218,7 +222,8 @@ Remaining for full memory:
 - Human review UI or inbox.
 - Hosted identity, tenancy, and capability rules beyond the local
   agent/scope/action write policy.
-- Automatic conflict detection heuristics and current-best-answer resolution.
+- Automatic conflict detection heuristics and production current-best-answer
+  resolution beyond the baseline explicit-conflict resolver.
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.
@@ -394,8 +399,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. Agents receive useful memory content, not just
 tags or labels, and operators can inspect read-time policy and Router decisions
 with `router-runs`, `router-explain`, `/router-runs`, and `/router-explain`.
-Remaining work is production ranking, automated usefulness learning,
-current-best conflict resolution, and larger golden evals.
+Remaining work is production ranking, automated usefulness learning, automatic
+conflict detection/current-best heuristics beyond explicit resolved conflicts,
+and larger golden evals.
 
 ### Step 7: Add Embeddings And Semantic Reranking
 
@@ -666,6 +672,9 @@ The repository has full memory when all of these are true:
   Router injection to next answer.
 - Golden fixtures measure recall quality, stale-memory avoidance, scope
   isolation, and memory-vs-no-memory task improvement.
+- A versioned conformance suite defines public reference scenarios for create,
+  update, ignore, retrieve, refuse, correct, delete, suppress, migrate, and
+  adapter behavior.
 - Memory-related model calls are auditable by cost, token use, source turn, and selected graph branches.
 - Slow, unavailable, corrupted, partially migrated, or oversized memory stores
   have defined fallback behavior.

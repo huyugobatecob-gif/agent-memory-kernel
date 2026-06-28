@@ -148,6 +148,15 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.memory_quality_report(scope=scope, limit=limit)
 
+    def current_best_report(
+        self,
+        query: str = "",
+        *,
+        scope: str | None = None,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        return self.store.current_best_report(query, scope=scope, limit=limit)
+
     def before_model_call(
         self,
         query: str,

@@ -172,11 +172,16 @@ Implementation surface:
 
 - `conflict record` stores an explicit open relationship without suppressing
   either memory.
+- `current-best` and prompt-facing tree retrieval resolve explicit resolved
+  conflicts at read time: the winner is selected and the loser is reported as a
+  suppressed current-best loser.
 - `supersede` records a resolved `supersedes` relationship and marks the old
   memory and its memory item as `superseded`.
 - Superseded memory is removed from active retrieval and active graph export
   through the same propagation path as delete, distrust, and expire.
 - `conflict list` exposes open and resolved relationships for review and audit.
+- Open conflicts remain eligible for review and are marked unresolved instead of
+  being silently treated as equal prompt evidence.
 
 ## Export
 
@@ -205,6 +210,8 @@ The lifecycle is not complete until tests cover:
 - delete -> derived graph edge removed or disabled;
 - distrust -> memory visible in audit but absent from prompt;
 - conflict -> newer trusted memory wins;
+- resolved conflict -> loser is absent from prompt-facing tree/context retrieval;
+- open conflict -> unresolved status is visible in Router metadata;
 - supersede -> old memory is absent from prompt and graph, resolved relation remains;
 - stale -> low-priority retrieval;
 - export/import -> lifecycle state preserved.

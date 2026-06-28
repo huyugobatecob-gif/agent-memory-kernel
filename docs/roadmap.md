@@ -69,6 +69,8 @@ production layers around the local kernel:
 - review and security hardening;
 - production governed read-time ranking and current-best conflict resolution;
 - production memory quality evals beyond baseline usefulness feedback;
+- versioned conformance spec with golden conversation traces and adapter
+  compatibility tests;
 - derived-memory invalidation for summaries, graph surfaces, cached packs,
   outcome lessons, and graph-derived style;
 - capability and consent model for read/write/promote/inject/export/delete;
@@ -126,9 +128,12 @@ Baseline shadow evals are implemented through `agent-memory shadow-eval`,
 provider wrapper. They turn reviewed traces into stored pass/fail checks for
 branch selection, candidate text, source IDs, token budget, and access mode.
 Conflict and supersession records are implemented through `agent-memory
-conflict`, `agent-memory supersede`, `/conflict/record`, `/conflict/list`, and
-`/supersede`. Superseded memory is suppressed from active retrieval and graph
-export while the resolved relationship remains auditable.
+conflict`, `agent-memory supersede`, `agent-memory current-best`,
+`/conflict/record`, `/conflict/list`, `/current-best`, and `/supersede`.
+Superseded memory is suppressed from active retrieval and graph export while the
+resolved relationship remains auditable. Explicit resolved conflicts also affect
+prompt-facing tree retrieval: the winner is selected, the loser is suppressed,
+and unresolved conflicts remain visible for review.
 Outcome records and outcome packs are implemented for success/failure loop
 planning.
 Delete, distrust, and expire now suppress retrieval and active graph export.

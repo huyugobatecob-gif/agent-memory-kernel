@@ -50,6 +50,7 @@ Included now:
   outcome, conflict, and supersession paths.
 - Correction revision history and rollback for active memories.
 - Conflict and supersession records for truth maintenance.
+- Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
 - Local stdlib HTTP API service: `serve`.
@@ -142,10 +143,14 @@ Mark memory truth changes explicitly:
 agent-memory conflict --db .memory/demo.db record mem_old mem_new --reason "newer project rule conflicts"
 agent-memory supersede --db .memory/demo.db mem_old mem_new --reason "newer user-stated memory wins"
 agent-memory conflict --db .memory/demo.db list --status resolved
+agent-memory current-best --db .memory/demo.db --scope professional "project rule"
 ```
 
 `supersede` suppresses the old memory from retrieval and graph export while
 recording a resolved conflict relationship for audit.
+`current-best` shows how prompt-facing retrieval resolves explicit conflicts:
+resolved winners suppress loser memories, and open conflicts stay visible as
+unresolved review items.
 
 Correct and rollback memory:
 
@@ -239,6 +244,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
+agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
 ```
 
 Inspect the formal memory contract and run the deterministic full-memory gate:

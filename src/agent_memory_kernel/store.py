@@ -1087,6 +1087,11 @@ class MemoryStore:
                 seed_scores[memory_id] = 20
             reasons[memory_id].add(reason)
 
+        current_best = self._apply_current_best_resolution(
+            seed_scores,
+            reasons,
+            scope=scope,
+        )
         ranked_ids = [
             memory_id
             for memory_id, _score in sorted(
@@ -1109,6 +1114,7 @@ class MemoryStore:
             memory_rows=decision_rows,
             limit=limit,
         )
+        selection_decisions.extend(current_best.get("suppressed_decisions", []))
         node_rows = self._nodes_for_memories(selected_ids)
         graph_node_rows = self._graph_nodes_for_memories(selected_ids)
         graph_edge_rows = self._graph_edges_for_memories(selected_ids)
@@ -1156,6 +1162,7 @@ class MemoryStore:
                     "scope": memory["scope"],
                     "confidence": memory["confidence"],
                     "source_trust": memory["source_trust"],
+                    "conflict_status": self._memory_conflict_status(memory_id),
                     "text": memory["text"],
                 }
             )
@@ -1168,13 +1175,19 @@ class MemoryStore:
                 if related not in branch["related_nodes"]:
                     branch["related_nodes"].append(related)
             for graph_node in graph_nodes:
+                evidence_text = str(graph_node["evidence_quote"] or "").strip()
+                summary = graph_node["summary"]
+                blob = graph_node["blob"]
+                if evidence_text:
+                    summary = self._excerpt(evidence_text, 180)
+                    blob = f"- {evidence_text}"
                 related = {
                     "graph_node_id": graph_node["graph_node_id"],
                     "node_type": graph_node["node_type"],
                     "label": graph_node["label"],
                     "group_label": graph_node["group_label"],
-                    "summary": graph_node["summary"],
-                    "blob": graph_node["blob"],
+                    "summary": summary,
+                    "blob": blob,
                     "importance": graph_node["importance"],
                 }
                 if related not in branch["memory_graph_nodes"]:
@@ -1211,6 +1224,7 @@ class MemoryStore:
                 "branch_count": len(branches),
                 "selection_decisions": selection_decisions,
                 "truncated_count": len(truncated_ids),
+                "current_best": current_best,
                 "depth": depth,
                 "include_raw": include_raw,
             },
@@ -1272,10 +1286,12 @@ class MemoryStore:
 
             lines.extend(["", "Active memories:"])
             for memory in branch["memories"]:
+                conflict_status = memory.get("conflict_status", {}).get("status", "none")
+                conflict_part = "" if conflict_status == "none" else f"; conflict={conflict_status}"
                 lines.append(
                     "- "
                     f"[{memory['scope']}:{memory['kind']}:{memory['confidence']}; "
-                    f"trust={memory['source_trust']}; id={memory['memory_id']}] "
+                    f"trust={memory['source_trust']}{conflict_part}; id={memory['memory_id']}] "
                     f"{memory['text']}"
                 )
 
@@ -1952,24 +1968,24 @@ class MemoryStore:
         saved_rules = self.list_memory_items(scope=scope, item_type="rule", limit=8)
         profile_intro = self.list_profile_notes(scope=scope, note_type="intro")
         profile_rules = self.list_profile_notes(scope=scope, note_type="rule")
-        compact_memory = self.search(query, scope=scope, limit=limit)
+        tree_data = self.retrieve_tree(
+            query,
+            scope=scope,
+            limit=limit,
+            include_raw=False,
+        )
+        compact_memory = [
+            {
+                "scope": memory["scope"],
+                "kind": memory["kind"],
+                "source_trust": memory["source_trust"],
+                "text": memory["text"],
+            }
+            for branch in tree_data["branches"]
+            for memory in branch["memories"]
+        ][:limit]
         if not compact_memory:
-            tree_data = self.retrieve_tree(
-                query,
-                scope=scope,
-                limit=limit,
-                include_raw=False,
-            )
-            compact_memory = [
-                {
-                    "scope": memory["scope"],
-                    "kind": memory["kind"],
-                    "source_trust": memory["source_trust"],
-                    "text": memory["text"],
-                }
-                for branch in tree_data["branches"]
-                for memory in branch["memories"]
-            ][:limit]
+            compact_memory = self.search(query, scope=scope, limit=limit)
         profile_nodes = self.list_graph_nodes(scope=scope, node_type="person", limit=8)
         summaries = self.conn.execute(
             """
@@ -2119,6 +2135,7 @@ class MemoryStore:
         )
         selected_branch_ids = self._selected_branch_ids(tree)
         selection_decisions = list(tree.get("retrieval", {}).get("selection_decisions", []))
+        current_best = dict(tree.get("retrieval", {}).get("current_best", {}))
         read_time_policy = self.read_time_policy(
             scope=scope,
             token_budget=token_budget,
@@ -2187,6 +2204,7 @@ class MemoryStore:
                 "selected_branch_ids": selected_branch_ids,
                 "selection_decisions": selection_decisions,
                 "truncated_branch_count": int(tree.get("retrieval", {}).get("truncated_count", 0) or 0),
+                "current_best": current_best,
                 "read_time_policy": read_time_policy,
                 "source_ids": self._source_ids_from_tree(tree),
                 "token_estimate": self._rough_token_count(system + context_pack + memory_context + query),
@@ -2817,6 +2835,59 @@ class MemoryStore:
                 positive=False,
                 limit=top_limit,
             ),
+        }
+
+    def current_best_report(
+        self,
+        query: str = "",
+        *,
+        scope: str | None = None,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        """Resolve current-best memory for a query or summarize conflicts."""
+        query = (query or "").strip()
+        scope = normalize_scope(scope) if scope else None
+        if query:
+            tree = self.retrieve_tree(
+                query,
+                scope=scope,
+                limit=limit,
+                include_raw=False,
+            )
+            return {
+                "query": query,
+                "scope": scope or "all",
+                "current_best": tree.get("retrieval", {}).get("current_best", {}),
+                "selection_decisions": tree.get("retrieval", {}).get("selection_decisions", []),
+                "branches": [
+                    {
+                        "category": branch.get("category", ""),
+                        "label": branch.get("label", ""),
+                        "score": branch.get("score", 0),
+                        "memories": [
+                            {
+                                "memory_id": memory.get("memory_id", ""),
+                                "kind": memory.get("kind", ""),
+                                "source_trust": memory.get("source_trust", ""),
+                                "conflict_status": memory.get("conflict_status", {}),
+                                "text": memory.get("text", ""),
+                            }
+                            for memory in branch.get("memories", [])
+                        ],
+                    }
+                    for branch in tree.get("branches", [])
+                ],
+            }
+        conflicts = self.list_memory_conflicts(scope=scope, limit=limit)
+        return {
+            "query": "",
+            "scope": scope or "all",
+            "current_best": {
+                "policy": "resolved winner suppresses loser at retrieval; open conflict remains unresolved",
+                "open_count": sum(1 for item in conflicts if item["status"] == "open"),
+                "resolved_count": sum(1 for item in conflicts if item["status"] == "resolved"),
+            },
+            "conflicts": conflicts,
         }
 
     def list_shadow_traces(
@@ -5641,7 +5712,7 @@ class MemoryStore:
             f"""
             SELECT DISTINCT mi.memory_id, gn.graph_node_id, gn.node_type,
                    gn.label, gn.group_label, gn.blob, gn.summary,
-                   gn.importance, gn.confidence
+                   gn.importance, gn.confidence, ne.quote AS evidence_quote
             FROM memory_items mi
             JOIN node_evidence ne ON ne.item_id = mi.item_id
             JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
@@ -5739,6 +5810,110 @@ class MemoryStore:
             )
         return decisions
 
+    def _apply_current_best_resolution(
+        self,
+        seed_scores: dict[str, float],
+        reasons: dict[str, set[str]],
+        *,
+        scope: str | None,
+    ) -> dict[str, Any]:
+        candidate_ids = list(seed_scores)
+        result: dict[str, Any] = {
+            "policy": "resolved winner suppresses loser at retrieval; open conflict is marked unresolved",
+            "resolved": [],
+            "unresolved": [],
+            "suppressed": [],
+            "suppressed_decisions": [],
+        }
+        if not candidate_ids:
+            return result
+        placeholders = ",".join("?" for _ in candidate_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT conflict_id, scope, memory_id, other_memory_id, relation,
+                   status, winner_memory_id, reason
+            FROM memory_conflicts
+            WHERE memory_id IN ({placeholders})
+               OR other_memory_id IN ({placeholders})
+            ORDER BY updated_at DESC
+            """,
+            (*candidate_ids, *candidate_ids),
+        ).fetchall()
+        seen_conflicts: set[str] = set()
+        for row in rows:
+            conflict_id = str(row["conflict_id"])
+            if conflict_id in seen_conflicts:
+                continue
+            seen_conflicts.add(conflict_id)
+            left = str(row["memory_id"])
+            right = str(row["other_memory_id"])
+            winner = str(row["winner_memory_id"] or "")
+            status = str(row["status"] or "open")
+            relation = str(row["relation"] or "conflicts_with")
+            if status == "resolved" and winner:
+                loser = right if winner == left else left if winner == right else ""
+                if not loser or loser not in seed_scores:
+                    continue
+                winner_row = self._active_memory_for_scope(winner, scope)
+                if winner_row is None:
+                    result["unresolved"].append(
+                        {
+                            "conflict_id": conflict_id,
+                            "memory_ids": [left, right],
+                            "reason": "resolved winner is not active in this scope",
+                        }
+                    )
+                    reasons[loser].add(f"resolved conflict has inactive winner: {conflict_id}")
+                    continue
+                loser_score = float(seed_scores.get(loser, 0))
+                seed_scores[winner] = max(float(seed_scores.get(winner, 0)), loser_score + 5)
+                reasons[winner].add(
+                    f"current-best winner for resolved conflict: {conflict_id}"
+                )
+                seed_scores.pop(loser, None)
+                result["resolved"].append(
+                    {
+                        "conflict_id": conflict_id,
+                        "winner_memory_id": winner,
+                        "suppressed_memory_id": loser,
+                        "relation": relation,
+                        "reason": row["reason"] or "resolved conflict winner",
+                    }
+                )
+                suppressed = {
+                    "decision": "suppressed_current_best_loser",
+                    "memory_id": loser,
+                    "winner_memory_id": winner,
+                    "conflict_id": conflict_id,
+                    "relation": relation,
+                    "score": round(loser_score, 4),
+                    "reason": "resolved conflict selected a different current-best memory",
+                    "policy_version": READ_TIME_POLICY_VERSION,
+                    "policy_factors": self._memory_policy_factors(
+                        loser,
+                        self._memory_row_any_status(loser),
+                    ),
+                }
+                result["suppressed"].append(suppressed)
+                result["suppressed_decisions"].append(suppressed)
+                continue
+            if status == "open":
+                active_candidates = [memory_id for memory_id in [left, right] if memory_id in seed_scores]
+                if not active_candidates:
+                    continue
+                for memory_id in active_candidates:
+                    reasons[memory_id].add(f"unresolved conflict requires review: {conflict_id}")
+                result["unresolved"].append(
+                    {
+                        "conflict_id": conflict_id,
+                        "memory_ids": [left, right],
+                        "selected_candidate_ids": active_candidates,
+                        "relation": relation,
+                        "reason": row["reason"] or "open conflict",
+                    }
+                )
+        return result
+
     def _memory_policy_factors(
         self,
         memory_id: str,
@@ -5765,6 +5940,34 @@ class MemoryStore:
             "conflict_status": self._memory_conflict_status(memory_id),
             "outcome_signal": self._memory_outcome_signal(memory_id),
         }
+
+    def _active_memory_for_scope(
+        self,
+        memory_id: str,
+        scope: str | None,
+    ) -> sqlite3.Row | None:
+        return self.conn.execute(
+            """
+            SELECT memory_id, text, kind, scope, confidence, sensitivity,
+                   source_trust, status, updated_at
+            FROM memories
+            WHERE memory_id = ?
+              AND status = 'active'
+              AND (? IS NULL OR scope = ?)
+            """,
+            (memory_id, scope, scope),
+        ).fetchone()
+
+    def _memory_row_any_status(self, memory_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            """
+            SELECT memory_id, text, kind, scope, confidence, sensitivity,
+                   source_trust, status, updated_at
+            FROM memories
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchone()
 
     def _memory_conflict_status(self, memory_id: str) -> dict[str, Any]:
         rows = self.conn.execute(
@@ -5862,12 +6065,14 @@ class MemoryStore:
                 lines.append(f"- {reason}")
             lines.append("Expanded content:")
             for memory in branch.get("memories", []):
+                conflict_status = memory.get("conflict_status", {}).get("status", "none")
+                conflict_part = "" if conflict_status == "none" else f"; conflict={conflict_status}"
                 lines.append(
                     "- "
                     f"[{memory.get('scope')}:{memory.get('kind')}; "
                     f"trust={memory.get('source_trust')}; "
                     f"confidence={memory.get('confidence')}; "
-                    f"id={memory.get('memory_id')}] "
+                    f"id={memory.get('memory_id')}{conflict_part}] "
                     f"{memory.get('text')}"
                 )
             raw_events = branch.get("raw_events", [])
