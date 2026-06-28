@@ -92,6 +92,7 @@ Already present:
 - Memory Tree Pack and full context builder output.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
+- Queued Keeper jobs and worker processing for post-turn analysis.
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
@@ -107,7 +108,7 @@ Remaining for full memory:
 - Deeper prompt budget adapters per model provider.
 - Guarded brain/style system-prompt append derived from graph analytics.
 - Production Hermes runtime hooks that call memory before and after agent work.
-- Background worker or service mode for queued Keeper jobs.
+- Production daemon mode for long-running Keeper workers.
 - MCP server for agents that should not use CLI or HTTP directly.
 - Provider embeddings and semantic reranking.
 - First-class outcome memory for success/failure loops.

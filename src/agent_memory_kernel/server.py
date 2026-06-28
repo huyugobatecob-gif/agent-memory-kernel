@@ -48,6 +48,11 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return run_vertical_slice(store)
     if path == "/slice/assert":
         return assert_vertical_slice(store)
+    if path == "/worker/run":
+        return store.process_keeper_jobs(
+            limit=int(payload.get("limit", 10) or 10),
+            actor=str(payload.get("actor", "worker")),
+        )
     raise KeyError(f"unknown endpoint: {path}")
 
 

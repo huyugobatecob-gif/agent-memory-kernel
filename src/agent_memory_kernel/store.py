@@ -1606,6 +1606,7 @@ class MemoryStore:
         assistant_text: str = "",
         turn_id: str = "",
         auto_approve: bool = False,
+        keeper_mode: str = "sync",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Persist an exchange and run the conservative post-turn Keeper path."""
@@ -1646,8 +1647,62 @@ class MemoryStore:
                 },
             )
             saved_turn_ids.append(assistant_turn["turn_id"])
+        if turn_id and turn_id not in saved_turn_ids:
+            saved_turn_ids.append(turn_id)
 
         source_ref = turn_id or (saved_turn_ids[-1] if saved_turn_ids else "")
+        keeper_mode = (keeper_mode or "sync").strip().lower()
+        if keeper_mode in {"queue", "queued", "async"}:
+            keeper_job_id = new_id("kjob")
+            job_metadata = {
+                **(metadata or {}),
+                "auto_approve": bool(auto_approve),
+                "source_ref": source_ref,
+            }
+            self.conn.execute(
+                """
+                INSERT INTO keeper_jobs
+                  (keeper_job_id, created_at, thread_id, scope, user_id, agent_id,
+                   model_id, turn_ids_json, event_id, candidate_ids_json, status,
+                   warnings_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 'queued', '[]', ?)
+                """,
+                (
+                    keeper_job_id,
+                    now_iso(),
+                    thread_id,
+                    scope,
+                    user_id,
+                    agent_id,
+                    model_id,
+                    json.dumps(saved_turn_ids, sort_keys=True),
+                    json.dumps(job_metadata, sort_keys=True),
+                ),
+            )
+            self._audit(
+                "after_saved_turn",
+                "keeper_job",
+                keeper_job_id,
+                actor=agent_id,
+                details={
+                    "thread_id": thread_id,
+                    "scope": scope,
+                    "turn_ids": saved_turn_ids,
+                    "status": "queued",
+                },
+            )
+            self.conn.commit()
+            return {
+                "keeper_job_id": keeper_job_id,
+                "mode": "queued",
+                "status": "queued",
+                "saved_turn_ids": saved_turn_ids,
+                "event_id": "",
+                "candidate_ids": [],
+                "memory": None,
+                "warnings": [],
+            }
+
         keeper_text = self._keeper_exchange_text(user_text, assistant_text, turn_id=turn_id)
         memory_result = None
         candidate_ids: list[str] = []
@@ -1730,6 +1785,101 @@ class MemoryStore:
             "memory": memory_result,
             "warnings": sorted(set(warnings)),
         }
+
+    def process_keeper_jobs(self, *, limit: int = 10, actor: str = "worker") -> dict[str, Any]:
+        """Process queued Keeper jobs outside the user-facing response path."""
+        rows = self.conn.execute(
+            """
+            SELECT keeper_job_id, thread_id, scope, user_id, agent_id, model_id,
+                   turn_ids_json, metadata_json
+            FROM keeper_jobs
+            WHERE status = 'queued'
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit or 10), 100)),),
+        ).fetchall()
+        jobs = []
+        for row in rows:
+            job_id = str(row["keeper_job_id"])
+            metadata = self._loads_json(row["metadata_json"], {})
+            turn_ids = [str(item) for item in self._loads_json(row["turn_ids_json"], [])]
+            keeper_text = self._keeper_text_from_turns(turn_ids)
+            warnings: list[str] = []
+            event_id = ""
+            candidate_ids: list[str] = []
+            status = "completed"
+            memory_result = None
+            if keeper_text:
+                memory_result = self.remember(
+                    keeper_text,
+                    scope=str(row["scope"]),
+                    actor=str(row["agent_id"] or actor),
+                    source_type="system",
+                    source_ref=job_id,
+                    auto_approve=bool(metadata.get("auto_approve", False)),
+                    metadata={
+                        **metadata,
+                        "source_kind": "queued_keeper_job",
+                        "keeper_job_id": job_id,
+                        "thread_id": row["thread_id"],
+                        "turn_ids": turn_ids,
+                        "model_id": row["model_id"],
+                        "user_id": row["user_id"],
+                    },
+                )
+                event_id = memory_result["event_id"]
+                for candidate in memory_result["candidates"]:
+                    candidate_ids.append(candidate["candidate_id"])
+                    if candidate["status"] == "quarantined":
+                        warnings.append("keeper candidate quarantined")
+                    elif candidate["status"] == "pending":
+                        warnings.append("keeper candidate requires review")
+                if warnings and all("quarantined" in warning for warning in warnings):
+                    status = "quarantined"
+            else:
+                status = "empty"
+                warnings.append("queued keeper job had no readable turns")
+
+            self.conn.execute(
+                """
+                UPDATE keeper_jobs
+                SET event_id = ?, candidate_ids_json = ?, status = ?,
+                    warnings_json = ?, metadata_json = ?
+                WHERE keeper_job_id = ?
+                """,
+                (
+                    event_id,
+                    json.dumps(candidate_ids, sort_keys=True),
+                    status,
+                    json.dumps(sorted(set(warnings)), sort_keys=True),
+                    json.dumps({**metadata, "processed_by": actor}, sort_keys=True),
+                    job_id,
+                ),
+            )
+            self._audit(
+                "process_keeper_job",
+                "keeper_job",
+                job_id,
+                actor=actor,
+                details={
+                    "status": status,
+                    "event_id": event_id,
+                    "candidate_ids": candidate_ids,
+                },
+            )
+            jobs.append(
+                {
+                    "keeper_job_id": job_id,
+                    "status": status,
+                    "event_id": event_id,
+                    "candidate_ids": candidate_ids,
+                    "memory": memory_result,
+                    "warnings": sorted(set(warnings)),
+                }
+            )
+        self.conn.commit()
+        return {"processed": len(jobs), "jobs": jobs}
 
     def correct_memory(self, memory_id: str, text: str, *, actor: str = "user") -> None:
         text = (text or "").strip()
@@ -3447,6 +3597,29 @@ class MemoryStore:
             parts.append(f"User said: {user_text}")
         if assistant_text:
             parts.append(f"Assistant answered: {assistant_text}")
+        return "\n".join(parts).strip()
+
+    def _keeper_text_from_turns(self, turn_ids: list[str]) -> str:
+        if not turn_ids:
+            return ""
+        placeholders = ",".join("?" for _ in turn_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT turn_id, role, actor, content, created_at
+            FROM conversation_turns
+            WHERE turn_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+            turn_ids,
+        ).fetchall()
+        parts = []
+        for row in rows:
+            role = str(row["role"] or "turn").strip().title()
+            actor = str(row["actor"] or "").strip()
+            prefix = f"{role}"
+            if actor:
+                prefix = f"{prefix}({actor})"
+            parts.append(f"{prefix}: {row['content']}")
         return "\n".join(parts).strip()
 
     @staticmethod

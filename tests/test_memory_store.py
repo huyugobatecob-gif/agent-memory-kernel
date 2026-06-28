@@ -489,6 +489,44 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("concise memory review updates", allowed_content)
             store.close()
 
+    def test_queued_keeper_worker_processes_saved_turn_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            queued = store.after_saved_turn(
+                thread_id="queued-thread",
+                scope="professional",
+                user_id="user-1",
+                agent_id="worker-agent",
+                model_id="gpt-test",
+                user_text="Remember that project queue-site uses background Keeper jobs.",
+                assistant_text="I will queue this for Keeper processing.",
+                keeper_mode="queued",
+            )
+
+            self.assertEqual(queued["status"], "queued")
+            self.assertEqual(queued["candidate_ids"], [])
+            self.assertEqual(store.list_candidates("pending"), [])
+
+            processed = store.process_keeper_jobs(limit=1, actor="test-worker")
+            self.assertEqual(processed["processed"], 1)
+            self.assertEqual(processed["jobs"][0]["keeper_job_id"], queued["keeper_job_id"])
+            self.assertEqual(processed["jobs"][0]["status"], "completed")
+            self.assertTrue(processed["jobs"][0]["candidate_ids"])
+            self.assertTrue(store.list_candidates("pending"))
+            job_row = store.conn.execute(
+                "SELECT status, event_id, candidate_ids_json FROM keeper_jobs WHERE keeper_job_id = ?",
+                (queued["keeper_job_id"],),
+            ).fetchone()
+            self.assertEqual(job_row["status"], "completed")
+            self.assertTrue(job_row["event_id"].startswith("evt_"))
+            self.assertIn("cand_", job_row["candidate_ids_json"])
+
+            second = store.process_keeper_jobs(limit=1, actor="test-worker")
+            self.assertEqual(second["processed"], 0)
+            store.close()
+
     def test_executable_vertical_slice_seed_run_assert(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -536,6 +574,18 @@ class MemoryStoreTests(unittest.TestCase):
                     "assistant_text": "Reuse the winning-title pattern.",
                 },
             )
+            queued = handle_api_request(
+                store,
+                "/after-saved-turn",
+                {
+                    "thread_id": "api-thread",
+                    "scope": "professional",
+                    "user_text": "Queue this Keeper API job.",
+                    "assistant_text": "Queued.",
+                    "keeper_mode": "queued",
+                },
+            )
+            worker = handle_api_request(store, "/worker/run", {"limit": 1, "actor": "api-worker"})
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -544,6 +594,8 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(review["candidates"])
             self.assertTrue(before["router_run_id"].startswith("router_"))
             self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
+            self.assertEqual(queued["status"], "queued")
+            self.assertEqual(worker["processed"], 1)
             store.close()
 
 

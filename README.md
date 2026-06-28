@@ -45,6 +45,7 @@ Included now:
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Scope access enforcement for runtime memory retrieval.
+- Queued Keeper jobs and `worker` processing.
 - Local stdlib HTTP API service: `serve`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
@@ -302,13 +303,17 @@ agent-memory before-model-call "Plan the next SEO loop" \
 agent-memory after-saved-turn \
   --thread-id seo-demo \
   --scope professional \
+  --keeper-mode queued \
   --user-text "Plan the next SEO loop" \
   --assistant-text "Use the prior successful refresh pattern."
+
+agent-memory worker --db .memory/demo.db --once --limit 10
 ```
 
 The first command returns a provider-neutral prompt envelope with a selected
 `MEMORY_TREE_SUPPLEMENT`. The second command records the exchange and creates
-reviewable Keeper candidates.
+reviewable Keeper candidates in sync mode or queues the Keeper job in queued
+mode. The worker command processes queued Keeper jobs.
 
 ## Implementation Plan
 

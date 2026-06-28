@@ -95,6 +95,7 @@ class HermesMemoryProvider:
         assistant_text: str = "",
         turn_id: str = "",
         auto_approve: bool = False,
+        keeper_mode: str = "sync",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.store.after_saved_turn(
@@ -107,8 +108,12 @@ class HermesMemoryProvider:
             assistant_text=assistant_text,
             turn_id=turn_id,
             auto_approve=auto_approve,
+            keeper_mode=keeper_mode,
             metadata=metadata,
         )
+
+    def process_keeper_jobs(self, limit: int = 10, actor: str = "hermes-worker") -> dict[str, Any]:
+        return self.store.process_keeper_jobs(limit=limit, actor=actor)
 
     def record_turn(
         self,

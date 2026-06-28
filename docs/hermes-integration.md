@@ -111,6 +111,7 @@ Useful endpoints:
 - `POST /search`
 - `POST /review/list`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
+- `POST /worker/run`
 
 ## Where To Hook It
 
@@ -215,12 +216,20 @@ agent-memory after-saved-turn \
   --thread-id seo-demo \
   --agent-id writer \
   --model-id gpt-4.1-mini \
+  --keeper-mode queued \
   --user-text "Plan the next SEO content refresh loop." \
   --assistant-text "I will reuse the prior successful refresh pattern."
 ```
 
-This records the exchange and creates Keeper candidates. Those candidates stay
-pending unless policy explicitly allows auto-approval.
+This records the exchange and either creates Keeper candidates immediately
+(`--keeper-mode sync`) or queues a Keeper job (`--keeper-mode queued`). Queued
+jobs can be processed with:
+
+```bash
+agent-memory worker --db .memory/hermes-memory.db --once --limit 10
+```
+
+Candidates stay pending unless policy explicitly allows auto-approval.
 
 A reviewer can approve durable memories:
 

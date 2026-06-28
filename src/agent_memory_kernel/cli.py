@@ -150,6 +150,7 @@ def cmd_after_saved_turn(args: argparse.Namespace) -> int:
             assistant_text=args.assistant_text,
             turn_id=args.turn_id,
             auto_approve=args.approve,
+            keeper_mode=args.keeper_mode,
             metadata=metadata,
         )
     )
@@ -467,6 +468,15 @@ def cmd_slice_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_worker(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.process_keeper_jobs(limit=args.limit, actor=args.actor)
+    store.close()
+    print_json(result)
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     run_server(args.db, host=args.host, port=args.port)
     return 0
@@ -574,6 +584,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--assistant-text", default="")
     p.add_argument("--turn-id", default="")
     p.add_argument("--approve", action="store_true", help="Auto-approve safe Keeper candidates")
+    p.add_argument("--keeper-mode", default="sync", choices=["sync", "queued"], help="Run Keeper now or queue it")
     p.add_argument("--metadata-json", default="{}")
     p.set_defaults(func=cmd_after_saved_turn)
 
@@ -778,6 +789,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp = slice_sub.add_parser("assert", help="Assert the slice fixture satisfies runtime gates")
     add_common_db(sp)
     sp.set_defaults(func=cmd_slice_assert)
+
+    p = sub.add_parser("worker", help="Process queued Keeper jobs")
+    add_common_db(p)
+    p.add_argument("--once", action="store_true", help="Process one batch and exit")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--actor", default="worker")
+    p.set_defaults(func=cmd_worker)
 
     p = sub.add_parser("serve", help="Run the stdlib HTTP API service")
     add_common_db(p)

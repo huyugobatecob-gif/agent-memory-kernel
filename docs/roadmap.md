@@ -79,6 +79,8 @@ separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
 now has a local stdlib HTTP API service through `agent-memory serve`; hosted
 auth and MCP are still backlog. Runtime scope allow/deny enforcement is
 implemented for Router retrieval.
+Queued Keeper jobs and `agent-memory worker --once` are implemented for
+background post-turn processing.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters
