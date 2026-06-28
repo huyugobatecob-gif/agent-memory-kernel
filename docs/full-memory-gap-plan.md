@@ -216,6 +216,9 @@ Already present:
   inbox items include source previews, risk flags, graph previews, review
   history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
   delete, distrust, and expire.
+- Baseline batch review through `agent-memory review batch`, `/review/batch`,
+  Hermes `review_batch()`, and MCP `memory_review_batch`; approve/reject
+  batches support dry-run and per-candidate results.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -263,7 +266,7 @@ Remaining for full memory:
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local
   capability/consent report for read/write/promote/inject/export/delete.
-- Broader inspection flows for export governance, batch review, and web UI
+- Broader inspection flows for export governance, batch correction, and web UI
   review beyond the baseline Router explain, post-turn memory-change, and
   review inbox endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
@@ -288,8 +291,9 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review web UI, graph browser, batch review, and notification queue
-  beyond the baseline machine-readable review inbox.
+- Human review web UI, graph browser, batch correction, and notification queue
+  beyond the baseline machine-readable review inbox and approve/reject batch
+  flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
@@ -670,8 +674,10 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli review --db /tmp/amk-full-memo
 Hermes `review_inbox()`, and MCP `memory_review_inbox` provide a
 machine-readable operator queue with source preview, risk flags, graph preview,
 review history, audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose
-correct/delete/distrust/expire lifecycle actions. Remaining work is a browser
-review UI, graph browser, batch review, export controls, and reviewer
+correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
+`/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch` provide
+approve/reject batches with dry-run and per-item results. Remaining work is a
+browser review UI, graph browser, batch correction, export controls, and reviewer
 notifications.
 
 ### Step 14: Harden Prompt Boundary And Source Trust

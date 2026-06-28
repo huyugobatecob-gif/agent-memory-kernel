@@ -44,6 +44,17 @@ agent-memory review --db .memory/demo.db approve cand_xxxxxxxxxxxxxxxx --actor r
 agent-memory review --db .memory/demo.db reject cand_xxxxxxxxxxxxxxxx --actor reviewer
 ```
 
+Batch review:
+
+```bash
+agent-memory review --db .memory/demo.db batch approve cand_a cand_b --actor reviewer --dry-run
+agent-memory review --db .memory/demo.db batch reject cand_a cand_b --actor reviewer --reason "low quality"
+```
+
+Batch responses return one result per candidate. A missing, already-active, or
+policy-blocked candidate is reported on that item without hiding the rest of
+the batch unless `--stop-on-error` is set.
+
 Active memory lifecycle:
 
 ```bash
@@ -56,6 +67,7 @@ agent-memory expire --db .memory/demo.db mem_xxxxxxxxxxxxxxxx --actor reviewer
 HTTP endpoints:
 
 - `POST /review/inbox`
+- `POST /review/batch`
 - `POST /review/approve`
 - `POST /review/reject`
 - `POST /memory/correct`
@@ -66,6 +78,7 @@ HTTP endpoints:
 MCP tools:
 
 - `memory_review_inbox`
+- `memory_review_batch`
 - `memory_review_approve`
 - `memory_review_reject`
 - `memory_correct`
@@ -80,9 +93,11 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
 1. Call `memory_changes` to inspect what the turn changed.
 2. Call `review inbox --status open` or `memory_review_inbox` to see all
    pending/quarantined candidates in operator form.
-3. Approve only candidates that are safe, scoped correctly, and useful.
-4. Reject quarantined or low-quality candidates.
-5. Use correct/delete/distrust/expire on already active memories when the
+3. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
+   approve/reject policy before mutating memory.
+4. Approve only candidates that are safe, scoped correctly, and useful.
+5. Reject quarantined or low-quality candidates.
+6. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -94,7 +109,7 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 
 - browser-based review UI;
 - graph browser with source previews;
-- batch approve/reject;
+- browser-assisted batch approve/reject;
 - conflict warnings inline with candidates;
 - export controls and retention policy;
 - reviewer assignment and notification queues.

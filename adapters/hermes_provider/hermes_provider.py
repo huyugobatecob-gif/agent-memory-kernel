@@ -226,6 +226,25 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.review_inbox(status=status, scope=scope, limit=limit)
 
+    def review_batch(
+        self,
+        *,
+        action: str,
+        candidate_ids: list[str],
+        actor: str = "hermes",
+        reason: str = "",
+        dry_run: bool = False,
+        stop_on_error: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.review_batch(
+            action=action,
+            candidate_ids=candidate_ids,
+            actor=actor,
+            reason=reason,
+            dry_run=dry_run,
+            stop_on_error=stop_on_error,
+        )
+
     def operational_status(
         self,
         *,

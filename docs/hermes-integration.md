@@ -103,6 +103,9 @@ class HermesMemoryProvider:
     def review_inbox(self, status: str = "open", scope: str | None = None, limit: int = 50) -> dict:
         ...
 
+    def review_batch(self, action: str, candidate_ids: list[str], actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
     def approve_candidate(self, candidate_id: str, actor: str = "reviewer", reason: str = "") -> dict:
         ...
 
@@ -242,6 +245,7 @@ Useful endpoints:
 - `POST /capability/check`
 - `POST /search`
 - `POST /review/inbox`
+- `POST /review/batch`
 - `POST /review/list`
 - `POST /review/approve`
 - `POST /review/reject`
@@ -382,6 +386,9 @@ risk flags, graph previews, review history, audit trail, and CLI/HTTP/MCP
 handles for approve/reject or active-memory correct/delete/distrust/expire.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
+For multiple candidates, Hermes can call `review_batch()` or MCP
+`memory_review_batch` with `dry_run=true` first, then run the approve/reject
+batch after the operator confirms the item-level results.
 
 Lower-level context builder call:
 

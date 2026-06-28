@@ -82,6 +82,7 @@ Included now:
 - Combined Router/Keeper/usage observability report for memory operations.
 - Operator review inbox with source previews, risk flags, graph previews, audit
   trail, and CLI/HTTP/MCP action handles.
+- Batch review for approve/reject with dry-run and per-candidate results.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
@@ -141,6 +142,7 @@ Review candidates:
 ```bash
 agent-memory review --db .memory/demo.db list --status pending
 agent-memory review --db .memory/demo.db inbox --status open --scope professional
+agent-memory review --db .memory/demo.db batch approve cand_a cand_b --dry-run
 ```
 
 Approve one candidate:
@@ -272,7 +274,8 @@ handles, and audit trail for a post-turn memory update.
 For a consolidated operator queue, use `review inbox`. It includes source
 event excerpts, Keeper extraction preview, risk flags, review history, audit
 trail, and ready-to-call CLI/HTTP/MCP handles for approve, reject, correct,
-delete, distrust, or expire.
+delete, distrust, or expire. Use `review batch` to approve or reject multiple
+candidates with one per-candidate result and optional `--dry-run`.
 
 Record whether selected memory helped and inspect quality signals:
 
@@ -611,7 +614,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_build_prompt_context`, `memory_after_saved_turn`, `memory_after_turn`,
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
-`memory_review_inbox`, `memory_review_approve`, `memory_review_reject`,
+`memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,

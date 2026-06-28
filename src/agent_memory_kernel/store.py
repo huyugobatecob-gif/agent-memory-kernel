@@ -97,6 +97,7 @@ DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
+REVIEW_BATCH_VERSION = "review-batch-v0.1"
 SCHEMA_VERSION = 1
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
@@ -1446,6 +1447,93 @@ class MemoryStore:
             "count": len(items),
             "summary": summary,
             "items": items,
+        }
+
+    def review_batch(
+        self,
+        *,
+        action: str,
+        candidate_ids: list[str],
+        actor: str = "reviewer",
+        reason: str = "",
+        dry_run: bool = False,
+        stop_on_error: bool = False,
+    ) -> dict[str, Any]:
+        """Approve or reject several review candidates with per-item results."""
+        action = (action or "").strip().lower()
+        if action not in {"approve", "reject"}:
+            raise ValueError("review batch action must be approve or reject")
+        seen: set[str] = set()
+        ordered_ids: list[str] = []
+        for candidate_id in candidate_ids or []:
+            item = str(candidate_id).strip()
+            if item and item not in seen:
+                seen.add(item)
+                ordered_ids.append(item)
+        if not ordered_ids:
+            raise ValueError("candidate_ids must not be empty")
+
+        results: list[dict[str, Any]] = []
+        for candidate_id in ordered_ids:
+            result: dict[str, Any] = {
+                "candidate_id": candidate_id,
+                "action": action,
+                "dry_run": bool(dry_run),
+            }
+            try:
+                candidate = self._candidate(candidate_id)
+                if candidate is None:
+                    raise KeyError(f"candidate not found: {candidate_id}")
+                result.update(
+                    {
+                        "scope": candidate["scope"],
+                        "before_status": candidate["status"],
+                        "reason": reason,
+                    }
+                )
+                policy = self._resolve_write_policy(actor, candidate["scope"], action)
+                result["policy"] = policy
+                if dry_run:
+                    result["status"] = "blocked" if policy["decision"] == "deny" else f"would_{action}"
+                    if policy["decision"] == "deny":
+                        result["error"] = policy["reason"] or f"{action} denied by write policy"
+                elif action == "approve":
+                    memory_id = self.approve_candidate(candidate_id, actor=actor, reason=reason)
+                    result.update(
+                        {
+                            "status": "approved",
+                            "after_status": "approved",
+                            "memory_id": memory_id,
+                        }
+                    )
+                else:
+                    self.reject_candidate(candidate_id, actor=actor, reason=reason)
+                    result.update({"status": "rejected", "after_status": "rejected"})
+            except Exception as exc:
+                result["status"] = "error"
+                result["error"] = str(exc)
+                results.append(result)
+                if stop_on_error:
+                    break
+                continue
+            results.append(result)
+
+        summary: dict[str, int] = {}
+        for item in results:
+            item_status = str(item["status"])
+            summary[item_status] = summary.get(item_status, 0) + 1
+        completed = len(results) == len(ordered_ids)
+        return {
+            "version": REVIEW_BATCH_VERSION,
+            "action": action,
+            "actor": actor,
+            "dry_run": bool(dry_run),
+            "stop_on_error": bool(stop_on_error),
+            "requested_count": len(ordered_ids),
+            "processed_count": len(results),
+            "completed": completed,
+            "summary": summary,
+            "results": results,
         }
 
     def operational_status(

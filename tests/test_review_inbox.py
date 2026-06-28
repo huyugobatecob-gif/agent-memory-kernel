@@ -171,6 +171,110 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(store.search("corrected", scope="professional"), [])
             store.close()
 
+    def test_review_batch_dry_run_and_per_item_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db", extractor=InboxExtractor())
+            store.init_db()
+            first_id = store.remember(
+                "Decision: batch-site first candidate is safe.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+            second_id = store.remember(
+                "Decision: batch-site second candidate is safe.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+
+            dry_run = store.review_batch(
+                action="approve",
+                candidate_ids=[first_id, second_id],
+                actor="reviewer",
+                reason="batch dry run",
+                dry_run=True,
+            )
+            self.assertEqual(dry_run["version"], "review-batch-v0.1")
+            self.assertEqual(dry_run["summary"], {"would_approve": 2})
+            self.assertEqual(store.search("batch-site", scope="professional"), [])
+
+            applied = store.review_batch(
+                action="approve",
+                candidate_ids=[first_id, "cand_missing", second_id],
+                actor="reviewer",
+                reason="batch approve",
+            )
+            self.assertEqual(applied["summary"]["approved"], 2)
+            self.assertEqual(applied["summary"]["error"], 1)
+            self.assertEqual(len(store.search("batch-site", scope="professional")), 2)
+            store.close()
+
+    def test_review_batch_http_mcp_and_provider_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "memory.db"
+            store = MemoryStore(db, extractor=InboxExtractor())
+            store.init_db()
+            http_id = store.remember(
+                "Decision: batch-site HTTP candidate should be rejected.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+            mcp_id = store.remember(
+                "Decision: batch-site MCP candidate should be rejected.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+
+            rejected = handle_api_request(
+                store,
+                "/review/batch",
+                {
+                    "action": "reject",
+                    "candidate_ids": [http_id],
+                    "actor": "reviewer",
+                    "reason": "batch reject",
+                },
+            )
+            self.assertEqual(rejected["summary"], {"rejected": 1})
+            store.close()
+
+            server = MCPMemoryServer(db)
+            called = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_review_batch",
+                        "arguments": {
+                            "action": "reject",
+                            "candidate_ids": [mcp_id],
+                            "actor": "reviewer",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(called["result"]["isError"])
+            self.assertEqual(called["result"]["structuredContent"]["summary"], {"rejected": 1})
+
+            provider = HermesMemoryProvider(db, extractor=InboxExtractor())
+            provider_id = provider.store.remember(
+                "Decision: batch-site provider candidate should approve.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+            approved = provider.review_batch(
+                action="approve",
+                candidate_ids=[provider_id],
+                actor="reviewer",
+            )
+            self.assertEqual(approved["summary"], {"approved": 1})
+            provider.close()
+
     def test_hermes_provider_exposes_review_inbox_and_lifecycle_wrappers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             provider = HermesMemoryProvider(Path(tmp) / "memory.db", extractor=InboxExtractor())

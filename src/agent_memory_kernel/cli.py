@@ -161,6 +161,23 @@ def cmd_review_inbox(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review_batch(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.review_batch(
+            action=args.action,
+            candidate_ids=args.candidate_ids,
+            actor=args.actor,
+            reason=args.reason,
+            dry_run=args.dry_run,
+            stop_on_error=args.stop_on_error,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_review_approve(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1142,6 +1159,15 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     rp.add_argument("--limit", type=int, default=50)
     rp.set_defaults(func=cmd_review_inbox)
+
+    rp = review_sub.add_parser("batch", help="Approve or reject multiple review candidates")
+    rp.add_argument("action", choices=["approve", "reject"])
+    rp.add_argument("candidate_ids", nargs="+")
+    rp.add_argument("--actor", default="reviewer")
+    rp.add_argument("--reason", default="")
+    rp.add_argument("--dry-run", action="store_true")
+    rp.add_argument("--stop-on-error", action="store_true")
+    rp.set_defaults(func=cmd_review_batch)
 
     rp = review_sub.add_parser("approve", help="Promote a candidate to active memory")
     rp.add_argument("candidate_id")

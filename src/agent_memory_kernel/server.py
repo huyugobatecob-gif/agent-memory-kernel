@@ -255,6 +255,20 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         )
     if path == "/review/list":
         return {"candidates": store.list_candidates(str(payload.get("status", "pending")))}
+    if path == "/review/batch":
+        raw_ids = payload.pop("candidate_ids", [])
+        if isinstance(raw_ids, str):
+            candidate_ids = [item.strip() for item in raw_ids.split(",") if item.strip()]
+        else:
+            candidate_ids = [str(item) for item in raw_ids]
+        return store.review_batch(
+            action=str(payload.pop("action")),
+            candidate_ids=candidate_ids,
+            actor=str(payload.pop("actor", "reviewer")),
+            reason=str(payload.pop("reason", "")),
+            dry_run=bool(payload.pop("dry_run", False)),
+            stop_on_error=bool(payload.pop("stop_on_error", False)),
+        )
     if path == "/review/approve":
         candidate_id = str(payload.pop("candidate_id"))
         return {"memory_id": store.approve_candidate(candidate_id, **payload), "status": "active"}

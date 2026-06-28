@@ -338,6 +338,25 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_review_batch": {
+        "endpoint": "/review/batch",
+        "description": "Approve or reject multiple review candidates with per-item results.",
+        "inputSchema": _schema(
+            {
+                "action": _string("Batch action: approve or reject."),
+                "candidate_ids": {
+                    "type": "array",
+                    "description": "Candidate ids to process.",
+                    "items": {"type": "string"},
+                },
+                "actor": _string("Reviewing actor.", "mcp"),
+                "reason": _string("Shared review reason.", ""),
+                "dry_run": _boolean("Preview policy and per-item results without mutating memory.", False),
+                "stop_on_error": _boolean("Stop processing after the first item error.", False),
+            },
+            ["action", "candidate_ids"],
+        ),
+    },
     "memory_review_approve": {
         "endpoint": "/review/approve",
         "description": "Approve a pending memory candidate.",

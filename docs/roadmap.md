@@ -166,6 +166,9 @@ inbox`, `/review/inbox`, the Hermes provider wrapper, and MCP
 previews, review history, audit trail, and CLI/HTTP/MCP handles for approve,
 reject, correct, delete, distrust, and expire. HTTP and MCP also expose
 correct/delete/distrust/expire lifecycle endpoints/tools.
+Baseline batch review is implemented through `agent-memory review batch`,
+`/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
+Approve/reject batches support dry-run and per-candidate results.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -230,7 +233,7 @@ Goal: make memory maintenance practical for non-technical users.
 Planned:
 
 - browser UI over the existing review inbox API;
-- batch approve/reject/correct flows;
+- browser-assisted batch correction flows;
 - richer source preview;
 - graph browser;
 - conflict warnings;
