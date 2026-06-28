@@ -90,30 +90,33 @@ Already present:
 - Semantic analysis slots for facts, chronology, key topics, people, events, and verified entities.
 - Personal and professional lanes.
 - Memory Tree Pack and full context builder output.
+- Provider-neutral prompt envelope via `before_model_call`.
+- Post-turn Keeper candidate path via `after_saved_turn`.
+- Deterministic `slice seed/run/assert` vertical fixture.
+- Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
+- Local stdlib HTTP API service for runtime hooks and review/list operations.
 - CLI and tests.
 
-Missing for full memory:
+Remaining for full memory:
 
-- Automatic pre-turn context retrieval before every agent/model call.
-- Automatic post-turn Keeper analysis after every user/assistant exchange.
+- Automatic pre-turn context retrieval inside each external orchestrator.
+- Automatic post-turn Keeper analysis inside each external orchestrator.
 - Production LLM-backed Keeper that can extract structured graph updates from natural language.
-- Memory Router that ranks graph branches and returns expanded node content, not tags.
-- Prompt envelope builder with explicit memory supplement placement and token budgeting.
+- Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
+- Deeper prompt budget adapters per model provider.
 - Guarded brain/style system-prompt append derived from graph analytics.
-- Hermes runtime hooks that call memory before and after agent work.
+- Production Hermes runtime hooks that call memory before and after agent work.
 - Background worker or service mode for queued Keeper jobs.
-- API/MCP server for agents that should not shell out to the CLI.
+- MCP server for agents that should not use CLI or HTTP directly.
 - Provider embeddings and semantic reranking.
 - First-class outcome memory for success/failure loops.
 - Human review UI or inbox.
 - Explicit identity, scope, permission, and tenancy rules.
 - Memory lifecycle propagation for correct, delete, distrust, expire, and
   conflict operations across summaries, graph nodes, and cached context packs.
-- Provider-neutral prompt context that can be adapted across main models.
-- End-to-end fixture proving save, route, inject, answer, ingest, review, and
-  correction behavior.
-- Stronger prompt-injection, source trust, and secret handling.
+- Broader provider adapters for the prompt envelope.
+- Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.
 
 ---

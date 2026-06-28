@@ -76,17 +76,21 @@ Current status: the first local runtime hook slice exists through
 Router/envelope/Keeper candidate loop. The richer `slice seed/run/assert`
 fixture now checks corrected memory, deleted memory, professional/personal lane
 separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
-still requires the remaining permission and service-mode gates above.
+now has a local stdlib HTTP API service through `agent-memory serve`; hosted
+auth, MCP, and the remaining permission gates are still backlog.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters
 
 Goal: let agent frameworks use the kernel without copy-pasting logic.
 
-Planned:
+Implemented now:
 
 - Hermes provider adapter;
 - simple HTTP API;
+
+Planned:
+
 - MCP server;
 - file-based vault adapter;
 - optional OpenAI extractor;

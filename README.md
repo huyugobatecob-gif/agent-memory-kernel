@@ -44,6 +44,7 @@ Included now:
 - Active memory search.
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
+- Local stdlib HTTP API service: `serve`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
 - Persistent memory graph nodes and edges.
@@ -64,7 +65,7 @@ Included now:
 
 Not included yet:
 
-- hosted API server;
+- hosted multi-user API server;
 - web UI;
 - provider embeddings;
 - production LLM Keeper/extractor;
@@ -370,6 +371,7 @@ src/agent_memory_kernel/
   cli.py                 CLI commands
   store.py               SQLite-backed memory store
   policy.py              safety and admission policy
+  server.py              stdlib HTTP API service
   schema.sql             database schema
   slice.py               deterministic full-memory vertical slice fixture
   extractors/            deterministic v0 extractor and extension seams

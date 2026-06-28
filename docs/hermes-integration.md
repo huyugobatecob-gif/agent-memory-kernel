@@ -96,6 +96,22 @@ The runtime hook pair is the preferred full-memory path. The older
 `context_pack`, `tree_pack`, and `record_turn` methods remain useful as smaller
 building blocks.
 
+Hermes can call the same hooks through the local HTTP service:
+
+```bash
+agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
+```
+
+Useful endpoints:
+
+- `GET /health`
+- `POST /before-model-call`
+- `POST /after-saved-turn`
+- `POST /remember`
+- `POST /search`
+- `POST /review/list`
+- `POST /slice/seed`, `/slice/run`, `/slice/assert`
+
 ## Where To Hook It
 
 ### Before Planning

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from agent_memory_kernel import MemoryStore
+from agent_memory_kernel.server import handle_api_request
 from agent_memory_kernel.slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 
 
@@ -447,6 +448,46 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(asserted["status"], "passed")
             self.assertTrue(asserted["checks"]["poisoning_quarantined"])
             self.assertTrue(asserted["checks"]["personal_lane_excluded"])
+            store.close()
+
+    def test_http_api_dispatcher_runtime_endpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            health = handle_api_request(store, "/health", {})
+            seeded = handle_api_request(store, "/slice/seed", {})
+            ran = handle_api_request(store, "/slice/run", {})
+            asserted = handle_api_request(store, "/slice/assert", {})
+            review = handle_api_request(store, "/review/list", {"status": "pending"})
+
+            before = handle_api_request(
+                store,
+                "/before-model-call",
+                {
+                    "query": "Plan the next slice-site SEO loop.",
+                    "thread_id": "api-thread",
+                    "scope": "professional",
+                },
+            )
+            after = handle_api_request(
+                store,
+                "/after-saved-turn",
+                {
+                    "thread_id": "api-thread",
+                    "scope": "professional",
+                    "user_text": "Plan the next slice-site SEO loop.",
+                    "assistant_text": "Reuse the winning-title pattern.",
+                },
+            )
+
+            self.assertEqual(health["status"], "ok")
+            self.assertEqual(seeded["status"], "seeded")
+            self.assertEqual(ran["status"], "ran")
+            self.assertEqual(asserted["status"], "passed")
+            self.assertTrue(review["candidates"])
+            self.assertTrue(before["router_run_id"].startswith("router_"))
+            self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
             store.close()
 
 

@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
 
@@ -464,6 +465,11 @@ def cmd_slice_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    run_server(args.db, host=args.host, port=args.port)
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -768,6 +774,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp = slice_sub.add_parser("assert", help="Assert the slice fixture satisfies runtime gates")
     add_common_db(sp)
     sp.set_defaults(func=cmd_slice_assert)
+
+    p = sub.add_parser("serve", help="Run the stdlib HTTP API service")
+    add_common_db(p)
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("export", help="Export active memories to a markdown vault")
     add_common_db(p)
