@@ -80,8 +80,9 @@ Included now:
   for contract tests and local operation.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report for memory operations.
-- Operator review inbox with source previews, risk flags, graph previews, audit
-  trail, and CLI/HTTP/MCP action handles.
+- Operator review inbox with source previews, risk flags, inline
+  possible-conflict warnings, graph previews, audit trail, and CLI/HTTP/MCP
+  action handles.
 - Batch review for approve/reject with dry-run and per-candidate results.
 - Batch lifecycle correction for active memories with dry-run and per-item
   results.
@@ -287,10 +288,11 @@ promoted active memories, affected graph/context surfaces, review or lifecycle
 handles, and audit trail for a post-turn memory update.
 
 For a consolidated operator queue, use `review inbox`. It includes source
-event excerpts, Keeper extraction preview, risk flags, review history, audit
-trail, and ready-to-call CLI/HTTP/MCP handles for approve, reject, correct,
-delete, distrust, or expire. Use `review batch` to approve or reject multiple
-candidates with one per-candidate result and optional `--dry-run`.
+event excerpts, Keeper extraction preview, risk flags, inline
+possible-conflict warnings against active memory, review history, audit trail,
+and ready-to-call CLI/HTTP/MCP handles for approve, reject, correct, delete,
+distrust, or expire. Use `review batch` to approve or reject multiple candidates
+with one per-candidate result and optional `--dry-run`.
 
 Record whether selected memory helped and inspect quality signals:
 

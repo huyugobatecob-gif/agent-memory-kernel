@@ -9468,6 +9468,73 @@ class MemoryStore:
             "facts": facts[:8],
         }
 
+    def _review_conflict_warnings(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+        candidate = item["candidate"]
+        status = str(candidate.get("status") or "")
+        if status not in {"pending", "quarantined"}:
+            return []
+        candidate_text = str(candidate.get("proposed_text") or "")
+        candidate_tokens = set(query_tokens(candidate_text))
+        if len(candidate_tokens) < 3:
+            return []
+        candidate_id = str(candidate.get("candidate_id") or "")
+        scope = str(candidate.get("scope") or "professional")
+        kind = str(candidate.get("kind") or "")
+        rows = self.conn.execute(
+            """
+            SELECT memory_id, candidate_id, created_at, updated_at, text,
+                   kind, scope, confidence, sensitivity, source_trust,
+                   status, expires_at
+            FROM memories
+            WHERE scope = ?
+              AND status = 'active'
+              AND (? = '' OR kind = ?)
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 200
+            """,
+            (scope, kind, kind),
+        ).fetchall()
+        warnings: list[dict[str, Any]] = []
+        normalized_candidate_text = candidate_text.strip().lower()
+        for row in rows:
+            if str(row["candidate_id"] or "") == candidate_id:
+                continue
+            memory_text = str(row["text"] or "")
+            if memory_text.strip().lower() == normalized_candidate_text:
+                continue
+            memory_tokens = set(query_tokens(memory_text))
+            if len(memory_tokens) < 3:
+                continue
+            common_tokens = candidate_tokens & memory_tokens
+            overlap_ratio = len(common_tokens) / max(
+                1,
+                min(len(candidate_tokens), len(memory_tokens)),
+            )
+            jaccard = len(common_tokens) / max(1, len(candidate_tokens | memory_tokens))
+            if len(common_tokens) < 3 or (overlap_ratio < 0.5 and jaccard < 0.35):
+                continue
+            warnings.append(
+                {
+                    "type": "possible_conflict",
+                    "severity": "medium",
+                    "memory_id": row["memory_id"],
+                    "memory_candidate_id": row["candidate_id"] or "",
+                    "kind": row["kind"],
+                    "scope": row["scope"],
+                    "memory_text_excerpt": self._excerpt(memory_text, 360),
+                    "overlap_tokens": sorted(common_tokens)[:12],
+                    "overlap_ratio": round(overlap_ratio, 4),
+                    "jaccard": round(jaccard, 4),
+                    "reason": (
+                        "candidate overlaps an active memory in the same "
+                        "scope/kind; review before approving"
+                    ),
+                }
+            )
+            if len(warnings) >= 5:
+                break
+        return warnings
+
     def _review_recommendation(self, item: dict[str, Any]) -> dict[str, Any]:
         candidate = item["candidate"]
         source_event = item["source_event"]
@@ -9500,10 +9567,22 @@ class MemoryStore:
             flag("prompt_injection_like", "high", reason)
         if "secret" in lowered_reason:
             flag("secret_like_reason", "high", reason)
+        conflict_warnings = self._review_conflict_warnings(item)
+        if conflict_warnings:
+            flag(
+                "possible_conflict",
+                "medium",
+                f"{len(conflict_warnings)} overlapping active memory candidate(s)",
+            )
 
         high_risk = any(flag_item["severity"] == "high" for flag_item in flags)
         if status == "pending":
-            recommended_action = "approve_or_correct" if not high_risk else "reject_or_correct"
+            if high_risk:
+                recommended_action = "reject_or_correct"
+            elif conflict_warnings:
+                recommended_action = "review_conflict_or_correct"
+            else:
+                recommended_action = "approve_or_correct"
         elif status == "quarantined":
             recommended_action = "reject_or_manually_rewrite"
         elif status == "approved":
@@ -9517,6 +9596,7 @@ class MemoryStore:
             "needs_human_review": status in {"pending", "quarantined"} or bool(flags),
             "recommended_action": recommended_action,
             "risk_flags": flags,
+            "conflict_warnings": conflict_warnings,
             "prompt_surface": "review_inbox" if status in {"pending", "quarantined"} else "memory_lifecycle",
         }
 

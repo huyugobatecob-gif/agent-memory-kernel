@@ -213,9 +213,10 @@ Already present:
   promoted memories, affected surfaces, handles, and audit trail.
 - Baseline operator review inbox through `agent-memory review inbox`,
   `/review/inbox`, the Hermes provider wrapper, and MCP `memory_review_inbox`;
-  inbox items include source previews, risk flags, graph previews, review
-  history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
-  delete, distrust, and expire.
+  inbox items include source previews, risk flags, inline possible-conflict
+  warnings against active memory, graph previews, review history, audit trail,
+  and CLI/HTTP/MCP handles for approve, reject, correct, delete, distrust, and
+  expire.
 - Baseline batch review through `agent-memory review batch`, `/review/batch`,
   Hermes `review_batch()`, and MCP `memory_review_batch`; approve/reject
   batches support dry-run and per-candidate results.
@@ -332,8 +333,8 @@ Remaining for full memory:
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review web UI, graph browser UI, browser-assisted batch correction,
   push/email/web notification transports beyond the baseline
-  machine-readable review inbox, notification queue, approve/reject batch flow,
-  and active-memory lifecycle batch flow.
+  machine-readable review inbox with inline conflict warnings, notification
+  queue, approve/reject batch flow, and active-memory lifecycle batch flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
@@ -712,9 +713,10 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli review --db /tmp/amk-full-memo
 
 **Result:** Baseline implemented. `agent-memory review inbox`, `/review/inbox`,
 Hermes `review_inbox()`, and MCP `memory_review_inbox` provide a
-machine-readable operator queue with source preview, risk flags, graph preview,
-review history, audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose
-correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
+machine-readable operator queue with source preview, risk flags, inline
+possible-conflict warnings against active memory, graph preview, review history,
+audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose the matching
+lifecycle actions. `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch` provide
 approve/reject batches with dry-run and per-item results. `agent-memory
 lifecycle-batch`, `/memory/lifecycle-batch`, Hermes

@@ -90,6 +90,41 @@ class ReviewInboxTests(unittest.TestCase):
             )
             store.close()
 
+    def test_review_inbox_warns_when_candidate_overlaps_active_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db", extractor=InboxExtractor())
+            store.init_db()
+            active = store.remember(
+                "Decision: conflict-site owner is Alice.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            candidate_id = store.remember(
+                "Decision: conflict-site owner is Bob.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+            )["candidates"][0]["candidate_id"]
+
+            inbox = store.review_inbox(status="open", scope="professional")
+
+            by_id = {item["candidate"]["candidate_id"]: item for item in inbox["items"]}
+            item = by_id[candidate_id]
+            self.assertEqual(
+                item["review"]["recommended_action"],
+                "review_conflict_or_correct",
+            )
+            self.assertEqual(item["review"]["conflict_warnings"][0]["memory_id"], active)
+            self.assertIn(
+                "owner",
+                item["review"]["conflict_warnings"][0]["overlap_tokens"],
+            )
+            risk_flags = {flag["flag"] for flag in item["review"]["risk_flags"]}
+            self.assertIn("possible_conflict", risk_flags)
+            store.close()
+
     def test_approved_inbox_items_include_lifecycle_handles(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db", extractor=InboxExtractor())

@@ -74,7 +74,8 @@ Operator and graph tools:
 - `memory_remember`: record a candidate or policy-approved memory.
 - `memory_review_list`: list review candidates.
 - `memory_review_inbox`: show review candidates with source context, risk
-  flags, graph preview, audit trail, and operator handles.
+  flags, inline possible-conflict warnings, graph preview, audit trail, and
+  operator handles.
 - `memory_review_batch`: approve or reject multiple review candidates with
   dry-run and per-item results.
 - `memory_review_approve`: approve a candidate.

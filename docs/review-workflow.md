@@ -137,13 +137,15 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
 4. Assign notifications to a reviewer when a human owner is needed.
 5. Filter `sla_status=overdue` or call `memory_notification_escalations` for
    escalation candidates before long-running review queues drift.
-6. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
+6. Read `review.risk_flags`, `review.conflict_warnings`, `graph_preview`,
+   `audit_trail`, and `operator_handles` before approving.
+7. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
    approve/reject policy before mutating memory.
-7. Approve only candidates that are safe, scoped correctly, and useful.
-8. Reject quarantined or low-quality candidates.
-9. Use `lifecycle-batch --dry-run` or `memory_lifecycle_batch` dry-run when
+8. Approve only candidates that are safe, scoped correctly, and useful.
+9. Reject quarantined or low-quality candidates.
+10. Use `lifecycle-batch --dry-run` or `memory_lifecycle_batch` dry-run when
    several active memories need correction, deletion, distrust, or expiry.
-10. Use correct/delete/distrust/expire on already active memories when the
+11. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -156,6 +158,6 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - browser-based review UI;
 - browser UI over graph browser source previews;
 - browser-assisted batch approve/reject and lifecycle correction;
-- conflict warnings inline with candidates;
+- richer conflict-resolution UI over inline candidate warnings;
 - hosted key-management and export custody controls;
 - push/email/web notification transports.

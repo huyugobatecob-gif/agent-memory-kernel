@@ -479,8 +479,9 @@ agent-memory review --db .memory/hermes-memory.db inbox --status open --scope pr
 ```
 
 or MCP `memory_review_inbox`. The inbox returns candidate source previews,
-risk flags, graph previews, review history, audit trail, and CLI/HTTP/MCP
-handles for approve/reject or active-memory correct/delete/distrust/expire.
+risk flags, inline possible-conflict warnings against active memory, graph
+previews, review history, audit trail, and CLI/HTTP/MCP handles for
+approve/reject or active-memory correct/delete/distrust/expire.
 Hermes can also call `notifications()` or MCP `memory_notifications_list` for a
 single operator queue across pending memory review, sensitive export approval,
 and export-retention cleanup. A notification can be acknowledged without

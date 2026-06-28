@@ -165,9 +165,10 @@ audit trail.
 The baseline operator review inbox is implemented through `agent-memory review
 inbox`, `/review/inbox`, the Hermes provider wrapper, and MCP
 `memory_review_inbox`. It returns candidate source previews, risk flags, graph
-previews, review history, audit trail, and CLI/HTTP/MCP handles for approve,
-reject, correct, delete, distrust, and expire. HTTP and MCP also expose
-correct/delete/distrust/expire lifecycle endpoints/tools.
+previews, inline possible-conflict warnings against active memory, review
+history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
+delete, distrust, and expire. HTTP and MCP also expose the matching lifecycle
+endpoints/tools.
 The baseline operator notification queue is implemented through `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 `memory_notifications_list` / `memory_notification_assign` /
@@ -280,7 +281,7 @@ Planned:
 - browser-assisted batch correction flows;
 - richer source preview;
 - browser UI over graph browser data;
-- conflict warnings;
+- richer conflict-resolution UI over inline warnings;
 - push/email/web notification transports;
 - hosted key-management and export custody controls.
 
