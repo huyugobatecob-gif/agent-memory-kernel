@@ -362,6 +362,18 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_notification_escalations": {
+        "endpoint": "/notifications/escalations",
+        "description": "List SLA-driven notification escalations without sending transports.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "assigned_to": _string("Optional assigned operator filter.", ""),
+                "include_acknowledged": _boolean("Include acknowledged unresolved notifications.", True),
+                "limit": _integer("Maximum escalations.", 50),
+            }
+        ),
+    },
     "memory_notification_assign": {
         "endpoint": "/notifications/assign",
         "description": "Assign an operator notification to a reviewer.",

@@ -37,9 +37,10 @@ The adapter should:
   saved turn and why;
 - expose `review_inbox()` so Hermes can show source previews, risk flags,
   graph previews, audit trail, and operator action handles;
-- expose `notifications()`, `assign_notification()`, `ack_notification()`,
-  and `resolve_notification()` so Hermes can show one operator queue across
-  review, export approval, and retention cleanup;
+- expose `notifications()`, `notification_escalations()`,
+  `assign_notification()`, `ack_notification()`, and `resolve_notification()`
+  so Hermes can show one operator queue across review, export approval, and
+  retention cleanup;
 - expose `review_batch()` so Hermes can approve or reject multiple candidates
   with dry-run and per-item results;
 - expose `batch_memory_lifecycle()` so Hermes can dry-run and apply batch
@@ -218,6 +219,7 @@ After review, preserve the expected behavior:
 provider.review_inbox(status="open", scope="professional")
 provider.notifications(status="open", scope="professional")
 provider.notifications(status="open", sla_status="overdue")
+provider.notification_escalations(scope="professional")
 provider.assign_notification("ntf_xxxxxxxxxxxxxxxx", assigned_to="reviewer-a", actor="lead")
 provider.review_batch(action="approve", candidate_ids=["cand_a", "cand_b"], actor="reviewer", dry_run=True)
 provider.batch_memory_lifecycle(

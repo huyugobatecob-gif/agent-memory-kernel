@@ -102,6 +102,7 @@ HTTP endpoints:
 - `POST /memory/distrust`
 - `POST /memory/expire`
 - `POST /notifications/list`
+- `POST /notifications/escalations`
 - `POST /notifications/assign`
 - `POST /notifications/ack`
 - `POST /notifications/resolve`
@@ -118,6 +119,7 @@ MCP tools:
 - `memory_distrust`
 - `memory_expire`
 - `memory_notifications_list`
+- `memory_notification_escalations`
 - `memory_notification_assign`
 - `memory_notification_ack`
 - `memory_notification_resolve`
@@ -133,8 +135,8 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
    the operator needs one queue across review, export approval, and retention
    cleanup.
 4. Assign notifications to a reviewer when a human owner is needed.
-5. Filter `sla_status=overdue` for escalations before long-running review
-   queues drift.
+5. Filter `sla_status=overdue` or call `memory_notification_escalations` for
+   escalation candidates before long-running review queues drift.
 6. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
    approve/reject policy before mutating memory.
 7. Approve only candidates that are safe, scoped correctly, and useful.
@@ -156,4 +158,4 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - browser-assisted batch approve/reject and lifecycle correction;
 - conflict warnings inline with candidates;
 - hosted key-management and export custody controls;
-- push/email/web notification transports and escalation policies.
+- push/email/web notification transports.

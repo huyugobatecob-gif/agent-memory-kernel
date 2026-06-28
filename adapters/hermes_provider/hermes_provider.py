@@ -251,6 +251,21 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def notification_escalations(
+        self,
+        *,
+        scope: str | None = None,
+        assigned_to: str | None = None,
+        include_acknowledged: bool = True,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.notification_escalations(
+            scope=scope,
+            assigned_to=assigned_to,
+            include_acknowledged=include_acknowledged,
+            limit=limit,
+        )
+
     def assign_notification(
         self,
         notification_id: str,

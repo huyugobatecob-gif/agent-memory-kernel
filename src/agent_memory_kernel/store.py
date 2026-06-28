@@ -104,6 +104,7 @@ MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
+NOTIFICATION_ESCALATION_VERSION = "notification-escalation-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
@@ -1672,6 +1673,60 @@ class MemoryStore:
         )
         self.conn.commit()
         return self._notification_to_dict(self._notification_row(notification_id))
+
+    def notification_escalations(
+        self,
+        *,
+        scope: str | None = None,
+        assigned_to: str | None = None,
+        include_acknowledged: bool = True,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Return SLA-driven notification escalations without sending transports."""
+        requested_limit = max(1, min(int(limit or 50), 200))
+        statuses = ["open", "acknowledged"] if include_acknowledged else ["open"]
+        escalations: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for status in statuses:
+            for sla_status in ["overdue", "due_soon"]:
+                listed = self.list_notifications(
+                    status=status,
+                    scope=scope,
+                    assigned_to=assigned_to,
+                    sla_status=sla_status,
+                    limit=requested_limit,
+                )
+                for notification in listed["notifications"]:
+                    notification_id = str(notification["notification_id"])
+                    if notification_id in seen:
+                        continue
+                    seen.add(notification_id)
+                    escalations.append(
+                        self._notification_escalation_item(notification)
+                    )
+        escalations.sort(
+            key=lambda item: (
+                0 if item["sla_status"] == "overdue" else 1,
+                item["notification"]["sla"].get("seconds_until_due")
+                if item["notification"]["sla"].get("seconds_until_due") is not None
+                else 10**12,
+            )
+        )
+        escalations = escalations[:requested_limit]
+        summary = {
+            "overdue": sum(1 for item in escalations if item["sla_status"] == "overdue"),
+            "due_soon": sum(1 for item in escalations if item["sla_status"] == "due_soon"),
+            "unassigned": sum(1 for item in escalations if not item["notification"]["assigned_to"]),
+        }
+        return {
+            "version": NOTIFICATION_ESCALATION_VERSION,
+            "scope": scope or "all",
+            "assigned_to": assigned_to or "all",
+            "include_acknowledged": bool(include_acknowledged),
+            "count": len(escalations),
+            "summary": summary,
+            "escalations": escalations,
+        }
 
     def assign_notification(
         self,
@@ -11232,6 +11287,35 @@ class MemoryStore:
             "overdue": overdue,
             "due_soon": due_soon,
             "seconds_until_due": seconds_until_due,
+        }
+
+    @staticmethod
+    def _notification_escalation_item(notification: dict[str, Any]) -> dict[str, Any]:
+        sla_status = str(notification["sla"]["status"])
+        unassigned = not bool(notification.get("assigned_to"))
+        if sla_status == "overdue" and unassigned:
+            escalation_level = "critical"
+            recommended_action = "assign_and_escalate_now"
+            reason = "notification is overdue and has no assigned owner"
+        elif sla_status == "overdue":
+            escalation_level = "critical"
+            recommended_action = "escalate_assigned_owner"
+            reason = "notification is overdue"
+        elif unassigned:
+            escalation_level = "warning"
+            recommended_action = "assign_owner_before_due"
+            reason = "notification is due soon and has no assigned owner"
+        else:
+            escalation_level = "warning"
+            recommended_action = "nudge_assigned_owner"
+            reason = "notification is due soon"
+        return {
+            "notification_id": notification["notification_id"],
+            "sla_status": sla_status,
+            "escalation_level": escalation_level,
+            "recommended_action": recommended_action,
+            "reason": reason,
+            "notification": notification,
         }
 
     @staticmethod

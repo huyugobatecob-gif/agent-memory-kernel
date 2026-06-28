@@ -225,6 +225,17 @@ class ReviewInboxTests(unittest.TestCase):
                 store.list_notifications(sla_status="overdue")["count"],
                 1,
             )
+            escalations = handle_api_request(
+                store,
+                "/notifications/escalations",
+                {"assigned_to": "reviewer-a"},
+            )
+            self.assertEqual(escalations["version"], "notification-escalation-v0.1")
+            self.assertEqual(escalations["summary"]["overdue"], 1)
+            self.assertEqual(
+                escalations["escalations"][0]["recommended_action"],
+                "escalate_assigned_owner",
+            )
 
             acknowledged = handle_api_request(
                 store,
@@ -463,6 +474,7 @@ class ReviewInboxTests(unittest.TestCase):
                 provider.notifications(status="open", sla_status="no_due_date")["count"],
                 1,
             )
+            self.assertEqual(provider.notification_escalations()["count"], 0)
             acknowledged = provider.ack_notification(
                 notifications["notifications"][0]["notification_id"],
                 actor="reviewer",

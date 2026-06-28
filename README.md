@@ -86,8 +86,9 @@ Included now:
 - Batch lifecycle correction for active memories with dry-run and per-item
   results.
 - Graph browser data API with nodes, edges, and source previews.
-- Operator notification queue, reviewer assignment, and SLA status filtering
-  for review candidates, export approvals, and expired export artifacts.
+- Operator notification queue, reviewer assignment, SLA status filtering, and
+  escalation reports for review candidates, export approvals, and expired
+  export artifacts.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
@@ -689,7 +690,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_notifications_list`, `memory_notification_assign`, `memory_notification_ack`,
-`memory_notification_resolve`,
+`memory_notification_resolve`, `memory_notification_escalations`,
 `memory_correct`, `memory_lifecycle_batch`, `memory_delete`, `memory_distrust`,
 `memory_expire`, `memory_graph_browser`,
 `memory_export_control`, `memory_export_profile`,

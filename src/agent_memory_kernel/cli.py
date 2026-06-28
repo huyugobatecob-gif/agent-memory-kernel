@@ -227,6 +227,21 @@ def cmd_notifications_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_notifications_escalations(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.notification_escalations(
+            scope=args.scope,
+            assigned_to=args.assigned_to,
+            include_acknowledged=not args.open_only,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_notifications_assign(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1486,6 +1501,13 @@ def build_parser() -> argparse.ArgumentParser:
     np.add_argument("--target-id")
     np.add_argument("--limit", type=int, default=50)
     np.set_defaults(func=cmd_notifications_list)
+
+    np = notifications_sub.add_parser("escalations", help="List SLA-driven notification escalations")
+    np.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    np.add_argument("--assigned-to")
+    np.add_argument("--open-only", action="store_true")
+    np.add_argument("--limit", type=int, default=50)
+    np.set_defaults(func=cmd_notifications_escalations)
 
     np = notifications_sub.add_parser("assign", help="Assign a memory notification to an operator")
     np.add_argument("notification_id")

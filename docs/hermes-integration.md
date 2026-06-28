@@ -106,6 +106,9 @@ class HermesMemoryProvider:
     def notifications(self, status: str = "open", scope: str | None = None, topic: str | None = None, assigned_to: str | None = None, sla_status: str | None = None) -> dict:
         ...
 
+    def notification_escalations(self, scope: str | None = None, assigned_to: str | None = None, include_acknowledged: bool = True) -> dict:
+        ...
+
     def assign_notification(self, notification_id: str, assigned_to: str, actor: str = "reviewer", due_at: str = "", reason: str = "") -> dict:
         ...
 
@@ -269,6 +272,7 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,
 `memory_notification_ack`, `memory_notification_resolve`,
+`memory_notification_escalations`,
 `memory_lifecycle_batch`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
@@ -311,6 +315,7 @@ Useful endpoints:
 - `POST /memory/lifecycle-batch`
 - `POST /graph/browser`
 - `POST /notifications/list`
+- `POST /notifications/escalations`
 - `POST /notifications/assign`
 - `POST /notifications/ack`
 - `POST /notifications/resolve`
@@ -485,6 +490,9 @@ Notifications can also be assigned to a reviewer with optional `due_at`, so
 Hermes can show per-operator queues before a browser UI exists.
 Every notification includes computed SLA metadata from `due_at`; Hermes can
 filter `sla_status=overdue` or `sla_status=due_soon` for escalation queues.
+Hermes can call `notification_escalations()` or MCP
+`memory_notification_escalations` for a policy-only escalation report before
+any push/email/web transport exists.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP

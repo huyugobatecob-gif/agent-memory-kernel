@@ -157,6 +157,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             target_id=payload.get("target_id"),
             limit=int(payload.get("limit", 50) or 50),
         )
+    if path == "/notifications/escalations":
+        return store.notification_escalations(
+            scope=payload.get("scope"),
+            assigned_to=payload.get("assigned_to"),
+            include_acknowledged=bool(payload.get("include_acknowledged", True)),
+            limit=int(payload.get("limit", 50) or 50),
+        )
     if path == "/notifications/assign":
         return store.assign_notification(
             str(payload.get("notification_id", "")),
