@@ -109,9 +109,11 @@ The richer `slice seed/run/assert` fixture now checks corrected memory, deleted
 memory, professional/personal lane separation, success/failure loop retrieval,
 and poisoning quarantine. Full v0.2 now has a local stdlib HTTP API service
 through `agent-memory serve`, optional bearer-token protection, and a local
-stdio MCP server; hosted multi-user auth/RBAC, remote MCP deployment, and live
-rollout across all Hermes agent profiles are still backlog. Runtime scope
-allow/deny enforcement is implemented for Router retrieval.
+stdio MCP server. `docs/production-rollout.md` now documents preflight, shadow
+rollout, worker supervision, local HTTP deployment, stdio MCP deployment,
+observability, and rollback. Hosted multi-user auth/RBAC, hosted remote MCP,
+and live rollout across all Hermes agent profiles are still backlog. Runtime
+scope allow/deny enforcement is implemented for Router retrieval.
 Baseline read-time policy and Router explainability are implemented through
 `prompt_envelope.metadata.read_time_policy`, `selection_decisions`,
 `agent-memory read-time-policy`, `agent-memory router-runs`,

@@ -798,6 +798,9 @@ it without relying on the original planning conversation:
   defines the provider-neutral prompt envelope and Memory Tree Supplement.
 - [docs/security-identity-contract.md](docs/security-identity-contract.md)
   defines identity, permissions, trust, audit, and leakage controls.
+- [docs/production-rollout.md](docs/production-rollout.md) gives the
+  Hermes/MCP rollout playbook: preflight, shadow rollout, worker supervision,
+  API/MCP deployment, observability, and rollback.
 - [docs/end-to-end-vertical-slice.md](docs/end-to-end-vertical-slice.md)
   defines the first executable full-memory scenario.
 

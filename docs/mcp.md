@@ -16,6 +16,11 @@ During development:
 PYTHONPATH=src python3 -m agent_memory_kernel.mcp_server --db /tmp/amk-mcp.db
 ```
 
+For rollout guidance, see [production-rollout.md](production-rollout.md).
+The repository ships a stdio MCP server, not a hosted remote MCP service. Run
+the stdio server on the same host as the agent runtime or pair it with the
+local HTTP API behind a private tunnel or authenticated proxy.
+
 ## Transport
 
 The server uses newline-delimited JSON-RPC over stdio. It implements:

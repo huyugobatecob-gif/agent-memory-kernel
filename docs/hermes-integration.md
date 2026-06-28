@@ -50,6 +50,7 @@ The concrete contracts live in:
 - [memory-lifecycle-contract.md](memory-lifecycle-contract.md)
 - [cross-model-context-contract.md](cross-model-context-contract.md)
 - [security-identity-contract.md](security-identity-contract.md)
+- [production-rollout.md](production-rollout.md)
 - [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md)
 - [memory-contract.md](memory-contract.md)
 

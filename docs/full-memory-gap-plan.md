@@ -334,11 +334,11 @@ Remaining for full memory:
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Broader conformance traces for migration, adapter compatibility, and
   real-world memory behavior beyond the baseline public suite.
-- Production worker supervision beyond the baseline daemon loop, including
-  systemd/launchd examples, restart policies, health alerts, and deployment
+- Production worker supervision beyond the baseline daemon loop and rollout
+  playbook, including managed health alerts and platform-specific deployment
   recipes.
-- Broader hosted/remote MCP deployment patterns for agents that should not use
-  local stdio.
+- Broader hosted/remote MCP deployment patterns beyond the documented local
+  stdio and private HTTP/tunnel guidance.
 - Approximate-nearest-neighbor indexes, live embedding provider certification,
   and production semantic reranking beyond the provider-neutral local contract.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
@@ -662,8 +662,10 @@ AGENT_MEMORY_API_TOKEN=change-me PYTHONPATH=src python3 -m agent_memory_kernel.s
 **Result:** Baseline implemented. The repository now has `agent-memory serve`,
 `agent-memory mcp`, `agent-memory-mcp`, `src/agent_memory_kernel/mcp_server.py`,
 optional bearer-token protection for HTTP, and tests for MCP `initialize`,
-`tools/list`, and `tools/call`. Remaining work is hosted multi-user auth/RBAC,
-remote MCP deployment guidance, and broader production adapter certification.
+`tools/list`, and `tools/call`. `docs/production-rollout.md` documents local
+stdio MCP deployment and private HTTP/tunnel guidance for remote agents.
+Remaining work is hosted multi-user auth/RBAC, a first-class hosted remote MCP
+server, and broader production adapter certification.
 Hermes, Codex, Claude, browser agents, and local tools can share the same
 memory kernel.
 
