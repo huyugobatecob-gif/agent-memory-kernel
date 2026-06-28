@@ -87,8 +87,11 @@ Already present:
 - `memory_items`, `memory_graph_nodes`, `memory_graph_edges`, node evidence, and edge evidence.
 - Keeper run and graph command audit tables.
 - Deterministic rule-based extraction and graph construction.
+- OpenAI-compatible lightweight extractor adapter with deterministic fallback.
 - Semantic analysis slots for facts, chronology, key topics, people, events, and verified entities.
 - Personal and professional lanes.
+- Agent write-policy table and enforcement for record, auto-approve, review,
+  lifecycle, outcome, conflict, and supersession paths.
 - Memory Tree Pack and full context builder output.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
@@ -111,7 +114,8 @@ Remaining for full memory:
 
 - Automatic pre-turn context retrieval inside each external orchestrator.
 - Automatic post-turn Keeper analysis inside each external orchestrator.
-- Production LLM-backed Keeper that can extract structured graph updates from natural language.
+- Production LLM-backed Keeper eval suite, managed model configuration, and
+  reviewed extraction prompts for natural-language graph updates.
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
 - Deeper prompt budget adapters per model provider.
 - Guarded brain/style system-prompt append derived from graph analytics.
@@ -122,7 +126,8 @@ Remaining for full memory:
 - Provider embeddings and semantic reranking.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review UI or inbox.
-- Explicit identity, scope, permission, and tenancy rules.
+- Hosted identity, tenancy, and capability rules beyond the local
+  agent/scope/action write policy.
 - Memory lifecycle propagation for correct, delete, distrust, expire, and
   conflict operations across summaries, graph nodes, and cached context packs.
 - Automatic conflict detection heuristics and current-best-answer resolution.

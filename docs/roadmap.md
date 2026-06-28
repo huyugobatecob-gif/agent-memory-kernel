@@ -22,6 +22,8 @@ Status: implemented in this template.
 - Context packs.
 - Memory Tree Packs.
 - Context builder packs.
+- Agent write-policy enforcement.
+- OpenAI-compatible lightweight extractor adapter.
 - Markdown vault export.
 - Tests.
 
@@ -85,6 +87,9 @@ separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
 now has a local stdlib HTTP API service through `agent-memory serve`; hosted
 auth and MCP are still backlog. Runtime scope allow/deny enforcement is
 implemented for Router retrieval.
+Agent write-policy enforcement is implemented for record, auto-approve,
+approve/reject, correct/delete/distrust/expire, outcome, conflict, and
+supersession write paths.
 Queued Keeper jobs and `agent-memory worker --once` are implemented for
 background post-turn processing.
 Shadow rollout traces are implemented through `agent-memory shadow-turn`,
@@ -112,12 +117,12 @@ Implemented now:
 
 - Hermes provider adapter;
 - simple HTTP API;
+- OpenAI-compatible lightweight extractor adapter;
 
 Planned:
 
 - MCP server;
 - file-based vault adapter;
-- optional OpenAI extractor;
 - optional provider embeddings;
 - optional semantic reranker.
 

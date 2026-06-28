@@ -59,6 +59,8 @@ Included now:
 - Graph groups and optimization runs.
 - Light Model semantic analyses: facts, chronology, key topics, people, events,
   verified entities.
+- OpenAI-compatible lightweight extractor adapter with deterministic fallback
+  for contract tests and local operation.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
@@ -74,7 +76,7 @@ Not included yet:
 - hosted multi-user API server;
 - web UI;
 - provider embeddings;
-- production LLM Keeper/extractor;
+- production LLM Keeper eval suite and managed model configuration;
 - production Hermes integration;
 - multi-user auth.
 
