@@ -213,6 +213,7 @@ After review, preserve the expected behavior:
 ```python
 provider.review_inbox(status="open", scope="professional")
 provider.notifications(status="open", scope="professional")
+provider.notifications(status="open", sla_status="overdue")
 provider.assign_notification("ntf_xxxxxxxxxxxxxxxx", assigned_to="reviewer-a", actor="lead")
 provider.review_batch(action="approve", candidate_ids=["cand_a", "cand_b"], actor="reviewer", dry_run=True)
 provider.approve_candidate("cand_xxxxxxxxxxxxxxxx", actor="reviewer")

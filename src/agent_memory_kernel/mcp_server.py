@@ -348,6 +348,10 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "topic": _string("Optional notification topic.", ""),
                 "severity": _string("Optional severity: info, warning, high, or critical.", ""),
                 "assigned_to": _string("Optional assigned operator filter.", ""),
+                "sla_status": _string(
+                    "Optional SLA filter: overdue, due_soon, on_track, no_due_date, invalid_due_date, or resolved.",
+                    "",
+                ),
                 "target_type": _string("Optional target type filter.", ""),
                 "target_id": _string("Optional target id filter.", ""),
                 "limit": _integer("Maximum notifications.", 50),

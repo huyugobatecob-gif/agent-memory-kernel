@@ -174,7 +174,8 @@ notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 `memory_notification_ack` / `memory_notification_resolve`.
 Pending/quarantined review candidates, sensitive export approval requests, and
 expired export artifacts create open notifications that can be assigned to a
-reviewer with optional `due_at`, acknowledged, or resolved.
+reviewer with optional `due_at`, filtered by computed SLA status, acknowledged,
+or resolved.
 Baseline batch review is implemented through `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
@@ -272,7 +273,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- push/email/web notification transports and SLAs;
+- push/email/web notification transports and escalation policies;
 - hosted key-management and export custody controls.
 
 ## v1.0: Stable Memory Contract

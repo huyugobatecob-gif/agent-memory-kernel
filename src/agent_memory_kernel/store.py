@@ -39,6 +39,7 @@ TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9_.-]{2,}")
 URL_RE = re.compile(r"https?://[^\s)]+")
 DOMAIN_RE = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b")
 DATE_HINT_RE = re.compile(r"\b(?:20\d{2}-\d{2}-\d{2}|20\d{6}|today|yesterday|tomorrow|сегодня|вчера|завтра)\b", re.I)
+NOTIFICATION_DUE_SOON_SECONDS = 24 * 60 * 60
 PROJECT_HINT_RE = re.compile(
     r"(?i)\b(?:project|repo|client|workspace|site|domain|проект|сайт|домен|клиент)\s+([A-Za-zА-Яа-яЁё0-9_.-]+)"
 )
@@ -1543,6 +1544,7 @@ class MemoryStore:
         topic: str | None = None,
         severity: str | None = None,
         assigned_to: str | None = None,
+        sla_status: str | None = None,
         target_type: str | None = None,
         target_id: str | None = None,
         limit: int = 50,
@@ -1553,6 +1555,21 @@ class MemoryStore:
         if status not in allowed_statuses:
             raise ValueError(
                 "notification status must be open, acknowledged, resolved, or all"
+            )
+        normalized_sla_status = (sla_status or "").strip().lower()
+        allowed_sla_statuses = {
+            "",
+            "overdue",
+            "due_soon",
+            "on_track",
+            "no_due_date",
+            "invalid_due_date",
+            "resolved",
+        }
+        if normalized_sla_status not in allowed_sla_statuses:
+            raise ValueError(
+                "notification SLA status must be overdue, due_soon, on_track, "
+                "no_due_date, invalid_due_date, or resolved"
             )
         clauses: list[str] = []
         params: list[Any] = []
@@ -1578,6 +1595,8 @@ class MemoryStore:
             clauses.append("target_id = ?")
             params.append(target_id.strip())
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        requested_limit = max(1, min(int(limit or 50), 500))
+        query_limit = 500 if normalized_sla_status else requested_limit
         rows = self.conn.execute(
             f"""
             SELECT *
@@ -1594,9 +1613,15 @@ class MemoryStore:
                 created_at DESC
             LIMIT ?
             """,
-            (*params, max(1, min(int(limit or 50), 500))),
+            (*params, query_limit),
         ).fetchall()
         notifications = [self._notification_to_dict(row) for row in rows]
+        if normalized_sla_status:
+            notifications = [
+                item
+                for item in notifications
+                if item["sla"]["status"] == normalized_sla_status
+            ][:requested_limit]
         summary: dict[str, int] = {}
         for item in notifications:
             item_status = str(item["status"])
@@ -1606,6 +1631,7 @@ class MemoryStore:
             "status_filter": status,
             "scope": scope or "all",
             "topic": topic or "all",
+            "sla_status": normalized_sla_status or "all",
             "count": len(notifications),
             "summary": summary,
             "notifications": notifications,
@@ -10832,8 +10858,70 @@ class MemoryStore:
             "resolved_by": row["resolved_by"],
             "resolve_reason": row["resolve_reason"],
         }
+        result["sla"] = self._notification_sla(row["due_at"], row["status"])
         result["operator_handles"] = self._notification_operator_handles(result)
         return result
+
+    @staticmethod
+    def _parse_notification_due_at(value: str) -> datetime | None:
+        normalized = (value or "").strip()
+        if not normalized:
+            return None
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _notification_sla(due_at: str, status: str) -> dict[str, Any]:
+        if status == "resolved":
+            return {
+                "status": "resolved",
+                "due_at": due_at or "",
+                "overdue": False,
+                "due_soon": False,
+                "seconds_until_due": None,
+            }
+        if not (due_at or "").strip():
+            return {
+                "status": "no_due_date",
+                "due_at": "",
+                "overdue": False,
+                "due_soon": False,
+                "seconds_until_due": None,
+            }
+        parsed = MemoryStore._parse_notification_due_at(due_at)
+        if parsed is None:
+            return {
+                "status": "invalid_due_date",
+                "due_at": due_at,
+                "overdue": False,
+                "due_soon": False,
+                "seconds_until_due": None,
+            }
+        seconds_until_due = int(
+            (parsed - datetime.now(timezone.utc).replace(microsecond=0)).total_seconds()
+        )
+        overdue = seconds_until_due < 0
+        due_soon = not overdue and seconds_until_due <= NOTIFICATION_DUE_SOON_SECONDS
+        if overdue:
+            sla_status = "overdue"
+        elif due_soon:
+            sla_status = "due_soon"
+        else:
+            sla_status = "on_track"
+        return {
+            "status": sla_status,
+            "due_at": parsed.replace(microsecond=0).isoformat(),
+            "overdue": overdue,
+            "due_soon": due_soon,
+            "seconds_until_due": seconds_until_due,
+        }
 
     @staticmethod
     def _notification_operator_handles(notification: dict[str, Any]) -> dict[str, Any]:

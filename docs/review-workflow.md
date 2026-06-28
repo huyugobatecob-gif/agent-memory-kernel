@@ -47,6 +47,7 @@ notifications for:
 ```bash
 agent-memory notifications --db .memory/demo.db list --status open
 agent-memory notifications --db .memory/demo.db assign ntf_xxxxxxxxxxxxxxxx --assigned-to reviewer-a --actor lead
+agent-memory notifications --db .memory/demo.db list --status open --sla-status overdue
 agent-memory notifications --db .memory/demo.db ack ntf_xxxxxxxxxxxxxxxx --actor reviewer
 agent-memory notifications --db .memory/demo.db resolve ntf_xxxxxxxxxxxxxxxx --actor reviewer
 ```
@@ -56,7 +57,9 @@ or rejecting an export approval resolves export approval notifications. Purging
 an export retention record resolves the export retention notification.
 Assignments add `assigned_to`, `assigned_by`, `assigned_at`, and optional
 `due_at`, so Hermes or a UI can filter one reviewer queue without changing
-memory state.
+memory state. Each notification also returns computed `sla.status`
+(`overdue`, `due_soon`, `on_track`, `no_due_date`, `invalid_due_date`, or
+`resolved`) and can be filtered with `sla_status`.
 
 ## Actions
 
@@ -128,11 +131,13 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
    the operator needs one queue across review, export approval, and retention
    cleanup.
 4. Assign notifications to a reviewer when a human owner is needed.
-5. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
+5. Filter `sla_status=overdue` for escalations before long-running review
+   queues drift.
+6. Use `review batch ... --dry-run` or `memory_review_batch` dry-run to preview
    approve/reject policy before mutating memory.
-6. Approve only candidates that are safe, scoped correctly, and useful.
-7. Reject quarantined or low-quality candidates.
-8. Use correct/delete/distrust/expire on already active memories when the
+7. Approve only candidates that are safe, scoped correctly, and useful.
+8. Reject quarantined or low-quality candidates.
+9. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected
@@ -147,4 +152,4 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - browser-assisted batch approve/reject;
 - conflict warnings inline with candidates;
 - hosted key-management and export custody controls;
-- push/email/web notification transports and SLAs.
+- push/email/web notification transports and escalation policies.

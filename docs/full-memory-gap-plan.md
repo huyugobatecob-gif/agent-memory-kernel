@@ -224,7 +224,8 @@ Already present:
   `memory_notifications_list` / `memory_notification_assign` /
   `memory_notification_ack` / `memory_notification_resolve`; review
   candidates, sensitive export approvals, and expired export artifacts produce
-  open notifications with operator handles and reviewer assignment/filtering.
+  open notifications with operator handles, reviewer assignment/filtering, and
+  computed SLA status from `due_at`.
 - Baseline export governance through `agent-memory export-control`,
   `/export/control`, Hermes `export_control_report()`, and MCP
   `memory_export_control`; export previews show policy decisions, aggregate
@@ -322,7 +323,7 @@ Remaining for full memory:
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review web UI, graph browser, batch correction, push/email/web
-  notification transports, and SLAs beyond the baseline
+  notification transports, and escalation policies beyond the baseline
   machine-readable review inbox, notification queue, and approve/reject batch
   flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
@@ -710,12 +711,13 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
-export approval, retention cleanup, and reviewer assignment/filtering.
+export approval, retention cleanup, reviewer assignment/filtering, and SLA
+status filtering.
 Remaining work is a browser review UI, graph browser, batch correction,
-notification transports, hosted key-management controls, and reviewer SLAs.
+notification transports/escalations, and hosted key-management controls.
 Export-control, redaction-profile, sensitive-export approval, export retention,
 and encrypted profile export baselines are implemented, but browser UI, graph
-browser, notification transports/SLAs, and hosted key-management/off-host
+browser, notification transports/escalations, and hosted key-management/off-host
 encryption remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust

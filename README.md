@@ -83,8 +83,8 @@ Included now:
 - Operator review inbox with source previews, risk flags, graph previews, audit
   trail, and CLI/HTTP/MCP action handles.
 - Batch review for approve/reject with dry-run and per-candidate results.
-- Operator notification queue and reviewer assignment for review candidates,
-  export approvals, and expired export artifacts.
+- Operator notification queue, reviewer assignment, and SLA status filtering
+  for review candidates, export approvals, and expired export artifacts.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.

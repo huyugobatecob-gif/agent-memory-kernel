@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
@@ -198,6 +199,9 @@ class ReviewInboxTests(unittest.TestCase):
                 "/notifications/ack",
             )
 
+            overdue_due_at = (
+                datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+            ).isoformat()
             assigned = handle_api_request(
                 store,
                 "/notifications/assign",
@@ -205,14 +209,20 @@ class ReviewInboxTests(unittest.TestCase):
                     "notification_id": notification["notification_id"],
                     "assigned_to": "reviewer-a",
                     "actor": "lead",
-                    "due_at": "2026-06-30T00:00:00+00:00",
+                    "due_at": overdue_due_at,
                     "reason": "route SEO review",
                 },
             )
             self.assertEqual(assigned["assigned_to"], "reviewer-a")
             self.assertEqual(assigned["assigned_by"], "lead")
+            self.assertEqual(assigned["sla"]["status"], "overdue")
+            self.assertTrue(assigned["sla"]["overdue"])
             self.assertEqual(
                 store.list_notifications(assigned_to="reviewer-a")["count"],
+                1,
+            )
+            self.assertEqual(
+                store.list_notifications(sla_status="overdue")["count"],
                 1,
             )
 
@@ -247,6 +257,10 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(
                 mcp_list["result"]["structuredContent"]["assigned_to"],
                 "reviewer-b",
+            )
+            self.assertEqual(
+                mcp_list["result"]["structuredContent"]["sla"]["status"],
+                "no_due_date",
             )
 
             store.approve_candidate(candidate_id, actor="reviewer")
@@ -443,6 +457,10 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(assigned["assigned_to"], "reviewer-provider")
             self.assertEqual(
                 provider.notifications(status="open", assigned_to="reviewer-provider")["count"],
+                1,
+            )
+            self.assertEqual(
+                provider.notifications(status="open", sla_status="no_due_date")["count"],
                 1,
             )
             acknowledged = provider.ack_notification(

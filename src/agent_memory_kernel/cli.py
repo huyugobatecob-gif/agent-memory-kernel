@@ -217,6 +217,7 @@ def cmd_notifications_list(args: argparse.Namespace) -> int:
             topic=args.topic,
             severity=args.severity,
             assigned_to=args.assigned_to,
+            sla_status=args.sla_status,
             target_type=args.target_type,
             target_id=args.target_id,
             limit=args.limit,
@@ -1439,6 +1440,10 @@ def build_parser() -> argparse.ArgumentParser:
     np.add_argument("--topic")
     np.add_argument("--severity", choices=["info", "warning", "high", "critical"])
     np.add_argument("--assigned-to")
+    np.add_argument(
+        "--sla-status",
+        choices=["overdue", "due_soon", "on_track", "no_due_date", "invalid_due_date", "resolved"],
+    )
     np.add_argument("--target-type")
     np.add_argument("--target-id")
     np.add_argument("--limit", type=int, default=50)

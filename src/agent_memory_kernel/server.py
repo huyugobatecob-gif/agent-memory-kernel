@@ -152,6 +152,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             topic=payload.get("topic"),
             severity=payload.get("severity"),
             assigned_to=payload.get("assigned_to"),
+            sla_status=payload.get("sla_status"),
             target_type=payload.get("target_type"),
             target_id=payload.get("target_id"),
             limit=int(payload.get("limit", 50) or 50),

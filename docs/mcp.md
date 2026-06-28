@@ -80,7 +80,7 @@ Operator and graph tools:
 - `memory_review_approve`: approve a candidate.
 - `memory_review_reject`: reject a candidate.
 - `memory_notifications_list`: list operator notifications for review,
-  export, and maintenance actions.
+  export, and maintenance actions; supports assignment and SLA filters.
 - `memory_notification_assign`: assign a notification to a reviewer or
   operator.
 - `memory_notification_ack`: acknowledge a notification without resolving it.

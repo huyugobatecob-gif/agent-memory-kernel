@@ -103,7 +103,7 @@ class HermesMemoryProvider:
     def review_inbox(self, status: str = "open", scope: str | None = None, limit: int = 50) -> dict:
         ...
 
-    def notifications(self, status: str = "open", scope: str | None = None, topic: str | None = None) -> dict:
+    def notifications(self, status: str = "open", scope: str | None = None, topic: str | None = None, assigned_to: str | None = None, sla_status: str | None = None) -> dict:
         ...
 
     def assign_notification(self, notification_id: str, assigned_to: str, actor: str = "reviewer", due_at: str = "", reason: str = "") -> dict:
@@ -474,6 +474,8 @@ mutating memory, then resolved automatically by the underlying approve/reject or
 purge action, or manually through `resolve_notification()`.
 Notifications can also be assigned to a reviewer with optional `due_at`, so
 Hermes can show per-operator queues before a browser UI exists.
+Every notification includes computed SLA metadata from `due_at`; Hermes can
+filter `sla_status=overdue` or `sla_status=due_soon` for escalation queues.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP
