@@ -18,6 +18,65 @@ The memory system described in the transcript has these core properties:
 - After a turn, a keeper extracts topics, facts, entities, relationships, preferences, decisions, and useful context, then updates the graph tree.
 - The main agent should receive a prepared prompt envelope, not spend tokens searching all historical data by itself.
 
+## Additional Runtime Architecture Notes
+
+The reference behavior should be implemented as one memory service with two
+lightweight-model paths around the main model call:
+
+```mermaid
+flowchart TD
+  U["User"] --> UI["Chat UI / Hermes UI"]
+  UI --> CB["Context Builder"]
+  CB --> CP["Context Pack: dialogue, summaries, rules, compact memory"]
+  CB --> MG["Memory Graph"]
+  MG --> R["Light Model / Memory Router"]
+  R --> MS["Relevant Memory Tree Supplement"]
+  CP --> PE["Prompt Envelope"]
+  MS --> PE
+  PE --> LLM["Main Agent / Priority Model"]
+  LLM --> A["Answer"]
+  A --> DB["Save Turn"]
+  DB --> K["Keeper / Light Model"]
+  K --> G["Extract + Normalize + Graph Ingest"]
+  G --> MG
+```
+
+The main agent must not scan the full graph or decide which historical branches
+to inspect. That is the Router's job. The main agent receives only the selected
+context package:
+
+- system core;
+- rules digest;
+- user profile and addressing hints;
+- compact active memory;
+- older thread excerpts and summaries;
+- `MEMORY_TREE_SUPPLEMENT` with expanded node content;
+- recent messages;
+- current user message.
+
+The lightweight model therefore has two different responsibilities:
+
+- **Memory Router before answer:** fetch `context_pack` and `memory_graph`, rank
+  relevant branches, and assemble a `MEMORY_TREE_SUPPLEMENT`.
+- **Keeper after answer:** inspect the saved exchange, extract entities,
+  relationships, interests, decisions, rules, attempts, outcomes, gotchas, and
+  profile facts, normalize them against existing nodes, and apply safe graph
+  commands.
+
+There is also an optional "brain/style" append path: graph-level analytics can
+derive a soft style instruction, but it must be appended as a guarded system
+preference and must never override user instructions, safety, or factual
+accuracy.
+
+For Hermes, this means the repository should expose a Memory Orchestrator or
+Keeper service with these high-level operations:
+
+- `record_turn` stores the complete exchange.
+- `keeper_analyze_turn` turns the exchange into graph updates.
+- `retrieve_context` selects relevant graph branches before the main model call.
+- `build_prompt_context` returns the final prompt envelope.
+- `ingest_graph` applies node, edge, summary, and evidence changes.
+
 ## Current Repository State
 
 Already present:
@@ -41,6 +100,7 @@ Missing for full memory:
 - Production LLM-backed Keeper that can extract structured graph updates from natural language.
 - Memory Router that ranks graph branches and returns expanded node content, not tags.
 - Prompt envelope builder with explicit memory supplement placement and token budgeting.
+- Guarded brain/style system-prompt append derived from graph analytics.
 - Hermes runtime hooks that call memory before and after agent work.
 - Background worker or service mode for queued Keeper jobs.
 - API/MCP server for agents that should not shell out to the CLI.
@@ -95,7 +155,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-full-memory
 
 ### Step 3: Build The Memory Orchestrator Module
 
-**What we do:** Create the central service API that Hermes will call instead of manually composing separate store methods.
+**What we do:** Create the central service API that Hermes will call instead of manually composing separate store methods. This orchestrator owns the live turn lifecycle: pre-turn retrieval, prompt envelope construction, post-turn storage, and Keeper scheduling.
 
 **Files:**
 
@@ -110,9 +170,9 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-full-memory
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Tests cover `before_turn(query, thread_id, scope)` and `after_turn(user_text, assistant_text, thread_id, scope)`.
+**Verification:** Tests cover `before_turn(query, thread_id, scope)`, `build_prompt_context(...)`, `record_turn(...)`, `keeper_analyze_turn(...)`, `retrieve_context(...)`, `ingest_graph(...)`, and `after_turn(user_text, assistant_text, thread_id, scope)`.
 
-**Result:** There is one stable entrypoint for live agent memory instead of many low-level calls.
+**Result:** There is one stable entrypoint for live agent memory instead of many low-level calls, and Hermes can treat memory as a service rather than as logic inside every agent.
 
 ### Step 4: Add The LLM-Backed Keeper
 
@@ -159,7 +219,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ### Step 6: Build The Memory Router
 
-**What we do:** Add a retrieval layer that finds relevant branches for the current user request and returns expanded node content.
+**What we do:** Add a retrieval layer that finds relevant branches for the current user request and returns expanded node content. The Router should use graph labels and tags only as routing hints; the final agent-facing output must include the underlying node summaries, blobs, evidence, and raw provenance snippets.
 
 **Files:**
 
@@ -174,7 +234,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Given a query, the router returns selected branches with why they were selected, node summaries, expanded blobs, related evidence, and raw provenance excerpts.
+**Verification:** Given a query, the router returns selected branches with why they were selected, node summaries, expanded blobs, related evidence, raw provenance excerpts, and a ready-to-insert `MEMORY_TREE_SUPPLEMENT`.
 
 **Result:** Agents receive useful memory content, not just tags or labels.
 
@@ -201,7 +261,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ### Step 8: Build The Prompt Envelope
 
-**What we do:** Produce a final agent-ready object that includes system core, rules, user profile, recent messages, summaries, memory tree supplement, and the current user request.
+**What we do:** Produce a final agent-ready object that includes system core, rules, user profile, recent messages, summaries, memory tree supplement, guarded brain/style append, and the current user request.
 
 **Files:**
 
@@ -218,9 +278,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m agent_memory_kernel.cli build-context "plan SEO work" --db /tmp/amk-full-memory.db
 ```
 
-**Verification:** The output shows stable sections, token estimates, memory supplement placement, and source IDs.
+**Verification:** The output shows stable sections, token estimates, memory supplement placement, guarded brain/style placement, source IDs, and final messages ready for a main model call.
 
-**Result:** Hermes can pass one prepared context object to any main model.
+**Result:** Hermes can pass one prepared context object to any main model, so model switching preserves memory without each model owning that memory.
 
 ### Step 9: Add Hermes Before/After Hooks
 
@@ -239,7 +299,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli build-context "plan SEO work" 
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** `before_agent_turn()` returns prompt envelope data. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis.
+**Verification:** `before_agent_turn()` returns prompt envelope data from the Router. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis. The main agent never receives the full graph, only the selected memory supplement and surrounding context.
 
 **Result:** Hermes can make every agent memory-aware without each agent implementing memory logic.
 
@@ -408,10 +468,12 @@ The repository has full memory when all of these are true:
 - A lightweight Router can select relevant branches before the main model answers.
 - The prompt envelope includes expanded node content, not only branch labels.
 - The same memory context can be passed to different main models.
+- The main agent never has to search the whole graph by itself.
+- Graph-derived style or brain hints are guarded, optional, and subordinate to
+  user instructions and correctness.
 - Personal and professional lanes work by default.
 - Success/failure loop memory is available as an optional extension.
 - Humans can review, correct, reject, delete, and export memory.
 - All active memory has provenance.
 - Untrusted content cannot silently become durable instructions.
 - Memory-related model calls are auditable by cost, token use, source turn, and selected graph branches.
-
