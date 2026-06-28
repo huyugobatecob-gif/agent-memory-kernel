@@ -300,6 +300,71 @@ class MemoryStoreTests(unittest.TestCase):
             imported.close()
             store.close()
 
+    def test_runtime_before_and_after_model_call_vertical_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.upsert_profile_note(
+                "Always retrieve selected memory before planning.",
+                scope="professional",
+                note_type="rule",
+            )
+            store.remember(
+                "Decision: project demo-site reuses successful SEO refresh loops.",
+                scope="professional",
+                source_ref="session://seo-success",
+                auto_approve=True,
+            )
+
+            before = store.before_model_call(
+                "Plan the next demo-site SEO refresh loop.",
+                thread_id="thread-runtime",
+                scope="professional",
+                user_id="user-1",
+                agent_id="seo-agent",
+                model_id="gpt-test",
+                mode="planning",
+                token_budget=8000,
+            )
+
+            self.assertTrue(before["router_run_id"].startswith("router_"))
+            self.assertTrue(before["selected_branch_ids"])
+            self.assertEqual(before["access_decisions"][0]["decision"], "allow")
+            envelope = before["prompt_envelope"]
+            self.assertIn("system", envelope)
+            self.assertEqual(envelope["metadata"]["thread_id"], "thread-runtime")
+            self.assertNotIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][0]["content"])
+            self.assertIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][1]["content"])
+            self.assertIn("demo-site", envelope["messages"][1]["content"])
+            router_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM router_runs"
+            ).fetchone()["count"]
+            self.assertEqual(router_count, 1)
+
+            after = store.after_saved_turn(
+                thread_id="thread-runtime",
+                scope="professional",
+                user_id="user-1",
+                agent_id="seo-agent",
+                model_id="gpt-test",
+                user_text="Plan the next demo-site SEO refresh loop.",
+                assistant_text="We should reuse the successful refresh loop and track outcome memory.",
+            )
+
+            self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
+            self.assertEqual(after["status"], "completed")
+            self.assertEqual(len(after["saved_turn_ids"]), 2)
+            self.assertTrue(after["candidate_ids"])
+            self.assertIn("keeper candidate requires review", after["warnings"])
+            self.assertEqual(store.search("outcome memory", scope="professional"), [])
+            self.assertTrue(store.list_candidates("pending"))
+            keeper_job_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM keeper_jobs"
+            ).fetchone()["count"]
+            self.assertEqual(keeper_job_count, 1)
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

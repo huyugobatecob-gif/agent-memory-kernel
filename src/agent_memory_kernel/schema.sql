@@ -264,6 +264,39 @@ CREATE TABLE IF NOT EXISTS graph_optimization_runs (
     metadata_json   TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS router_runs (
+    router_run_id            TEXT PRIMARY KEY,
+    created_at               TEXT NOT NULL,
+    thread_id                TEXT NOT NULL DEFAULT 'default',
+    scope                    TEXT NOT NULL DEFAULT 'professional',
+    user_id                  TEXT NOT NULL DEFAULT '',
+    agent_id                 TEXT NOT NULL DEFAULT '',
+    model_id                 TEXT NOT NULL DEFAULT '',
+    mode                     TEXT NOT NULL DEFAULT 'chat',
+    query                    TEXT NOT NULL,
+    token_budget             INTEGER NOT NULL DEFAULT 0,
+    selected_branch_ids_json TEXT NOT NULL DEFAULT '[]',
+    access_decisions_json    TEXT NOT NULL DEFAULT '[]',
+    warnings_json            TEXT NOT NULL DEFAULT '[]',
+    metadata_json            TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS keeper_jobs (
+    keeper_job_id      TEXT PRIMARY KEY,
+    created_at         TEXT NOT NULL,
+    thread_id          TEXT NOT NULL DEFAULT 'default',
+    scope              TEXT NOT NULL DEFAULT 'professional',
+    user_id            TEXT NOT NULL DEFAULT '',
+    agent_id           TEXT NOT NULL DEFAULT '',
+    model_id           TEXT NOT NULL DEFAULT '',
+    turn_ids_json      TEXT NOT NULL DEFAULT '[]',
+    event_id           TEXT NOT NULL DEFAULT '',
+    candidate_ids_json TEXT NOT NULL DEFAULT '[]',
+    status             TEXT NOT NULL DEFAULT 'completed',
+    warnings_json      TEXT NOT NULL DEFAULT '[]',
+    metadata_json      TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS digital_brain_state (
     state_id       TEXT PRIMARY KEY,
     created_at     TEXT NOT NULL,
@@ -363,3 +396,5 @@ CREATE INDEX IF NOT EXISTS idx_semantic_analyses_scope ON semantic_analyses(scop
 CREATE INDEX IF NOT EXISTS idx_profile_notes_scope_type ON profile_notes(scope, note_type);
 CREATE INDEX IF NOT EXISTS idx_llm_usage_scope_thread ON llm_usage_stats(scope, thread_id);
 CREATE INDEX IF NOT EXISTS idx_graph_optimizations_scope ON graph_optimization_runs(scope);
+CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
+CREATE INDEX IF NOT EXISTS idx_keeper_jobs_thread ON keeper_jobs(thread_id);

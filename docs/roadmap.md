@@ -70,6 +70,12 @@ tested:
 - [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md): executable
   save-retrieve-ingest scenario with permission and poisoning checks.
 
+Current status: the first local runtime hook slice exists through
+`before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
+`MemoryStore.after_saved_turn()`, and the Hermes provider wrapper. It proves the
+Router/envelope/Keeper candidate loop, but full v0.2 still requires the full
+lifecycle, security, permission, poisoning, and service-mode gates above.
+
 ## v0.3: Adapters
 
 Goal: let agent frameworks use the kernel without copy-pasting logic.

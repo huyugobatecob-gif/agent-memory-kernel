@@ -52,6 +52,60 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def before_model_call(
+        self,
+        query: str,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "chat",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        return self.store.before_model_call(
+            query,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode,
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            limit=limit,
+        )
+
+    def after_saved_turn(
+        self,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        user_text: str = "",
+        assistant_text: str = "",
+        turn_id: str = "",
+        auto_approve: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.after_saved_turn(
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            turn_id=turn_id,
+            auto_approve=auto_approve,
+            metadata=metadata,
+        )
+
     def record_turn(
         self,
         content: str,

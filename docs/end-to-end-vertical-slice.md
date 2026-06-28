@@ -109,17 +109,33 @@ The slice is complete only if tests prove:
 
 ## Suggested Commands
 
-After implementation, the slice should be runnable with commands like:
+The first runtime hook slice is available through:
 
 ```bash
-agent-memory init --db /tmp/amk-slice.db
+agent-memory before-model-call "Plan the next demo-site SEO refresh loop." \
+  --db /tmp/amk-slice.db \
+  --scope professional \
+  --thread-id thread-runtime
+
+agent-memory after-saved-turn \
+  --db /tmp/amk-slice.db \
+  --scope professional \
+  --thread-id thread-runtime \
+  --user-text "Plan the next demo-site SEO refresh loop." \
+  --assistant-text "Reuse the successful refresh loop and track outcome memory."
+```
+
+`tests/test_memory_store.py` contains
+`test_runtime_before_and_after_model_call_vertical_slice`, which proves the
+minimal Router -> prompt envelope -> Keeper candidate loop.
+
+The richer fixture can later be wrapped in dedicated commands:
+
+```bash
 agent-memory slice seed --db /tmp/amk-slice.db
 agent-memory slice run --db /tmp/amk-slice.db
 agent-memory slice assert --db /tmp/amk-slice.db
 ```
-
-These commands do not exist yet. They are part of the acceptance target for the
-first full-memory implementation milestone.
 
 ## Why This Comes First
 

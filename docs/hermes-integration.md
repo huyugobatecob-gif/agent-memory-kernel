@@ -59,6 +59,12 @@ Suggested interface:
 
 ```python
 class HermesMemoryProvider:
+    def before_model_call(self, query: str, thread_id: str = "default", scope: str = "professional") -> dict:
+        ...
+
+    def after_saved_turn(self, thread_id: str = "default", user_text: str = "", assistant_text: str = "") -> dict:
+        ...
+
     def context_pack(self, query: str, scope: str | None = None, limit: int = 8) -> str:
         ...
 
@@ -86,6 +92,10 @@ class HermesMemoryProvider:
 
 The provider should call `MemoryStore`, not duplicate storage logic.
 
+The runtime hook pair is the preferred full-memory path. The older
+`context_pack`, `tree_pack`, and `record_turn` methods remain useful as smaller
+building blocks.
+
 ## Where To Hook It
 
 ### Before Planning
@@ -99,6 +109,19 @@ When Hermes receives a task, it should generate a compact retrieval query:
 - requested loop type, if any.
 
 Then call:
+
+```bash
+agent-memory before-model-call "planning SEO content refresh loop" \
+  --scope professional \
+  --thread-id seo-demo \
+  --agent-id writer \
+  --model-id gpt-4.1-mini
+```
+
+The response includes `prompt_envelope`, `router_run_id`,
+`selected_branch_ids`, `access_decisions`, and warnings.
+
+Lower-level context builder call:
 
 ```bash
 agent-memory build-context "planning SEO content refresh loop" --scope professional --thread-id seo-demo
@@ -164,6 +187,21 @@ event -> candidate -> active memory -> memory_item
 ```
 
 ### After Work
+
+After the main agent response is saved, Hermes should call:
+
+```bash
+agent-memory after-saved-turn \
+  --scope professional \
+  --thread-id seo-demo \
+  --agent-id writer \
+  --model-id gpt-4.1-mini \
+  --user-text "Plan the next SEO content refresh loop." \
+  --assistant-text "I will reuse the prior successful refresh pattern."
+```
+
+This records the exchange and creates Keeper candidates. Those candidates stay
+pending unless policy explicitly allows auto-approval.
 
 A reviewer can approve durable memories:
 

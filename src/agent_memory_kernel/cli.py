@@ -104,6 +104,55 @@ def cmd_build_context(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_before_model_call(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    requested_lanes = [
+        lane.strip()
+        for lane in (args.requested_lanes or "").split(",")
+        if lane.strip()
+    ] or None
+    print_json(
+        store.before_model_call(
+            args.query,
+            thread_id=args.thread_id,
+            scope=args.scope,
+            user_id=args.user_id,
+            agent_id=args.agent_id,
+            model_id=args.model_id,
+            mode=args.mode,
+            token_budget=args.token_budget,
+            requested_lanes=requested_lanes,
+            limit=args.limit,
+            recent_messages=args.recent_messages,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_after_saved_turn(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    metadata = json.loads(args.metadata_json)
+    print_json(
+        store.after_saved_turn(
+            thread_id=args.thread_id,
+            scope=args.scope,
+            user_id=args.user_id,
+            agent_id=args.agent_id,
+            model_id=args.model_id,
+            user_text=args.user_text,
+            assistant_text=args.assistant_text,
+            turn_id=args.turn_id,
+            auto_approve=args.approve,
+            metadata=metadata,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_tree_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -445,6 +494,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--recent-messages", type=int, default=6)
     p.set_defaults(func=cmd_build_context)
+
+    p = sub.add_parser("before-model-call", help="Build a provider-neutral memory prompt envelope")
+    add_common_db(p)
+    p.add_argument("query")
+    p.add_argument("--thread-id", default="default")
+    p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--user-id", default="user_default")
+    p.add_argument("--agent-id", default="agent")
+    p.add_argument("--model-id", default="")
+    p.add_argument("--mode", default="chat")
+    p.add_argument("--token-budget", type=int, default=12000)
+    p.add_argument("--requested-lanes", default="", help="Comma-separated memory lanes")
+    p.add_argument("--limit", type=int, default=8)
+    p.add_argument("--recent-messages", type=int, default=6)
+    p.set_defaults(func=cmd_before_model_call)
+
+    p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
+    add_common_db(p)
+    p.add_argument("--thread-id", default="default")
+    p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--user-id", default="user_default")
+    p.add_argument("--agent-id", default="agent")
+    p.add_argument("--model-id", default="")
+    p.add_argument("--user-text", default="")
+    p.add_argument("--assistant-text", default="")
+    p.add_argument("--turn-id", default="")
+    p.add_argument("--approve", action="store_true", help="Auto-approve safe Keeper candidates")
+    p.add_argument("--metadata-json", default="{}")
+    p.set_defaults(func=cmd_after_saved_turn)
 
     p = sub.add_parser("tree-pack", help="Build a branch-oriented memory tree pack for an agent")
     add_common_db(p)

@@ -285,6 +285,26 @@ Recommended shape:
 
 See [docs/hermes-integration.md](docs/hermes-integration.md).
 
+Runtime hook shape:
+
+```bash
+agent-memory before-model-call "Plan the next SEO loop" \
+  --thread-id seo-demo \
+  --scope professional \
+  --agent-id writer \
+  --model-id gpt-4.1-mini
+
+agent-memory after-saved-turn \
+  --thread-id seo-demo \
+  --scope professional \
+  --user-text "Plan the next SEO loop" \
+  --assistant-text "Use the prior successful refresh pattern."
+```
+
+The first command returns a provider-neutral prompt envelope with a selected
+`MEMORY_TREE_SUPPLEMENT`. The second command records the exchange and creates
+reviewable Keeper candidates.
+
 ## Implementation Plan
 
 The detailed build plan is in
