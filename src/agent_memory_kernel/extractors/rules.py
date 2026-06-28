@@ -31,6 +31,8 @@ class RuleBasedExtractor(Extractor):
             kind = "rule"
         elif "decided" in lowered or "decision:" in lowered:
             kind = "decision"
+        elif "pattern:" in lowered or "successful" in lowered or "worked" in lowered:
+            kind = "pattern"
         elif "failed" in lowered or "did not work" in lowered:
             kind = "gotcha"
 

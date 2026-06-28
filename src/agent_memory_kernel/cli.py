@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
 
 
@@ -439,6 +440,30 @@ def cmd_expire(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_slice_seed(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(seed_vertical_slice(store))
+    store.close()
+    return 0
+
+
+def cmd_slice_run(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(run_vertical_slice(store))
+    store.close()
+    return 0
+
+
+def cmd_slice_assert(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(assert_vertical_slice(store))
+    store.close()
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -728,6 +753,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="system")
     p.add_argument("--reason", default="")
     p.set_defaults(func=cmd_expire)
+
+    p = sub.add_parser("slice", help="Run the deterministic full-memory vertical slice")
+    slice_sub = p.add_subparsers(dest="slice_command", required=True)
+
+    sp = slice_sub.add_parser("seed", help="Seed the deterministic vertical slice fixture")
+    add_common_db(sp)
+    sp.set_defaults(func=cmd_slice_seed)
+
+    sp = slice_sub.add_parser("run", help="Run Router and Keeper over the slice fixture")
+    add_common_db(sp)
+    sp.set_defaults(func=cmd_slice_run)
+
+    sp = slice_sub.add_parser("assert", help="Assert the slice fixture satisfies runtime gates")
+    add_common_db(sp)
+    sp.set_defaults(func=cmd_slice_assert)
 
     p = sub.add_parser("export", help="Export active memories to a markdown vault")
     add_common_db(p)

@@ -125,17 +125,19 @@ agent-memory after-saved-turn \
   --assistant-text "Reuse the successful refresh loop and track outcome memory."
 ```
 
-`tests/test_memory_store.py` contains
-`test_runtime_before_and_after_model_call_vertical_slice`, which proves the
-minimal Router -> prompt envelope -> Keeper candidate loop.
-
-The richer fixture can later be wrapped in dedicated commands:
+The richer fixture is available through dedicated commands:
 
 ```bash
 agent-memory slice seed --db /tmp/amk-slice.db
 agent-memory slice run --db /tmp/amk-slice.db
 agent-memory slice assert --db /tmp/amk-slice.db
 ```
+
+`tests/test_memory_store.py` contains
+`test_runtime_before_and_after_model_call_vertical_slice` and
+`test_executable_vertical_slice_seed_run_assert`. Together they prove the
+minimal Router -> prompt envelope -> Keeper candidate loop and the richer
+seed/run/assert fixture.
 
 ## Why This Comes First
 

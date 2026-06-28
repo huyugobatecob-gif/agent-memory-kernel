@@ -40,9 +40,10 @@ Included now:
 - Append-only source events.
 - Candidate memory lifecycle.
 - Manual review and conservative auto-approval.
-- Secret-like content quarantine.
+- Secret-like and prompt-injection-like content quarantine.
 - Active memory search.
 - Agent context packs with provenance.
+- Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
 - Persistent memory graph nodes and edges.
@@ -56,6 +57,7 @@ Included now:
   coordinates.
 - Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
+- Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -369,6 +371,7 @@ src/agent_memory_kernel/
   store.py               SQLite-backed memory store
   policy.py              safety and admission policy
   schema.sql             database schema
+  slice.py               deterministic full-memory vertical slice fixture
   extractors/            deterministic v0 extractor and extension seams
 docs/
   implementation-plan.md  phased build plan

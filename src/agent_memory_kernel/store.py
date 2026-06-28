@@ -573,13 +573,18 @@ class MemoryStore:
                 if rel not in branch["relationships"]:
                     branch["relationships"].append(rel)
             for source in source_rows.get(memory_id, []):
+                raw_content = str(source["content"] or "")
+                source_type = str(source["source_type"] or "")
+                if memory["text"] and memory["text"] not in raw_content:
+                    raw_content = str(memory["text"])
+                    source_type = f"{source_type}:corrected"
                 raw = {
                     "event_id": source["event_id"],
-                    "source_type": source["source_type"],
+                    "source_type": source_type,
                     "source_ref": source["source_ref"],
                     "actor": source["actor"],
                     "created_at": source["created_at"],
-                    "content": self._excerpt(source["content"], raw_chars),
+                    "content": self._excerpt(raw_content, raw_chars),
                 }
                 if raw not in branch["raw_events"]:
                     branch["raw_events"].append(raw)
@@ -1740,6 +1745,7 @@ class MemoryStore:
             "UPDATE memory_items SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
         )
+        self._propagate_corrected_memory(memory_id, text)
         self._audit("correct", "memory", memory_id, actor=actor)
         self.conn.commit()
 
@@ -2352,6 +2358,62 @@ class MemoryStore:
             ),
         )
         return analysis_id
+
+    def _propagate_corrected_memory(self, memory_id: str, text: str) -> None:
+        ts = now_iso()
+        item_rows = self.conn.execute(
+            """
+            SELECT item_id, item_type, scope, confidence
+            FROM memory_items
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchall()
+        for item in item_rows:
+            item_type = self._normalize_graph_node_type(str(item["item_type"]))
+            label = self._item_label(item_type, text)
+            summary = excerpt(text, 180)
+            embedding_text = " ".join([label, summary, text])
+            topics = self._node_topics(item_type, label, text)
+            self.conn.execute(
+                """
+                UPDATE memory_graph_nodes
+                SET updated_at = ?, label = ?, canonical_key = ?, blob = ?,
+                    summary = ?, topics_json = ?, embedding_json = ?
+                WHERE graph_node_id IN (
+                    SELECT ne.graph_node_id
+                    FROM node_evidence ne
+                    JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+                    WHERE ne.memory_id = ?
+                      AND ne.item_id = ?
+                      AND gn.node_type = ?
+                )
+                """,
+                (
+                    ts,
+                    label,
+                    canonical_key(label),
+                    text,
+                    summary,
+                    json.dumps(topics, sort_keys=True),
+                    json.dumps(lexical_embedding(embedding_text)),
+                    memory_id,
+                    item["item_id"],
+                    item_type,
+                ),
+            )
+            self._refresh_graph_groups(str(item["scope"]))
+            self._refresh_digital_brain_state(str(item["scope"]))
+
+        quote = excerpt(text, 600)
+        self.conn.execute(
+            "UPDATE node_evidence SET quote = ? WHERE memory_id = ?",
+            (quote, memory_id),
+        )
+        self.conn.execute(
+            "UPDATE edge_evidence SET quote = ? WHERE memory_id = ?",
+            (quote, memory_id),
+        )
 
     def _propagate_inactive_memory(self, memory_id: str) -> None:
         affected_scopes = {

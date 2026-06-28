@@ -12,6 +12,13 @@ SECRET_PATTERNS = [
     re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |PGP )?PRIVATE KEY-----"),
     re.compile(r"(?i)\b(cookie|sessionid|refresh[_-]?token)\b\s*[:=]\s*\S+"),
 ]
+PROMPT_INJECTION_PATTERNS = [
+    re.compile(r"(?i)\bignore (?:all )?(?:previous|prior|earlier) instructions\b"),
+    re.compile(r"(?i)\bdisregard (?:all )?(?:previous|prior|earlier) instructions\b"),
+    re.compile(r"(?i)\breveal (?:the )?(?:system prompt|developer message|hidden instructions|secrets)\b"),
+    re.compile(r"(?i)\btreat (?:this|the following) as (?:a )?(?:system|developer) instruction\b"),
+    re.compile(r"(?i)\boverride (?:the )?(?:system|developer|user) instructions\b"),
+]
 
 ALLOWED_SCOPES = {"personal", "professional", "project", "agent", "session"}
 ALLOWED_CONFIDENCE = {"low", "medium", "high", "confirmed"}
@@ -42,6 +49,10 @@ def classify_sensitivity(text: str, requested: str = "internal") -> str:
     if any(pattern.search(text or "") for pattern in SECRET_PATTERNS):
         return "secret"
     return requested if requested in ALLOWED_SENSITIVITY else "internal"
+
+
+def looks_like_prompt_injection(text: str) -> bool:
+    return any(pattern.search(text or "") for pattern in PROMPT_INJECTION_PATTERNS)
 
 
 def source_trust_for(source_type: str) -> str:
@@ -75,6 +86,14 @@ def admission_policy(
             sensitivity="secret",
             source_trust=trust,
             reason="secret-like content detected",
+        )
+
+    if looks_like_prompt_injection(text):
+        return PolicyDecision(
+            status="quarantined",
+            sensitivity=detected_sensitivity,
+            source_trust=trust,
+            reason="prompt-injection-like content detected",
         )
 
     if auto_approve and trust in {"trusted", "user", "system"}:
