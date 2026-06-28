@@ -107,6 +107,124 @@ STOPWORDS = {
     "про",
     "чтобы",
 }
+SEMANTIC_GROUPS = {
+    "agent": {
+        "agent",
+        "agents",
+        "assistant",
+        "assistants",
+        "бот",
+        "агент",
+        "агенты",
+        "ассистент",
+    },
+    "failure": {
+        "avoid",
+        "bad",
+        "blocked",
+        "broken",
+        "bug",
+        "error",
+        "fail",
+        "failed",
+        "failure",
+        "failing",
+        "gotcha",
+        "issue",
+        "negative",
+        "outdated",
+        "problem",
+        "regression",
+        "risk",
+        "stale",
+        "unsuccessful",
+        "неудача",
+        "неудачный",
+        "ошибка",
+        "проблема",
+    },
+    "loop": {
+        "attempt",
+        "iteration",
+        "loop",
+        "plan",
+        "planning",
+        "workflow",
+        "итерация",
+        "луп",
+        "петля",
+        "план",
+    },
+    "memory": {
+        "context",
+        "history",
+        "memory",
+        "provenance",
+        "recall",
+        "remember",
+        "retrieve",
+        "source",
+        "вспомнить",
+        "история",
+        "контекст",
+        "память",
+    },
+    "project": {
+        "client",
+        "domain",
+        "project",
+        "repo",
+        "site",
+        "workspace",
+        "домен",
+        "клиент",
+        "проект",
+        "репозиторий",
+        "сайт",
+    },
+    "seo": {
+        "content",
+        "indexing",
+        "internal",
+        "keyword",
+        "keywords",
+        "link",
+        "links",
+        "organic",
+        "page",
+        "refresh",
+        "seo",
+        "serp",
+        "title",
+        "titles",
+        "контент",
+        "ключи",
+        "семантика",
+        "сео",
+    },
+    "success": {
+        "better",
+        "effective",
+        "good",
+        "improved",
+        "positive",
+        "reusable",
+        "success",
+        "successful",
+        "succeed",
+        "worked",
+        "winning",
+        "wins",
+        "выигрыш",
+        "удачно",
+        "успех",
+    },
+}
+SEMANTIC_ALIASES = {
+    alias: group
+    for group, aliases in SEMANTIC_GROUPS.items()
+    for alias in aliases
+}
 
 
 def query_tokens(text: str) -> list[str]:
@@ -116,6 +234,41 @@ def query_tokens(text: str) -> list[str]:
         if token not in STOPWORDS and token not in tokens:
             tokens.append(token)
     return tokens[:40]
+
+
+def semantic_terms(text: str) -> set[str]:
+    """Return dependency-free semantic terms for local reranking.
+
+    This is not a provider embedding replacement. It is a conservative bridge
+    that lets the Router match common planning/outcome vocabulary even when the
+    query and stored memory use different words.
+    """
+    terms: set[str] = set()
+    for token in query_tokens(text):
+        terms.add(token)
+        alias = SEMANTIC_ALIASES.get(token)
+        if alias:
+            terms.add(alias)
+        if token.endswith("ing") and len(token) > 5:
+            terms.add(token[:-3])
+        if token.endswith("ed") and len(token) > 4:
+            terms.add(token[:-2])
+        if token.endswith("s") and len(token) > 4:
+            terms.add(token[:-1])
+    return terms
+
+
+def semantic_similarity(left: str, right: str) -> float:
+    """Return a small deterministic similarity score between two texts."""
+    left_terms = semantic_terms(left)
+    right_terms = semantic_terms(right)
+    if not left_terms or not right_terms:
+        return 0.0
+    intersection = left_terms & right_terms
+    if not intersection:
+        return 0.0
+    denominator = (len(left_terms) * len(right_terms)) ** 0.5
+    return round(len(intersection) / denominator, 6)
 
 
 def canonical_key(label: str) -> str:
@@ -864,6 +1017,14 @@ class MemoryStore:
                 f"memory graph node: {item['group_label']} / {item['label']}"
             )
 
+        semantic_hits = self._semantic_memory_hits(query, scope=scope, limit=limit * 8)
+        for item in semantic_hits:
+            memory_id = str(item["memory_id"])
+            seed_scores[memory_id] = max(seed_scores.get(memory_id, 0), 55 + item["score"])
+            reasons[memory_id].add(
+                f"semantic rerank match: score={item['similarity']:.3f}"
+            )
+
         expanded = self._expand_by_graph(seed_scores.keys(), depth=depth, scope=scope)
         for memory_id, reason in expanded.items():
             if memory_id not in seed_scores:
@@ -968,7 +1129,7 @@ class MemoryStore:
             "query": query,
             "scope": scope or "all",
             "retrieval": {
-                "mode": "deterministic hybrid tree retrieval",
+                "mode": "deterministic hybrid tree retrieval with semantic rerank",
                 "seed_count": len(seed_scores),
                 "branch_count": len(branches),
                 "depth": depth,
@@ -4801,6 +4962,66 @@ class MemoryStore:
                 item["memory_id"],
             )
         )
+        return hits[: max(1, limit)]
+
+    def _semantic_memory_hits(
+        self,
+        query: str,
+        *,
+        scope: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not semantic_terms(query):
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT DISTINCT m.memory_id, m.text AS memory_text, m.kind,
+                   m.scope, m.confidence, m.source_trust, mi.text AS item_text,
+                   mi.item_type, gn.label AS graph_label,
+                   gn.group_label, gn.summary, gn.blob, gn.importance
+            FROM memories m
+            LEFT JOIN memory_items mi
+              ON mi.memory_id = m.memory_id AND mi.status = 'active'
+            LEFT JOIN node_evidence ne
+              ON ne.memory_id = m.memory_id OR ne.item_id = mi.item_id
+            LEFT JOIN memory_graph_nodes gn
+              ON gn.graph_node_id = ne.graph_node_id AND gn.status = 'active'
+            WHERE m.status = 'active'
+              AND (? IS NULL OR m.scope = ?)
+            """,
+            (scope, scope),
+        ).fetchall()
+        best: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            haystack = " ".join(
+                [
+                    str(row["memory_text"] or ""),
+                    str(row["kind"] or ""),
+                    str(row["item_text"] or ""),
+                    str(row["item_type"] or ""),
+                    str(row["group_label"] or ""),
+                    str(row["graph_label"] or ""),
+                    str(row["summary"] or ""),
+                    str(row["blob"] or "")[:1000],
+                ]
+            )
+            similarity = semantic_similarity(query, haystack)
+            if similarity < 0.18:
+                continue
+            memory_id = str(row["memory_id"])
+            score = (similarity * 40.0) + float(row["importance"] or 0)
+            item = {
+                "memory_id": memory_id,
+                "score": score,
+                "similarity": similarity,
+                "scope": row["scope"],
+                "kind": row["kind"],
+                "text": row["memory_text"],
+            }
+            if memory_id not in best or score > best[memory_id]["score"]:
+                best[memory_id] = item
+        hits = list(best.values())
+        hits.sort(key=lambda item: (-item["score"], item["memory_id"]))
         return hits[: max(1, limit)]
 
     def _expand_by_graph(

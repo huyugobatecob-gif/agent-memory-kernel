@@ -47,16 +47,18 @@ source material for an agent to understand what actually happened.
 
 ## Retrieval Layers
 
-The deterministic v0 implementation uses four layers:
+The deterministic v0 implementation uses five layers:
 
 1. Active memory text search.
 2. Legacy graph node search for compatibility.
 3. Persistent graph node search over labels, node types, blobs, summaries, and
    linked memory items.
-4. Optional graph neighbor expansion by depth.
+4. Dependency-free semantic reranking over active memories, compact items, and
+   graph summaries/blobs.
+5. Optional graph neighbor expansion by depth.
 
-Future implementations can add embeddings, reranking, or an LLM extractor
-without changing the output contract.
+Future implementations can replace or enrich the local reranker with provider
+embeddings or an LLM extractor without changing the output contract.
 
 ## Persistent Graph Tree
 

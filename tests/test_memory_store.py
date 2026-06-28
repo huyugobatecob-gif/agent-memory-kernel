@@ -576,6 +576,41 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("Rule: project demo-site", pack)
             store.close()
 
+    def test_memory_tree_semantic_rerank_matches_related_outcome_language(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Pattern: project demo-site successful SEO refresh loop worked by comparing winning titles.",
+                scope="professional",
+                source_ref="session://semantic-success",
+                auto_approve=True,
+            )
+            store.remember(
+                "Fact: project unrelated-site stores billing metadata.",
+                scope="professional",
+                source_ref="session://semantic-unrelated",
+                auto_approve=True,
+            )
+
+            tree = store.retrieve_tree("client wins approach", scope="professional")
+            content = "\n".join(
+                memory["text"]
+                for branch in tree["branches"]
+                for memory in branch["memories"]
+            )
+            reasons = [
+                reason
+                for branch in tree["branches"]
+                for reason in branch["why_selected"]
+            ]
+
+            self.assertIn("winning titles", content)
+            self.assertTrue(any("semantic rerank match" in reason for reason in reasons))
+            self.assertIn("semantic rerank", tree["retrieval"]["mode"])
+            store.close()
+
     def test_conversation_turn_context_builder_and_graph_lists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

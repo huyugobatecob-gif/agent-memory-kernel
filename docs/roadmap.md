@@ -25,6 +25,7 @@ Status: implemented in this template.
 - Agent write-policy enforcement.
 - Memory revision history and rollback.
 - Formal Memory Contract and deterministic acceptance harness.
+- Dependency-free semantic reranking for Memory Tree retrieval.
 - OpenAI-compatible lightweight extractor adapter.
 - Markdown vault export.
 - Tests.
@@ -130,13 +131,14 @@ Implemented now:
 - Hermes provider adapter;
 - simple HTTP API;
 - OpenAI-compatible lightweight extractor adapter;
+- local deterministic semantic reranker.
 
 Planned:
 
 - MCP server;
 - file-based vault adapter;
 - optional provider embeddings;
-- optional semantic reranker.
+- provider-backed semantic reranker for larger corpora.
 
 ## v0.4: Review UI
 

@@ -94,6 +94,7 @@ Already present:
 - Agent write-policy table and enforcement for record, auto-approve, review,
   lifecycle, outcome, conflict, and supersession paths.
 - Memory Tree Pack and full context builder output.
+- Dependency-free semantic reranking for Memory Tree retrieval.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -130,7 +131,8 @@ Remaining for full memory:
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Production daemon mode for long-running Keeper workers.
 - MCP server for agents that should not use CLI or HTTP directly.
-- Provider embeddings and semantic reranking.
+- Provider embeddings and production semantic reranking beyond the local
+  deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Human review UI or inbox.
 - Hosted identity, tenancy, and capability rules beyond the local
@@ -312,7 +314,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ### Step 7: Add Embeddings And Semantic Reranking
 
-**What we do:** Keep lexical retrieval as the default fallback, but allow provider embeddings and optional lightweight reranking.
+**What we do:** Keep lexical retrieval as the default fallback, add a
+dependency-free local semantic reranker, and allow provider embeddings later.
 
 **Files:**
 
@@ -327,9 +330,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Tests prove retrieval works without embeddings and improves branch ranking when embeddings are available.
+**Verification:** Tests prove retrieval works without external embeddings and
+can match related outcome language that lexical search misses. Provider
+embedding tests can be added behind optional integration flags.
 
-**Result:** The router can handle paraphrases and long-running projects better than simple text search.
+**Result:** Baseline local reranking is implemented. Production users can still
+replace or augment it with provider embeddings for larger corpora.
 
 ### Step 8: Build The Prompt Envelope
 

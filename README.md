@@ -67,6 +67,7 @@ Included now:
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
+- Dependency-free semantic reranking for Memory Tree retrieval.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Markdown vault export.
@@ -77,7 +78,7 @@ Not included yet:
 
 - hosted multi-user API server;
 - web UI;
-- provider embeddings;
+- provider embeddings beyond the local deterministic semantic reranker;
 - production LLM Keeper eval suite and managed model configuration;
 - production Hermes integration;
 - multi-user auth.
