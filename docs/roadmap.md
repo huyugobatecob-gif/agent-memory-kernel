@@ -143,6 +143,12 @@ The formal contract is exposed through `agent-memory contract` and
 `/contract`; the deterministic full-memory gate is exposed through
 `agent-memory acceptance seed/run/assert` and `/acceptance/seed`,
 `/acceptance/run`, `/acceptance/assert`.
+The first public conformance suite is exposed through `agent-memory conformance
+spec/seed/run/assert` and `/conformance/spec`, `/conformance/seed`,
+`/conformance/run`, `/conformance/assert`. It defines named adapter scenarios
+for professional memory injection, personal-lane isolation, current-best
+conflict suppression, deleted-memory absence, unsafe-memory absence, and
+reviewable Keeper writes.
 
 ## v0.3: Adapters
 

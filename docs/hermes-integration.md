@@ -121,6 +121,8 @@ Useful endpoints:
 - `GET /health`
 - `POST /contract`
 - `POST /contract/assert`
+- `POST /conformance/spec`
+- `POST /conformance/spec/assert`
 - `POST /before-model-call`
 - `POST /after-saved-turn`
 - `POST /shadow-turn`
@@ -150,6 +152,7 @@ Useful endpoints:
 - `POST /outcome/pack`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
 - `POST /acceptance/seed`, `/acceptance/run`, `/acceptance/assert`
+- `POST /conformance/seed`, `/conformance/run`, `/conformance/assert`
 - `POST /worker/run`
 
 Before enabling live memory in Hermes, run the deterministic gate:
@@ -161,6 +164,19 @@ agent-memory acceptance assert --db .memory/hermes-memory.db
 
 Passing this gate does not mean production memory is complete, but failing it
 means the runtime loop is not safe enough for live pre-turn prompt injection.
+
+For adapter compatibility, run the public conformance suite as well:
+
+```bash
+agent-memory conformance spec
+agent-memory conformance seed --db .memory/hermes-memory.db
+agent-memory conformance assert --db .memory/hermes-memory.db
+```
+
+This suite names the behavior Hermes must preserve: selected professional
+memory enters the prompt with provenance, personal memory stays out of
+professional prompts, resolved conflict losers are suppressed, deleted and
+unsafe memory stay absent, and Keeper writes remain reviewable by default.
 
 ## Where To Hook It
 

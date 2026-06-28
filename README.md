@@ -45,6 +45,7 @@ Included now:
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Formal machine-readable Memory Contract and acceptance harness.
+- Versioned public conformance scenarios for adapter compatibility.
 - Scope access enforcement for runtime memory retrieval.
 - Agent write-policy enforcement for record, auto-approve, review, lifecycle,
   outcome, conflict, and supersession paths.
@@ -254,6 +255,9 @@ agent-memory contract
 agent-memory contract assert
 agent-memory acceptance seed --db .memory/acceptance.db
 agent-memory acceptance assert --db .memory/acceptance.db
+agent-memory conformance spec
+agent-memory conformance seed --db .memory/conformance.db
+agent-memory conformance assert --db .memory/conformance.db
 ```
 
 The acceptance harness checks the minimum closed-loop behavior: selected memory
@@ -261,6 +265,12 @@ beats a no-memory baseline, personal memory does not leak into professional
 prompts, unsafe memory is absent, source ids are logged, correction/rollback
 affect retrieval, Keeper writes stay reviewable, and write policy blocks
 unauthorized promotion.
+
+The conformance suite is the public compatibility layer. It checks named
+scenarios for professional memory injection, personal-lane isolation, resolved
+conflict suppression, deleted-memory absence, unsafe-memory absence, and
+reviewable Keeper writes. Adapters can use it as the first "does this behave
+like Agent Memory Kernel?" gate.
 
 Record profile and usage metadata:
 

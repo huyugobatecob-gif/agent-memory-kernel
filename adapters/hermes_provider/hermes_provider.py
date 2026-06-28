@@ -12,10 +12,15 @@ from typing import Any
 from agent_memory_kernel import (
     MemoryStore,
     assert_acceptance_suite,
+    assert_conformance_spec_shape,
+    assert_conformance_suite,
     assert_contract_shape,
+    conformance_spec,
     memory_contract,
     run_acceptance_suite,
+    run_conformance_suite,
     seed_acceptance_fixture,
+    seed_conformance_fixture,
 )
 
 
@@ -40,6 +45,21 @@ class HermesMemoryProvider:
 
     def assert_acceptance(self) -> dict[str, Any]:
         return assert_acceptance_suite(self.store)
+
+    def conformance_spec(self) -> dict[str, Any]:
+        return conformance_spec()
+
+    def assert_conformance_spec(self) -> dict[str, Any]:
+        return assert_conformance_spec_shape()
+
+    def seed_conformance(self) -> dict[str, Any]:
+        return seed_conformance_fixture(self.store)
+
+    def run_conformance(self) -> dict[str, Any]:
+        return run_conformance_suite(self.store)
+
+    def assert_conformance(self) -> dict[str, Any]:
+        return assert_conformance_suite(self.store)
 
     def context_pack(self, query: str, scope: str | None = None, limit: int = 8) -> str:
         return self.store.context_pack(query, scope=scope, limit=limit)

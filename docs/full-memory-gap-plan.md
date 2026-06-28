@@ -83,6 +83,10 @@ Must-have before claiming full memory:
     expected memory mutations, expected retrieval/refusal behavior, migration
     compatibility checks, and adapter conformance tests so outside projects can
     prove they implement the memory behavior instead of only copying the API.
+    Baseline implemented through `agent-memory conformance spec/seed/run/assert`
+    and `/conformance/spec`, `/conformance/seed`, `/conformance/run`,
+    `/conformance/assert`; remaining work is broader golden traces, migration
+    checks, and external adapter badges.
 
 ## Additional Runtime Architecture Notes
 
@@ -214,6 +218,8 @@ Remaining for full memory:
 - Production evals for guarded brain/style append across real prompt adapters.
 - Production Hermes runtime hooks that call memory before and after agent work.
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
+- Broader conformance traces for migration, adapter compatibility, and
+  real-world memory behavior beyond the baseline public suite.
 - Production daemon mode for long-running Keeper workers.
 - MCP server for agents that should not use CLI or HTTP directly.
 - Provider embeddings and production semantic reranking beyond the local

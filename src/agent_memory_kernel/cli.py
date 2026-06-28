@@ -8,6 +8,13 @@ import sys
 from pathlib import Path
 
 from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
+from .conformance import (
+    assert_conformance_spec_shape,
+    assert_conformance_suite,
+    conformance_spec,
+    run_conformance_suite,
+    seed_conformance_fixture,
+)
 from .contract import assert_contract_shape, memory_contract
 from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
@@ -828,6 +835,43 @@ def cmd_acceptance_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_conformance_spec(args: argparse.Namespace) -> int:
+    print_json(conformance_spec())
+    return 0
+
+
+def cmd_conformance_spec_assert(args: argparse.Namespace) -> int:
+    result = assert_conformance_spec_shape()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
+def cmd_conformance_seed(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(seed_conformance_fixture(store))
+    store.close()
+    return 0
+
+
+def cmd_conformance_run(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = run_conformance_suite(store)
+    store.close()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
+def cmd_conformance_assert(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = assert_conformance_suite(store)
+    store.close()
+    print_json(result)
+    return 0
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1381,6 +1425,27 @@ def build_parser() -> argparse.ArgumentParser:
     ap = acceptance_sub.add_parser("assert", help="Run acceptance and fail the command on any failed gate")
     add_common_db(ap)
     ap.set_defaults(func=cmd_acceptance_assert)
+
+    p = sub.add_parser("conformance", help="Run the public memory behavior conformance suite")
+    conformance_sub = p.add_subparsers(dest="conformance_command", required=True)
+
+    cp = conformance_sub.add_parser("spec", help="Print the versioned conformance scenarios")
+    cp.set_defaults(func=cmd_conformance_spec)
+
+    cp = conformance_sub.add_parser("spec-assert", help="Validate the conformance spec shape")
+    cp.set_defaults(func=cmd_conformance_spec_assert)
+
+    cp = conformance_sub.add_parser("seed", help="Seed the public conformance fixture")
+    add_common_db(cp)
+    cp.set_defaults(func=cmd_conformance_seed)
+
+    cp = conformance_sub.add_parser("run", help="Run conformance scenarios and return pass/fail JSON")
+    add_common_db(cp)
+    cp.set_defaults(func=cmd_conformance_run)
+
+    cp = conformance_sub.add_parser("assert", help="Run conformance and fail the command on any failed scenario")
+    add_common_db(cp)
+    cp.set_defaults(func=cmd_conformance_assert)
 
     p = sub.add_parser("worker", help="Process queued Keeper jobs")
     add_common_db(p)

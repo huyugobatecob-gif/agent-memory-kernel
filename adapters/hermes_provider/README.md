@@ -11,6 +11,8 @@ The adapter should:
 
 - expose the Memory Contract and acceptance gate as a preflight before live
   memory rollout;
+- expose the conformance spec and suite as the public adapter-compatibility
+  gate;
 - run `shadow_turn()` during rollout to collect reviewable Router/Keeper traces;
 - run `evaluate_shadow_trace()` after review to keep regression fixtures;
 - call `before_model_call()` before a main agent/model answers;
@@ -55,12 +57,19 @@ Preflight the shared contract before enabling live memory:
 agent-memory contract assert
 agent-memory acceptance seed --db .memory/hermes-memory.db
 agent-memory acceptance assert --db .memory/hermes-memory.db
+agent-memory conformance seed --db .memory/hermes-memory.db
+agent-memory conformance assert --db .memory/hermes-memory.db
 ```
 
 This proves the deterministic minimum: selected memory beats no-memory,
 personal memory does not leak into professional prompts, unsafe memory stays
 out, source ids are logged, rollback affects retrieval, Keeper writes remain
 reviewable, and write policy blocks unauthorized approval.
+
+The conformance commands are the public adapter-compatibility gate. They verify
+professional memory injection, personal-lane isolation, resolved conflict
+suppression, deleted-memory absence, unsafe-memory absence, and reviewable
+Keeper writes through the same runtime surfaces external adapters use.
 
 Hermes can pass a configured extractor into the provider:
 

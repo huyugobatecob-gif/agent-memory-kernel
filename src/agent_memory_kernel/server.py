@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
+from .conformance import (
+    assert_conformance_spec_shape,
+    assert_conformance_suite,
+    conformance_spec,
+    run_conformance_suite,
+    seed_conformance_fixture,
+)
 from .contract import assert_contract_shape, memory_contract
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
@@ -23,6 +30,10 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return memory_contract()
     if path == "/contract/assert":
         return assert_contract_shape()
+    if path == "/conformance/spec":
+        return conformance_spec()
+    if path == "/conformance/spec/assert":
+        return assert_conformance_spec_shape()
     if path == "/before-model-call":
         return store.before_model_call(**payload)
     if path == "/read-time-policy":
@@ -176,6 +187,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return run_acceptance_suite(store)
     if path == "/acceptance/assert":
         return assert_acceptance_suite(store)
+    if path == "/conformance/seed":
+        return seed_conformance_fixture(store)
+    if path == "/conformance/run":
+        return run_conformance_suite(store)
+    if path == "/conformance/assert":
+        return assert_conformance_suite(store)
     if path == "/worker/run":
         return store.process_keeper_jobs(
             limit=int(payload.get("limit", 10) or 10),

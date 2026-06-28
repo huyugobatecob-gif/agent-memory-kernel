@@ -10,6 +10,13 @@ from agent_memory_kernel.acceptance import (
     run_acceptance_suite,
     seed_acceptance_fixture,
 )
+from agent_memory_kernel.conformance import (
+    assert_conformance_spec_shape,
+    assert_conformance_suite,
+    conformance_spec,
+    run_conformance_suite,
+    seed_conformance_fixture,
+)
 from agent_memory_kernel.contract import assert_contract_shape, memory_contract
 from agent_memory_kernel.server import handle_api_request
 
@@ -46,6 +53,37 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertEqual(asserted["status"], "pass")
             store.close()
 
+    def test_conformance_suite_passes_public_memory_scenarios(self) -> None:
+        spec = conformance_spec()
+        spec_result = assert_conformance_spec_shape(spec)
+
+        self.assertEqual(spec_result["status"], "pass")
+        scenario_ids = {item["id"] for item in spec["scenarios"]}
+        self.assertIn("resolved_conflict_suppresses_loser", scenario_ids)
+        self.assertIn("keeper_write_is_reviewable", scenario_ids)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            seeded = seed_conformance_fixture(store)
+            self.assertEqual(seeded["status"], "seeded")
+            self.assertEqual(seeded["ids"]["unsafe_status"], "quarantined")
+
+            result = run_conformance_suite(store)
+            self.assertEqual(result["status"], "pass")
+            passed = {item["scenario"] for item in result["results"] if item["passed"]}
+            self.assertIn("professional_memory_injected_with_provenance", passed)
+            self.assertIn("personal_lane_is_withheld", passed)
+            self.assertIn("resolved_conflict_suppresses_loser", passed)
+            self.assertIn("deleted_memory_absent", passed)
+            self.assertIn("unsafe_memory_absent", passed)
+            self.assertIn("keeper_write_is_reviewable", passed)
+
+            asserted = assert_conformance_suite(store)
+            self.assertEqual(asserted["status"], "pass")
+            store.close()
+
     def test_http_contract_and_acceptance_endpoints(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -59,5 +97,21 @@ class ContractAcceptanceTests(unittest.TestCase):
             seeded = handle_api_request(store, "/acceptance/seed", {})
             self.assertEqual(seeded["status"], "seeded")
             result = handle_api_request(store, "/acceptance/assert", {})
+            self.assertEqual(result["status"], "pass")
+            store.close()
+
+    def test_http_conformance_endpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            spec = handle_api_request(store, "/conformance/spec", {})
+            self.assertEqual(spec["version"], "agent-memory-conformance-v0")
+            spec_assert = handle_api_request(store, "/conformance/spec/assert", {})
+            self.assertEqual(spec_assert["status"], "pass")
+
+            seeded = handle_api_request(store, "/conformance/seed", {})
+            self.assertEqual(seeded["status"], "seeded")
+            result = handle_api_request(store, "/conformance/assert", {})
             self.assertEqual(result["status"], "pass")
             store.close()
