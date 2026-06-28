@@ -101,6 +101,8 @@ Included now:
 - Router read-time policy, explainability, usefulness feedback, and memory
   quality reports.
 - Dependency-free semantic reranking for Memory Tree retrieval.
+- Provider-neutral embedding contract with local deterministic fallback and
+  optional provider rerank hook for larger corpora.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Export control previews with policy decisions, scope counts, and aggregate
@@ -123,7 +125,7 @@ Not included yet:
 
 - hosted multi-user API server;
 - web UI;
-- provider embeddings beyond the local deterministic semantic reranker;
+- hosted embedding provider adapters and approximate-nearest-neighbor indexes;
 - production LLM Keeper eval suite and managed model configuration;
 - production Hermes integration;
 - multi-user auth.

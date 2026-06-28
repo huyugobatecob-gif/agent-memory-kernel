@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .embeddings import lexical_embedding, query_tokens, semantic_similarity, semantic_terms
 from .extractors.base import Extractor
 from .extractors.rules import RuleBasedExtractor
 from .graph_commands import (
@@ -36,7 +37,6 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:16]}"
 
 
-TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9_.-]{2,}")
 URL_RE = re.compile(r"https?://[^\s)]+")
 DOMAIN_RE = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b")
 DATE_HINT_RE = re.compile(r"\b(?:20\d{2}-\d{2}-\d{2}|20\d{6}|today|yesterday|tomorrow|сегодня|вчера|завтра)\b", re.I)
@@ -218,195 +218,6 @@ ROUTER_FEEDBACK_SCORES = {
     "missing": -0.5,
     "harmful": -1.0,
 }
-STOPWORDS = {
-    "and",
-    "are",
-    "для",
-    "for",
-    "from",
-    "how",
-    "как",
-    "или",
-    "это",
-    "что",
-    "the",
-    "this",
-    "that",
-    "what",
-    "when",
-    "where",
-    "with",
-    "you",
-    "your",
-    "вот",
-    "при",
-    "про",
-    "чтобы",
-}
-SEMANTIC_GROUPS = {
-    "agent": {
-        "agent",
-        "agents",
-        "assistant",
-        "assistants",
-        "бот",
-        "агент",
-        "агенты",
-        "ассистент",
-    },
-    "failure": {
-        "avoid",
-        "bad",
-        "blocked",
-        "broken",
-        "bug",
-        "error",
-        "fail",
-        "failed",
-        "failure",
-        "failing",
-        "gotcha",
-        "issue",
-        "negative",
-        "outdated",
-        "problem",
-        "regression",
-        "risk",
-        "stale",
-        "unsuccessful",
-        "неудача",
-        "неудачный",
-        "ошибка",
-        "проблема",
-    },
-    "loop": {
-        "attempt",
-        "iteration",
-        "loop",
-        "plan",
-        "planning",
-        "workflow",
-        "итерация",
-        "луп",
-        "петля",
-        "план",
-    },
-    "memory": {
-        "context",
-        "history",
-        "memory",
-        "provenance",
-        "recall",
-        "remember",
-        "retrieve",
-        "source",
-        "вспомнить",
-        "история",
-        "контекст",
-        "память",
-    },
-    "project": {
-        "client",
-        "domain",
-        "project",
-        "repo",
-        "site",
-        "workspace",
-        "домен",
-        "клиент",
-        "проект",
-        "репозиторий",
-        "сайт",
-    },
-    "seo": {
-        "content",
-        "indexing",
-        "internal",
-        "keyword",
-        "keywords",
-        "link",
-        "links",
-        "organic",
-        "page",
-        "refresh",
-        "seo",
-        "serp",
-        "title",
-        "titles",
-        "контент",
-        "ключи",
-        "семантика",
-        "сео",
-    },
-    "success": {
-        "better",
-        "effective",
-        "good",
-        "improved",
-        "positive",
-        "reusable",
-        "success",
-        "successful",
-        "succeed",
-        "worked",
-        "winning",
-        "wins",
-        "выигрыш",
-        "удачно",
-        "успех",
-    },
-}
-SEMANTIC_ALIASES = {
-    alias: group
-    for group, aliases in SEMANTIC_GROUPS.items()
-    for alias in aliases
-}
-
-
-def query_tokens(text: str) -> list[str]:
-    """Return small lexical tokens for deterministic graph retrieval."""
-    tokens = []
-    for token in TOKEN_RE.findall((text or "").lower()):
-        if token not in STOPWORDS and token not in tokens:
-            tokens.append(token)
-    return tokens[:40]
-
-
-def semantic_terms(text: str) -> set[str]:
-    """Return dependency-free semantic terms for local reranking.
-
-    This is not a provider embedding replacement. It is a conservative bridge
-    that lets the Router match common planning/outcome vocabulary even when the
-    query and stored memory use different words.
-    """
-    terms: set[str] = set()
-    for token in query_tokens(text):
-        terms.add(token)
-        alias = SEMANTIC_ALIASES.get(token)
-        if alias:
-            terms.add(alias)
-        if token.endswith("ing") and len(token) > 5:
-            terms.add(token[:-3])
-        if token.endswith("ed") and len(token) > 4:
-            terms.add(token[:-2])
-        if token.endswith("s") and len(token) > 4:
-            terms.add(token[:-1])
-    return terms
-
-
-def semantic_similarity(left: str, right: str) -> float:
-    """Return a small deterministic similarity score between two texts."""
-    left_terms = semantic_terms(left)
-    right_terms = semantic_terms(right)
-    if not left_terms or not right_terms:
-        return 0.0
-    intersection = left_terms & right_terms
-    if not intersection:
-        return 0.0
-    denominator = (len(left_terms) * len(right_terms)) ** 0.5
-    return round(len(intersection) / denominator, 6)
-
-
 def canonical_key(label: str) -> str:
     """Normalize a graph label for deterministic dedupe."""
     tokens = query_tokens(label)
@@ -426,27 +237,6 @@ def excerpt(text: str, limit: int = 240) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 1)].rstrip() + "…"
-
-
-def lexical_embedding(text: str, *, dims: int = 32) -> list[float]:
-    """Small local embedding placeholder compatible with future vector search.
-
-    It is intentionally deterministic and dependency-free. Production installs
-    can replace this field with provider embeddings without changing the schema.
-    """
-    vector = [0.0] * dims
-    tokens = query_tokens(text)
-    if not tokens:
-        return vector
-    for token in tokens:
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        index = digest[0] % dims
-        sign = 1.0 if digest[1] % 2 == 0 else -1.0
-        vector[index] += sign
-    magnitude = sum(value * value for value in vector) ** 0.5
-    if not magnitude:
-        return vector
-    return [round(value / magnitude, 6) for value in vector]
 
 
 def deterministic_position(key: str) -> tuple[float, float]:

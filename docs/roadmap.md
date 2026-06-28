@@ -279,14 +279,15 @@ Implemented now:
 - simple HTTP API;
 - dependency-free stdio MCP server;
 - OpenAI-compatible lightweight extractor adapter;
-- local deterministic semantic reranker.
+- local deterministic semantic reranker;
+- provider-neutral embedding contract with local fallback.
 
 Planned:
 
 - hosted or remote MCP deployment patterns;
 - file-based vault adapter;
-- optional provider embeddings;
-- provider-backed semantic reranker for larger corpora.
+- hosted embedding provider adapters;
+- provider-backed approximate-nearest-neighbor reranker for larger corpora.
 
 ## v0.4: Review UI
 
