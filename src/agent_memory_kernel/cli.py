@@ -307,6 +307,20 @@ def cmd_memory_quality(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_observability(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.memory_observability_report(
+            scope=args.scope,
+            thread_id=args.thread_id,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_current_best(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1187,6 +1201,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=10)
     p.set_defaults(func=cmd_memory_quality)
+
+    p = sub.add_parser("observability", help="Summarize Router, Keeper, and usage telemetry")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--thread-id")
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_observability)
 
     p = sub.add_parser("current-best", help="Resolve current-best memory for a query or scope")
     add_common_db(p)

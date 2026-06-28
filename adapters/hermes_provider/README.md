@@ -42,6 +42,8 @@ The adapter should:
 - expose `operational_status()` so Hermes can check local memory health and
   fallback behavior before routing critical work through memory;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
+- inspect `observability_report()` for Router token estimates, Keeper job
+  health, and LLM usage tokens/cost;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
 - inspect graph nodes and Keeper runs while debugging retrieval;

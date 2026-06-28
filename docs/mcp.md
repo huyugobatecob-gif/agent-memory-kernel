@@ -50,6 +50,8 @@ Runtime tools:
 - `memory_operational_status`: report local memory health, required table
   checks, storage size warning, and configured no-memory/failed-Keeper fallback
   behavior.
+- `memory_observability`: summarize Router runs, Keeper jobs, and LLM usage
+  tokens/cost for memory operations.
 
 Retrieval tools:
 

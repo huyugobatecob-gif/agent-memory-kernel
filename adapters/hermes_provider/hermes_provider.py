@@ -180,6 +180,19 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.memory_quality_report(scope=scope, limit=limit)
 
+    def observability_report(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return self.store.memory_observability_report(
+            scope=scope,
+            thread_id=thread_id,
+            limit=limit,
+        )
+
     def current_best_report(
         self,
         query: str = "",

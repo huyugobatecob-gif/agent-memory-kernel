@@ -215,6 +215,17 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_observability": {
+        "endpoint": "/observability",
+        "description": "Summarize Router, Keeper, and LLM usage telemetry for memory operations.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "thread_id": _string("Optional thread id.", ""),
+                "limit": _integer("Maximum recent Router/Keeper/usage rows.", 20),
+            }
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

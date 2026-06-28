@@ -380,6 +380,9 @@ Baseline implementation:
 - `agent-memory worker --daemon` provides a long-running polling Keeper worker;
   failed queued extraction is recorded as a failed Keeper job instead of
   crashing the worker path.
+- `agent-memory observability`, `/observability`, and MCP
+  `memory_observability` summarize Router token estimates, selected branches,
+  Keeper job status, warnings, and LLM usage tokens/cost.
 
 Still production work: latency SLOs, backup/restore, migration recovery,
 hosted health checks, deployment supervisor recipes, restart policies, and

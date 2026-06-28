@@ -132,6 +132,9 @@ class HermesMemoryProvider:
 
     def operational_status(self) -> dict:
         ...
+
+    def observability_report(self, scope: str | None = None, thread_id: str | None = None) -> dict:
+        ...
 ```
 
 The provider should call `MemoryOrchestrator`/`MemoryStore`, not duplicate
@@ -160,8 +163,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_after_turn`, `memory_retrieve_context`, `memory_ingest_graph`,
 `memory_changes`, `memory_tree_pack`, `memory_capability_check`,
 `memory_derived_invalidations`, `memory_operational_status`,
-`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_observability`, `memory_review_list`, `memory_graph_nodes`,
+`memory_graph_edges`, and `memory_worker_run`.
 
 Useful endpoints:
 
@@ -190,6 +193,7 @@ Useful endpoints:
 - `POST /router-feedback/record`
 - `POST /router-feedback/list`
 - `POST /memory-quality`
+- `POST /observability`
 - `POST /current-best`
 - `POST /memory-changes`
 - `POST /derived-invalidations`
@@ -544,6 +548,8 @@ agent-memory usage record \
   --thread-id seo-demo \
   --prompt-tokens 1200 \
   --completion-tokens 300
+
+agent-memory observability --scope professional --thread-id seo-demo
 ```
 
 Workspace profile export:

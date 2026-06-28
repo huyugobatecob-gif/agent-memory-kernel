@@ -115,6 +115,12 @@ Baseline read-time policy and Router explainability are implemented through
 Baseline Router usefulness feedback and quality reporting are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
+Baseline observability and cost accounting are implemented through
+`agent-memory observability`, `/observability`, the Hermes provider wrapper,
+and MCP `memory_observability`. The report joins Router selected branches and
+prompt token estimates, Keeper status/warnings, and LLM usage tokens/cost.
+Production latency, billing reconciliation, dashboards, retention policy, and
+alerts are still backlog.
 Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
 `keeper-extraction-v0.1`, local schema validation, deterministic fallback, and
 candidate extraction metadata. Production Keeper prompt tuning, live provider

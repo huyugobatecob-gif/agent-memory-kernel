@@ -97,6 +97,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             limit=int(payload.get("limit", 10) or 10),
         )
+    if path in {"/observability", "/memory-observability"}:
+        return store.memory_observability_report(
+            scope=payload.get("scope"),
+            thread_id=payload.get("thread_id"),
+            limit=int(payload.get("limit", 20) or 20),
+        )
     if path == "/current-best":
         return store.current_best_report(
             str(payload.get("query", "")),

@@ -78,6 +78,7 @@ Included now:
 - OpenAI-compatible lightweight extractor adapter with deterministic fallback
   for contract tests and local operation.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
+- Combined Router/Keeper/usage observability report for memory operations.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
@@ -274,6 +275,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
+agent-memory observability --db .memory/demo.db --scope professional
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
 ```
 
@@ -307,6 +309,7 @@ Record profile and usage metadata:
 agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO projects."
 agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
 agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
+agent-memory observability --db .memory/demo.db --thread-id seo-demo
 agent-memory export-profile --db .memory/demo.db --scope professional
 agent-memory import-profile --db .memory/restored.db exported-profile.json
 ```
@@ -597,8 +600,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
 `memory_capability_check`, `memory_derived_invalidations`,
-`memory_operational_status`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_operational_status`, `memory_observability`, `memory_graph_nodes`,
+`memory_graph_edges`, and `memory_worker_run`.
 
 ## Implementation Plan
 
@@ -674,6 +677,7 @@ docs/
   implementation-plan.md  phased build plan
   full-memory-gap-plan.md  gap plan for automatic full memory
   runtime-contract.md      pre-call router and post-turn keeper contract
+  observability.md         Router, Keeper, and usage telemetry report
   memory-lifecycle-contract.md  durable memory lifecycle contract
   keeper-extraction.md    versioned low-cost keeper extraction contract
   cross-model-context-contract.md  provider-neutral prompt context contract

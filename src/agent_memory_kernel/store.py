@@ -95,6 +95,7 @@ READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
+MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
     "record",
@@ -2330,6 +2331,134 @@ class MemoryStore:
             (scope, scope, thread_id, thread_id, max(1, min(int(limit or 50), 500))),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def memory_observability_report(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Summarize Router, Keeper, and LLM usage telemetry for memory ops."""
+        scope = normalize_scope(scope) if scope else None
+        row_limit = max(1, min(int(limit or 20), 100))
+        router_runs = self.list_router_runs(thread_id=thread_id, scope=scope, limit=row_limit)
+        keeper_changes = self.memory_changes(
+            thread_id=thread_id,
+            scope=scope,
+            limit=row_limit,
+        )["changes"]
+        usage_rows = self.list_llm_usage(scope=scope, thread_id=thread_id, limit=row_limit)
+
+        router_token_estimates = [
+            int(run.get("metadata", {}).get("token_estimate", 0) or 0)
+            for run in router_runs
+        ]
+        router_selected_total = sum(len(run.get("selected_branch_ids", [])) for run in router_runs)
+        router_warning_runs = sum(1 for run in router_runs if run.get("warnings"))
+        no_memory_runs = sum(
+            1
+            for run in router_runs
+            if not bool(run.get("metadata", {}).get("memory_allowed", True))
+        )
+        keeper_status_counts: dict[str, int] = {}
+        keeper_warning_jobs = 0
+        for change in keeper_changes:
+            status = str(change.get("status", "unknown") or "unknown")
+            keeper_status_counts[status] = keeper_status_counts.get(status, 0) + 1
+            if change.get("warnings"):
+                keeper_warning_jobs += 1
+
+        usage_by_model: dict[str, dict[str, Any]] = {}
+        usage_by_currency: dict[str, dict[str, Any]] = {}
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_tokens = 0
+        for row in usage_rows:
+            provider_model = f"{row['provider']}:{row['model']}"
+            currency = str(row["currency"] or "USD")
+            prompt_tokens = int(row["prompt_tokens"] or 0)
+            completion_tokens = int(row["completion_tokens"] or 0)
+            tokens = int(row["total_tokens"] or 0)
+            cost = float(row["cost"] or 0)
+            total_prompt_tokens += prompt_tokens
+            total_completion_tokens += completion_tokens
+            total_tokens += tokens
+            model_bucket = usage_by_model.setdefault(
+                provider_model,
+                {
+                    "calls": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost": 0.0,
+                },
+            )
+            model_bucket["calls"] += 1
+            model_bucket["prompt_tokens"] += prompt_tokens
+            model_bucket["completion_tokens"] += completion_tokens
+            model_bucket["total_tokens"] += tokens
+            model_bucket["cost"] = round(float(model_bucket["cost"]) + cost, 6)
+            currency_bucket = usage_by_currency.setdefault(currency, {"calls": 0, "cost": 0.0})
+            currency_bucket["calls"] += 1
+            currency_bucket["cost"] = round(float(currency_bucket["cost"]) + cost, 6)
+
+        return {
+            "version": MEMORY_OBSERVABILITY_VERSION,
+            "scope": scope or "all",
+            "thread_id": thread_id or "",
+            "limit": row_limit,
+            "router": {
+                "run_count": len(router_runs),
+                "warning_run_count": router_warning_runs,
+                "no_memory_run_count": no_memory_runs,
+                "selected_branch_count": router_selected_total,
+                "average_token_estimate": (
+                    round(sum(router_token_estimates) / len(router_token_estimates), 2)
+                    if router_token_estimates
+                    else 0
+                ),
+                "latest_runs": [
+                    {
+                        "router_run_id": run["router_run_id"],
+                        "created_at": run["created_at"],
+                        "thread_id": run["thread_id"],
+                        "scope": run["scope"],
+                        "agent_id": run["agent_id"],
+                        "model_id": run["model_id"],
+                        "mode": run["mode"],
+                        "selected_branch_ids": run["selected_branch_ids"],
+                        "token_estimate": int(
+                            run.get("metadata", {}).get("token_estimate", 0) or 0
+                        ),
+                        "memory_allowed": bool(run.get("metadata", {}).get("memory_allowed", True)),
+                        "warnings": run["warnings"],
+                    }
+                    for run in router_runs
+                ],
+            },
+            "keeper": {
+                "job_count": len(keeper_changes),
+                "status_counts": keeper_status_counts,
+                "warning_job_count": keeper_warning_jobs,
+                "candidate_count": sum(
+                    len(change.get("candidate_ids", [])) for change in keeper_changes
+                ),
+                "promoted_memory_count": sum(
+                    len(change.get("promoted_memory_ids", [])) for change in keeper_changes
+                ),
+                "latest_jobs": keeper_changes,
+            },
+            "usage": {
+                "call_count": len(usage_rows),
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "total_tokens": total_tokens,
+                "by_model": usage_by_model,
+                "by_currency": usage_by_currency,
+                "latest_usage": usage_rows,
+            },
+        }
 
     def optimize_graph(
         self,
