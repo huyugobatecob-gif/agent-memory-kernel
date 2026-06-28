@@ -35,6 +35,7 @@ Root
 Branch
   category / label
   why selected
+  selection decisions
   active memories
   related nodes
   memory graph nodes
@@ -59,6 +60,30 @@ The deterministic v0 implementation uses five layers:
 
 Future implementations can replace or enrich the local reranker with provider
 embeddings or an LLM extractor without changing the output contract.
+
+## Read-Time Policy And Explainability
+
+Every runtime Router call records the policy version and selection decisions in
+the prompt envelope metadata and in `router_runs.metadata_json`.
+
+The local policy is `read-time-policy-v0.1`. It ranks candidates by task
+relevance, graph-node relevance, semantic similarity, graph-neighbor expansion,
+source trust/confidence visibility, recency tie-breakers, lifecycle filters,
+scope/sensitivity filters, conflict status, outcome signal, and branch/token
+limits.
+
+Inspect it with:
+
+```bash
+agent-memory read-time-policy --scope professional
+agent-memory router-runs --thread-id seo-demo
+agent-memory router-explain router_xxxxxxxxxxxxxxxx
+```
+
+`router-explain` returns selected and truncated candidates with rank, score,
+why-signals, prompt role, source trust, sensitivity, conflict status, and
+outcome signal. This makes the Router auditable without giving the main model
+access to the full graph.
 
 ## Persistent Graph Tree
 

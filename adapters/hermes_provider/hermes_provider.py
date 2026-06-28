@@ -77,6 +77,31 @@ class HermesMemoryProvider:
     def brain_style_append(self, scope: str = "professional") -> dict[str, Any]:
         return self.store.brain_style_append(scope=scope)
 
+    def read_time_policy(
+        self,
+        *,
+        scope: str | None = None,
+        token_budget: int | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return self.store.read_time_policy(
+            scope=scope,
+            token_budget=token_budget,
+            limit=limit,
+        )
+
+    def router_runs(
+        self,
+        *,
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_router_runs(thread_id=thread_id, scope=scope, limit=limit)
+
+    def explain_router_run(self, router_run_id: str) -> dict[str, Any]:
+        return self.store.explain_router_run(router_run_id)
+
     def before_model_call(
         self,
         query: str,

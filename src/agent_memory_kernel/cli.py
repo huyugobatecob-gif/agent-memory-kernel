@@ -170,6 +170,42 @@ def cmd_before_model_call(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_read_time_policy(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.read_time_policy(
+            scope=args.scope,
+            token_budget=args.token_budget,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_router_runs(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_router_runs(
+            thread_id=args.thread_id,
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_router_explain(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.explain_router_run(args.router_run_id))
+    store.close()
+    return 0
+
+
 def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -862,6 +898,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--recent-messages", type=int, default=6)
     p.add_argument("--disable-brain-style", action="store_true", help="Omit graph-derived style hints")
     p.set_defaults(func=cmd_before_model_call)
+
+    p = sub.add_parser("read-time-policy", help="Show the Router read-time decision policy")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--token-budget", type=int, default=0)
+    p.add_argument("--limit", type=int, default=0)
+    p.set_defaults(func=cmd_read_time_policy)
+
+    p = sub.add_parser("router-runs", help="List Router runs and prompt-facing memory reads")
+    add_common_db(p)
+    p.add_argument("--thread-id")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_router_runs)
+
+    p = sub.add_parser("router-explain", help="Explain why a Router run selected memory")
+    add_common_db(p)
+    p.add_argument("router_run_id")
+    p.set_defaults(func=cmd_router_explain)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
     add_common_db(p)

@@ -768,9 +768,31 @@ class MemoryStoreTests(unittest.TestCase):
             envelope = before["prompt_envelope"]
             self.assertIn("system", envelope)
             self.assertEqual(envelope["metadata"]["thread_id"], "thread-runtime")
+            self.assertEqual(
+                envelope["metadata"]["read_time_policy"]["version"],
+                "read-time-policy-v0.1",
+            )
+            self.assertTrue(envelope["metadata"]["selection_decisions"])
+            self.assertEqual(
+                envelope["metadata"]["selection_decisions"][0]["decision"],
+                "selected",
+            )
+            self.assertIn(
+                "policy_factors",
+                envelope["metadata"]["selection_decisions"][0],
+            )
             self.assertNotIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][0]["content"])
             self.assertIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][1]["content"])
             self.assertIn("demo-site", envelope["messages"][1]["content"])
+            explained = store.explain_router_run(before["router_run_id"])
+            self.assertEqual(explained["router_run"]["thread_id"], "thread-runtime")
+            self.assertEqual(explained["read_time_policy"]["version"], "read-time-policy-v0.1")
+            self.assertEqual(
+                explained["selection_decisions"][0]["memory_id"],
+                envelope["metadata"]["selection_decisions"][0]["memory_id"],
+            )
+            router_runs = store.list_router_runs(thread_id="thread-runtime")
+            self.assertEqual(router_runs[0]["router_run_id"], before["router_run_id"])
             router_count = store.conn.execute(
                 "SELECT COUNT(*) AS count FROM router_runs"
             ).fetchone()["count"]
@@ -1174,6 +1196,21 @@ class MemoryStoreTests(unittest.TestCase):
                     "scope": "professional",
                 },
             )
+            read_policy = handle_api_request(
+                store,
+                "/read-time-policy",
+                {"scope": "professional", "token_budget": 12000, "limit": 8},
+            )
+            router_runs = handle_api_request(
+                store,
+                "/router-runs",
+                {"thread_id": "api-thread"},
+            )
+            router_explain = handle_api_request(
+                store,
+                "/router-explain",
+                {"router_run_id": before["router_run_id"]},
+            )
             after = handle_api_request(
                 store,
                 "/after-saved-turn",
@@ -1321,6 +1358,10 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(asserted["status"], "passed")
             self.assertTrue(review["candidates"])
             self.assertTrue(before["router_run_id"].startswith("router_"))
+            self.assertEqual(read_policy["version"], "read-time-policy-v0.1")
+            self.assertEqual(len(router_runs["runs"]), 1)
+            self.assertEqual(router_explain["router_run"]["router_run_id"], before["router_run_id"])
+            self.assertIn("selection_decisions", router_explain)
             self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
             self.assertEqual(queued["status"], "queued")
             self.assertEqual(worker["processed"], 1)

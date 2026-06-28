@@ -179,6 +179,9 @@ The response includes `prompt_envelope`, `router_run_id`,
 `selected_branch_ids`, `access_decisions`, and warnings.
 If the active scope is not allowed, the Router returns a no-memory envelope and
 records a denied access decision.
+The prompt envelope metadata includes `read_time_policy`,
+`selection_decisions`, and `truncated_branch_count`, so Hermes can audit why a
+memory branch entered the prompt.
 When graph-level Digital Brain state has enough classified nodes and a clear
 skew, `prompt_envelope.system` also includes a guarded advisory style append.
 The decision is visible in `prompt_envelope.metadata.brain_style`, and no style
@@ -190,6 +193,13 @@ agent-memory before-model-call "planning SEO content refresh loop" \
   --scope professional \
   --allowed-scopes professional \
   --disable-brain-style
+```
+
+To explain a live Router decision:
+
+```bash
+agent-memory router-runs --thread-id seo-demo
+agent-memory router-explain router_xxxxxxxxxxxxxxxx
 ```
 
 Lower-level context builder call:

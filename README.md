@@ -219,6 +219,14 @@ agent-memory before-model-call --db .memory/demo.db "planning an SEO loop" \
   --disable-brain-style
 ```
 
+Inspect why the Router selected memory for a prompt:
+
+```bash
+agent-memory read-time-policy --db .memory/demo.db --scope professional
+agent-memory router-runs --db .memory/demo.db --thread-id seo-demo
+agent-memory router-explain --db .memory/demo.db router_xxxxxxxxxxxxxxxx
+```
+
 Inspect the formal memory contract and run the deterministic full-memory gate:
 
 ```bash

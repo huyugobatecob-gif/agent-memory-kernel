@@ -85,6 +85,36 @@ PRIMARY_GRAPH_TYPES = [
 MIN_BRAIN_STYLE_NODES = 4
 LEFT_BRAIN_STYLE_SHARE = 0.60
 RIGHT_BRAIN_STYLE_SHARE = 0.40
+READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
+READ_TIME_POLICY = {
+    "version": READ_TIME_POLICY_VERSION,
+    "ranking_order": [
+        "task relevance from active memory text",
+        "task relevance from graph node labels and summaries",
+        "semantic rerank similarity",
+        "graph neighbor expansion",
+        "source trust and confidence visibility",
+        "recency as tie-breaker",
+        "scope, sensitivity, lifecycle, and conflict filters",
+        "token budget and branch limit",
+    ],
+    "filters": [
+        "status must be active",
+        "scope must match the active read scope",
+        "secret or quarantined memory must be absent",
+        "deleted, distrusted, expired, and superseded memory must be absent",
+    ],
+    "prompt_roles": {
+        "rule": "candidate instruction only when trusted and allowed",
+        "preference": "user preference context",
+        "decision": "decision evidence",
+        "attempt": "attempt evidence",
+        "outcome": "outcome evidence",
+        "gotcha": "risk evidence",
+        "pattern": "reusable pattern evidence",
+        "fact": "factual evidence",
+    },
+}
 STOPWORDS = {
     "and",
     "are",
@@ -968,6 +998,22 @@ class MemoryStore:
             )
         return "\n".join(lines)
 
+    def read_time_policy(
+        self,
+        *,
+        scope: str | None = None,
+        token_budget: int | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Return the Router policy that governs prompt-facing memory reads."""
+        policy = json.loads(json.dumps(READ_TIME_POLICY))
+        policy["runtime"] = {
+            "scope": normalize_scope(scope) if scope else "all",
+            "token_budget": int(token_budget or 0),
+            "branch_limit": int(limit or 0),
+        }
+        return policy
+
     def retrieve_tree(
         self,
         query: str,
@@ -1034,17 +1080,28 @@ class MemoryStore:
                 seed_scores[memory_id] = 20
             reasons[memory_id].add(reason)
 
-        selected_ids = [
+        ranked_ids = [
             memory_id
             for memory_id, _score in sorted(
                 seed_scores.items(),
                 key=lambda item: (-item[1], item[0]),
-            )[:limit]
+            )
         ]
+        selected_ids = ranked_ids[:limit]
+        truncated_ids = ranked_ids[limit:]
         if not selected_ids:
             return self._empty_tree_pack(query, scope)
 
         memory_rows = self._memories_by_id(selected_ids)
+        decision_rows = self._memories_by_id(ranked_ids[: limit + min(len(truncated_ids), 16)])
+        selection_decisions = self._selection_decisions(
+            ranked_ids,
+            seed_scores=seed_scores,
+            reasons=reasons,
+            selected_ids=set(selected_ids),
+            memory_rows=decision_rows,
+            limit=limit,
+        )
         node_rows = self._nodes_for_memories(selected_ids)
         graph_node_rows = self._graph_nodes_for_memories(selected_ids)
         graph_edge_rows = self._graph_edges_for_memories(selected_ids)
@@ -1065,6 +1122,8 @@ class MemoryStore:
                     "category": primary["node_type"],
                     "label": primary["label"],
                     "why_selected": sorted(reasons.get(memory_id, [])),
+                    "score": round(float(seed_scores.get(memory_id, 0)), 4),
+                    "selection_decisions": [],
                     "memories": [],
                     "related_nodes": [],
                     "memory_graph_nodes": [],
@@ -1076,6 +1135,13 @@ class MemoryStore:
             branch["why_selected"] = sorted(
                 set(branch["why_selected"]) | reasons.get(memory_id, set())
             )
+            branch["score"] = max(
+                float(branch.get("score", 0)),
+                round(float(seed_scores.get(memory_id, 0)), 4),
+            )
+            for decision in selection_decisions:
+                if decision.get("memory_id") == memory_id and decision not in branch["selection_decisions"]:
+                    branch["selection_decisions"].append(decision)
             branch["memories"].append(
                 {
                     "memory_id": memory_id,
@@ -1133,8 +1199,11 @@ class MemoryStore:
             "scope": scope or "all",
             "retrieval": {
                 "mode": "deterministic hybrid tree retrieval with semantic rerank",
+                "policy_version": READ_TIME_POLICY_VERSION,
                 "seed_count": len(seed_scores),
                 "branch_count": len(branches),
+                "selection_decisions": selection_decisions,
+                "truncated_count": len(truncated_ids),
                 "depth": depth,
                 "include_raw": include_raw,
             },
@@ -2042,6 +2111,12 @@ class MemoryStore:
             else self._empty_tree_pack(query, scope)
         )
         selected_branch_ids = self._selected_branch_ids(tree)
+        selection_decisions = list(tree.get("retrieval", {}).get("selection_decisions", []))
+        read_time_policy = self.read_time_policy(
+            scope=scope,
+            token_budget=token_budget,
+            limit=limit,
+        )
         memory_context = self._memory_tree_supplement(tree)
         context_pack = (
             self.context_builder_pack(
@@ -2103,6 +2178,9 @@ class MemoryStore:
                 "allowed_scopes": allowed_scopes or [scope],
                 "denied_scopes": denied_scopes or [],
                 "selected_branch_ids": selected_branch_ids,
+                "selection_decisions": selection_decisions,
+                "truncated_branch_count": int(tree.get("retrieval", {}).get("truncated_count", 0) or 0),
+                "read_time_policy": read_time_policy,
                 "source_ids": self._source_ids_from_tree(tree),
                 "token_estimate": self._rough_token_count(system + context_pack + memory_context + query),
                 "redactions": [],
@@ -2498,6 +2576,75 @@ class MemoryStore:
             "warnings": warnings,
             "prompt_envelope": before["prompt_envelope"],
             "keeper": after,
+        }
+
+    def list_router_runs(
+        self,
+        *,
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List Router runs so operators can inspect prompt-facing memory reads."""
+        clauses = []
+        params: list[Any] = []
+        if thread_id:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT router_run_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, mode, query, token_budget,
+                   selected_branch_ids_json, access_decisions_json,
+                   warnings_json, metadata_json
+            FROM router_runs
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        return [self._router_run_dict(row) for row in rows]
+
+    def explain_router_run(self, router_run_id: str) -> dict[str, Any]:
+        """Return a replayable explanation for one Router run."""
+        row = self.conn.execute(
+            """
+            SELECT router_run_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, mode, query, token_budget,
+                   selected_branch_ids_json, access_decisions_json,
+                   warnings_json, metadata_json
+            FROM router_runs
+            WHERE router_run_id = ?
+            """,
+            (router_run_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"router run not found: {router_run_id}")
+        run = self._router_run_dict(row)
+        metadata = run["metadata"]
+        return {
+            "router_run": run,
+            "read_time_policy": metadata.get(
+                "read_time_policy",
+                self.read_time_policy(
+                    scope=run["scope"],
+                    token_budget=run["token_budget"],
+                    limit=len(run["selected_branch_ids"]),
+                ),
+            ),
+            "selection_decisions": metadata.get("selection_decisions", []),
+            "truncated_branch_count": metadata.get("truncated_branch_count", 0),
+            "selected_branch_ids": run["selected_branch_ids"],
+            "source_ids": metadata.get("source_ids", []),
+            "access_decisions": run["access_decisions"],
+            "warnings": run["warnings"],
+            "memory_allowed": metadata.get("memory_allowed", False),
+            "token_estimate": metadata.get("token_estimate", 0),
         }
 
     def list_shadow_traces(
@@ -4528,6 +4675,24 @@ class MemoryStore:
             "metadata": self._loads_json(row["metadata_json"], {}),
         }
 
+    def _router_run_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "router_run_id": row["router_run_id"],
+            "created_at": row["created_at"],
+            "thread_id": row["thread_id"],
+            "scope": row["scope"],
+            "user_id": row["user_id"],
+            "agent_id": row["agent_id"],
+            "model_id": row["model_id"],
+            "mode": row["mode"],
+            "query": row["query"],
+            "token_budget": row["token_budget"],
+            "selected_branch_ids": self._loads_json(row["selected_branch_ids_json"], []),
+            "access_decisions": self._loads_json(row["access_decisions_json"], []),
+            "warnings": self._loads_json(row["warnings_json"], []),
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
     def _get_shadow_trace(self, shadow_trace_id: str) -> dict[str, Any]:
         row = self.conn.execute(
             """
@@ -5303,6 +5468,117 @@ class MemoryStore:
             by_memory[str(row["memory_id"])].append(row)
         return by_memory
 
+    def _selection_decisions(
+        self,
+        ranked_ids: list[str],
+        *,
+        seed_scores: dict[str, float],
+        reasons: dict[str, set[str]],
+        selected_ids: set[str],
+        memory_rows: dict[str, sqlite3.Row],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        decisions: list[dict[str, Any]] = []
+        max_decisions = max(limit, min(len(ranked_ids), limit + 16))
+        for index, memory_id in enumerate(ranked_ids[:max_decisions], start=1):
+            row = memory_rows.get(memory_id)
+            decision = "selected" if memory_id in selected_ids else "truncated"
+            reason = "within branch limit" if decision == "selected" else "outside branch limit"
+            decisions.append(
+                {
+                    "memory_id": memory_id,
+                    "decision": decision,
+                    "rank": index,
+                    "score": round(float(seed_scores.get(memory_id, 0)), 4),
+                    "reason": reason,
+                    "why": sorted(reasons.get(memory_id, [])),
+                    "policy_version": READ_TIME_POLICY_VERSION,
+                    "policy_factors": self._memory_policy_factors(memory_id, row),
+                }
+            )
+        if len(ranked_ids) > max_decisions:
+            decisions.append(
+                {
+                    "decision": "truncated_summary",
+                    "count": len(ranked_ids) - max_decisions,
+                    "reason": "additional lower-ranked candidates omitted from audit metadata",
+                    "policy_version": READ_TIME_POLICY_VERSION,
+                }
+            )
+        return decisions
+
+    def _memory_policy_factors(
+        self,
+        memory_id: str,
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any]:
+        if row is None:
+            return {
+                "status": "missing_or_inactive",
+                "prompt_role": "unknown",
+                "conflict_status": self._memory_conflict_status(memory_id),
+                "outcome_signal": self._memory_outcome_signal(memory_id),
+            }
+        kind = str(row["kind"] or "fact")
+        prompt_role = READ_TIME_POLICY["prompt_roles"].get(kind, "evidence")
+        return {
+            "kind": kind,
+            "prompt_role": prompt_role,
+            "scope": row["scope"],
+            "confidence": row["confidence"],
+            "source_trust": row["source_trust"],
+            "sensitivity": row["sensitivity"],
+            "status": row["status"],
+            "updated_at": row["updated_at"],
+            "conflict_status": self._memory_conflict_status(memory_id),
+            "outcome_signal": self._memory_outcome_signal(memory_id),
+        }
+
+    def _memory_conflict_status(self, memory_id: str) -> dict[str, Any]:
+        rows = self.conn.execute(
+            """
+            SELECT conflict_id, status, winner_memory_id, relation
+            FROM memory_conflicts
+            WHERE memory_id = ? OR other_memory_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 5
+            """,
+            (memory_id, memory_id),
+        ).fetchall()
+        if not rows:
+            return {"status": "none", "conflict_ids": []}
+        open_ids = [row["conflict_id"] for row in rows if row["status"] == "open"]
+        if open_ids:
+            return {"status": "open", "conflict_ids": open_ids}
+        winner_ids = {str(row["winner_memory_id"] or "") for row in rows}
+        if memory_id in winner_ids:
+            return {"status": "resolved_winner", "conflict_ids": [row["conflict_id"] for row in rows]}
+        if any(winner_id for winner_id in winner_ids):
+            return {"status": "resolved_loser", "conflict_ids": [row["conflict_id"] for row in rows]}
+        return {"status": "resolved", "conflict_ids": [row["conflict_id"] for row in rows]}
+
+    def _memory_outcome_signal(self, memory_id: str) -> dict[str, Any]:
+        row = self.conn.execute(
+            """
+            SELECT outcome_id, outcome_status, score, project, loop_id
+            FROM outcome_records
+            WHERE memory_id = ?
+              AND status IN ('active', 'approved')
+            ORDER BY score DESC, updated_at DESC
+            LIMIT 1
+            """,
+            (memory_id,),
+        ).fetchone()
+        if row is None:
+            return {"status": "none"}
+        return {
+            "status": row["outcome_status"],
+            "score": row["score"],
+            "project": row["project"],
+            "loop_id": row["loop_id"],
+            "outcome_id": row["outcome_id"],
+        }
+
     @staticmethod
     def _selected_branch_ids(tree: dict[str, Any]) -> list[str]:
         selected: list[str] = []
@@ -5505,8 +5781,11 @@ class MemoryStore:
             "scope": scope or "all",
             "retrieval": {
                 "mode": "deterministic hybrid tree retrieval",
+                "policy_version": READ_TIME_POLICY_VERSION,
                 "seed_count": 0,
                 "branch_count": 0,
+                "selection_decisions": [],
+                "truncated_count": 0,
                 "depth": 0,
                 "include_raw": False,
             },

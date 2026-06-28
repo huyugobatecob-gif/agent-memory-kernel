@@ -19,6 +19,8 @@ The adapter should:
 - build full context builder packs for tasks that need profile, summaries,
   recent messages, and graph branches together;
 - use compact context packs for small tasks;
+- expose `read_time_policy()`, `router_runs()`, and `explain_router_run()` for
+  prompt-facing memory audit;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
 - inspect graph nodes and Keeper runs while debugging retrieval;

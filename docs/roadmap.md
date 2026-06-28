@@ -66,8 +66,8 @@ production layers around the local kernel:
 - Hermes before/after hooks;
 - API/MCP service mode;
 - background worker;
-- review and security hardening.
-- governed read-time ranking and current-best conflict resolution;
+- review and security hardening;
+- production governed read-time ranking and current-best conflict resolution;
 - memory quality evals and usefulness feedback;
 - derived-memory invalidation for summaries, graph surfaces, cached packs,
   outcome lessons, and graph-derived style;
@@ -101,6 +101,11 @@ separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
 now has a local stdlib HTTP API service through `agent-memory serve`; hosted
 auth and MCP are still backlog. Runtime scope allow/deny enforcement is
 implemented for Router retrieval.
+Baseline read-time policy and Router explainability are implemented through
+`prompt_envelope.metadata.read_time_policy`, `selection_decisions`,
+`agent-memory read-time-policy`, `agent-memory router-runs`,
+`agent-memory router-explain`, `/read-time-policy`, `/router-runs`, and
+`/router-explain`.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.

@@ -158,6 +158,8 @@ Already present:
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
+- Baseline read-time policy and Router explainability through prompt metadata,
+  `router_runs`, `/router-explain`, and `agent-memory router-explain`.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -185,7 +187,7 @@ Remaining for full memory:
 
 - Automatic pre-turn context retrieval inside each external orchestrator.
 - Automatic post-turn Keeper analysis inside each external orchestrator.
-- A formal read-time decision/ranking policy for branch selection.
+- Production-grade read-time ranking beyond the baseline deterministic policy.
 - A memory quality contract with behavioral metrics and golden fixtures.
 - Derived-memory invalidation across summaries, graph links, cached prompt
   surfaces, outcome lessons, and graph-derived style state.
@@ -193,8 +195,8 @@ Remaining for full memory:
   claims.
 - A capability and consent model for read/write/promote/inject/export/delete
   actions under multi-agent orchestration.
-- Inspection and explainability endpoints for recalled memory, provenance,
-  post-turn changes, undo, distrust, and export.
+- Broader inspection flows for post-turn changes, undo, distrust, and export
+  beyond the baseline Router explain endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Idempotent Keeper write tests and graph consolidation/compaction behavior.
@@ -369,7 +371,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ### Step 6: Build The Memory Router
 
-**What we do:** Add a retrieval layer that finds relevant branches for the current user request and returns expanded node content. The Router should use graph labels and tags only as routing hints; the final agent-facing output must include the underlying node summaries, blobs, evidence, and raw provenance snippets.
+**What we do:** Add a retrieval layer that finds relevant branches for the current user request and returns expanded node content. The Router should use graph labels and tags only as routing hints; the final agent-facing output must include the underlying node summaries, blobs, evidence, raw provenance snippets, read-time policy, and explainable selection decisions.
 
 **Files:**
 
@@ -384,9 +386,13 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Given a query, the router returns selected branches with why they were selected, node summaries, expanded blobs, related evidence, raw provenance excerpts, and a ready-to-insert `MEMORY_TREE_SUPPLEMENT`.
+**Verification:** Given a query, the router returns selected branches with why they were selected, node summaries, expanded blobs, related evidence, raw provenance excerpts, policy factors, selected/truncated decisions, and a ready-to-insert `MEMORY_TREE_SUPPLEMENT`.
 
-**Result:** Agents receive useful memory content, not just tags or labels.
+**Result:** Baseline implemented. Agents receive useful memory content, not just
+tags or labels, and operators can inspect read-time policy and Router decisions
+with `router-runs`, `router-explain`, `/router-runs`, and `/router-explain`.
+Remaining work is production ranking, usefulness feedback, current-best conflict
+resolution, and larger golden evals.
 
 ### Step 7: Add Embeddings And Semantic Reranking
 

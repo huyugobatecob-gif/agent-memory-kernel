@@ -25,6 +25,22 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return assert_contract_shape()
     if path == "/before-model-call":
         return store.before_model_call(**payload)
+    if path == "/read-time-policy":
+        return store.read_time_policy(
+            scope=payload.get("scope"),
+            token_budget=int(payload.get("token_budget", 0) or 0),
+            limit=int(payload.get("limit", 0) or 0),
+        )
+    if path == "/router-runs":
+        return {
+            "runs": store.list_router_runs(
+                thread_id=payload.get("thread_id"),
+                scope=payload.get("scope"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/router-explain":
+        return store.explain_router_run(str(payload.get("router_run_id", "")))
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":

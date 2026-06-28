@@ -229,7 +229,25 @@ Router output:
       "node_summary": "...",
       "expanded_content": "...",
       "evidence_ids": ["ev_..."],
-      "source_refs": ["turn_..."]
+      "source_refs": ["turn_..."],
+      "selection_decisions": [
+        {
+          "memory_id": "mem_...",
+          "decision": "selected",
+          "rank": 1,
+          "score": 95.2,
+          "why": ["active memory text match"],
+          "policy_factors": {
+            "kind": "outcome",
+            "prompt_role": "outcome evidence",
+            "scope": "professional",
+            "source_trust": "trusted",
+            "sensitivity": "internal",
+            "conflict_status": {"status": "none"},
+            "outcome_signal": {"status": "success", "score": 0.8}
+          }
+        }
+      ]
     }
   ],
   "skipped": [
@@ -238,6 +256,10 @@ Router output:
       "reason": "permission_denied"
     }
   ],
+  "read_time_policy": {
+    "version": "read-time-policy-v0.1",
+    "ranking_order": ["task relevance", "semantic rerank", "scope filters"]
+  },
   "token_estimate": 1800
 }
 ```
