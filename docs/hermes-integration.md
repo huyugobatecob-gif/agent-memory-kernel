@@ -118,6 +118,9 @@ Useful endpoints:
 - `POST /remember`
 - `POST /search`
 - `POST /review/list`
+- `POST /conflict/record`
+- `POST /conflict/list`
+- `POST /supersede`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
 - `POST /worker/run`
 
@@ -293,6 +296,19 @@ A reviewer can approve durable memories:
 agent-memory review list --status pending
 agent-memory review approve cand_xxxxxxxxxxxxxxxx
 ```
+
+When newer memory contradicts older memory, preserve the truth-maintenance
+trail instead of leaving both as equal active facts:
+
+```bash
+agent-memory conflict record mem_old mem_new --reason "project rule changed"
+agent-memory supersede mem_old mem_new --reason "newer user-stated rule wins"
+agent-memory conflict list --status resolved
+```
+
+Hermes should use `conflict record` when a contradiction needs review and
+`supersede` only when the winning memory is explicit enough to suppress the old
+memory from retrieval.
 
 This keeps memory quality high and makes the system auditable.
 

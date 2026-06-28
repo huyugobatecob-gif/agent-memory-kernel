@@ -45,6 +45,7 @@ Included now:
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
 - Scope access enforcement for runtime memory retrieval.
+- Conflict and supersession records for truth maintenance.
 - Queued Keeper jobs and `worker` processing.
 - Local stdlib HTTP API service: `serve`.
 - Conversation turns, thread messages, and rolling summaries.
@@ -123,6 +124,17 @@ Search active memory:
 ```bash
 agent-memory search --db .memory/demo.db "SEO projects"
 ```
+
+Mark memory truth changes explicitly:
+
+```bash
+agent-memory conflict --db .memory/demo.db record mem_old mem_new --reason "newer project rule conflicts"
+agent-memory supersede --db .memory/demo.db mem_old mem_new --reason "newer user-stated memory wins"
+agent-memory conflict --db .memory/demo.db list --status resolved
+```
+
+`supersede` suppresses the old memory from retrieval and graph export while
+recording a resolved conflict relationship for audit.
 
 Build a context pack for an agent:
 

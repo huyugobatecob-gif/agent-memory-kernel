@@ -41,6 +41,20 @@ CREATE TABLE IF NOT EXISTS memories (
     expires_at     TEXT
 );
 
+CREATE TABLE IF NOT EXISTS memory_conflicts (
+    conflict_id      TEXT PRIMARY KEY,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    scope            TEXT NOT NULL DEFAULT 'professional',
+    memory_id        TEXT NOT NULL REFERENCES memories(memory_id),
+    other_memory_id  TEXT NOT NULL REFERENCES memories(memory_id),
+    relation         TEXT NOT NULL DEFAULT 'conflicts_with',
+    status           TEXT NOT NULL DEFAULT 'open',
+    winner_memory_id TEXT REFERENCES memories(memory_id),
+    reason           TEXT NOT NULL DEFAULT '',
+    metadata_json    TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS conversation_turns (
     turn_id        TEXT PRIMARY KEY,
     thread_id      TEXT NOT NULL DEFAULT 'default',
@@ -411,6 +425,8 @@ CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidate_memories(status);
 CREATE INDEX IF NOT EXISTS idx_candidates_scope ON candidate_memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
+CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status ON memory_conflicts(status);
+CREATE INDEX IF NOT EXISTS idx_memory_conflicts_scope ON memory_conflicts(scope);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_turns_thread ON conversation_turns(thread_id);

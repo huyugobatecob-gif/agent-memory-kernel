@@ -97,6 +97,8 @@ Already present:
   `write_policy=propose_only`.
 - Baseline shadow trace evals for branch selection, Keeper candidate text,
   source IDs, token budget, and access mode.
+- Explicit conflict and supersession records that suppress superseded memory
+  from active retrieval and graph export.
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
@@ -121,6 +123,7 @@ Remaining for full memory:
 - Explicit identity, scope, permission, and tenancy rules.
 - Memory lifecycle propagation for correct, delete, distrust, expire, and
   conflict operations across summaries, graph nodes, and cached context packs.
+- Automatic conflict detection heuristics and current-best-answer resolution.
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Migration, observability, and cost accounting around all LLM memory calls.

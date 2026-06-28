@@ -2372,6 +2372,221 @@ class MemoryStore:
     def expire_memory(self, memory_id: str, *, actor: str = "system", reason: str = "") -> None:
         self._deactivate_memory(memory_id, status="expired", actor=actor, reason=reason)
 
+    def record_memory_conflict(
+        self,
+        memory_id: str,
+        other_memory_id: str,
+        *,
+        relation: str = "conflicts_with",
+        winner_memory_id: str = "",
+        actor: str = "user",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record an explicit relationship between two memories for review."""
+        left = self._memory_row(memory_id)
+        right = self._memory_row(other_memory_id)
+        if left is None:
+            raise KeyError(f"memory not found: {memory_id}")
+        if right is None:
+            raise KeyError(f"memory not found: {other_memory_id}")
+        relation = (relation or "conflicts_with").strip().lower()
+        if relation not in {"conflicts_with", "contradicted_by", "supersedes", "context_bound"}:
+            raise ValueError("relation must be conflicts_with, contradicted_by, supersedes, or context_bound")
+        winner_memory_id = (winner_memory_id or "").strip()
+        if winner_memory_id and winner_memory_id not in {memory_id, other_memory_id}:
+            raise ValueError("winner_memory_id must be one of the conflicting memories")
+        status = "resolved" if winner_memory_id else "open"
+        conflict_id = new_id("conflict")
+        ts = now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO memory_conflicts
+              (conflict_id, created_at, updated_at, scope, memory_id,
+               other_memory_id, relation, status, winner_memory_id, reason,
+               metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                conflict_id,
+                ts,
+                ts,
+                left["scope"],
+                memory_id,
+                other_memory_id,
+                relation,
+                status,
+                winner_memory_id or None,
+                reason,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "record_conflict",
+            "memory_conflict",
+            conflict_id,
+            actor=actor,
+            details={
+                "memory_id": memory_id,
+                "other_memory_id": other_memory_id,
+                "relation": relation,
+                "status": status,
+                "winner_memory_id": winner_memory_id,
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        return {
+            "conflict_id": conflict_id,
+            "status": status,
+            "relation": relation,
+            "memory_id": memory_id,
+            "other_memory_id": other_memory_id,
+            "winner_memory_id": winner_memory_id,
+        }
+
+    def supersede_memory(
+        self,
+        old_memory_id: str,
+        new_memory_id: str,
+        *,
+        actor: str = "user",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Mark old memory as superseded by newer trusted memory."""
+        old = self._memory_row(old_memory_id)
+        new = self._memory_row(new_memory_id)
+        if old is None:
+            raise KeyError(f"memory not found: {old_memory_id}")
+        if new is None:
+            raise KeyError(f"memory not found: {new_memory_id}")
+        if old_memory_id == new_memory_id:
+            raise ValueError("old_memory_id and new_memory_id must differ")
+        ts = now_iso()
+        self.conn.execute(
+            "UPDATE memories SET status = 'superseded', updated_at = ? WHERE memory_id = ?",
+            (ts, old_memory_id),
+        )
+        self.conn.execute(
+            "UPDATE memory_items SET status = 'superseded', updated_at = ? WHERE memory_id = ?",
+            (ts, old_memory_id),
+        )
+        self._propagate_inactive_memory(old_memory_id)
+        self.conn.execute(
+            """
+            UPDATE memory_conflicts
+            SET status = 'resolved', updated_at = ?, winner_memory_id = ?,
+                metadata_json = ?
+            WHERE status = 'open'
+              AND (
+                (memory_id = ? AND other_memory_id = ?)
+                OR (memory_id = ? AND other_memory_id = ?)
+              )
+            """,
+            (
+                ts,
+                new_memory_id,
+                json.dumps({"resolved_by": "supersede"}, sort_keys=True),
+                old_memory_id,
+                new_memory_id,
+                new_memory_id,
+                old_memory_id,
+            ),
+        )
+        conflict_id = new_id("conflict")
+        self.conn.execute(
+            """
+            INSERT INTO memory_conflicts
+              (conflict_id, created_at, updated_at, scope, memory_id,
+               other_memory_id, relation, status, winner_memory_id, reason,
+               metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, 'supersedes', 'resolved', ?, ?, ?)
+            """,
+            (
+                conflict_id,
+                ts,
+                ts,
+                old["scope"],
+                new_memory_id,
+                old_memory_id,
+                new_memory_id,
+                reason,
+                json.dumps({"old_memory_id": old_memory_id}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "supersede",
+            "memory",
+            old_memory_id,
+            actor=actor,
+            details={
+                "superseded_by": new_memory_id,
+                "conflict_id": conflict_id,
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        return {
+            "memory_id": old_memory_id,
+            "status": "superseded",
+            "superseded_by": new_memory_id,
+            "conflict_id": conflict_id,
+        }
+
+    def list_memory_conflicts(
+        self,
+        *,
+        status: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List explicit conflict/supersession relationships."""
+        clauses = []
+        params: list[Any] = []
+        if status:
+            clauses.append("mc.status = ?")
+            params.append(status)
+        if scope:
+            clauses.append("mc.scope = ?")
+            params.append(normalize_scope(scope))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT mc.conflict_id, mc.created_at, mc.updated_at, mc.scope,
+                   mc.memory_id, mc.other_memory_id, mc.relation, mc.status,
+                   mc.winner_memory_id, mc.reason, mc.metadata_json,
+                   m.text AS memory_text, om.text AS other_memory_text,
+                   wm.text AS winner_memory_text
+            FROM memory_conflicts mc
+            JOIN memories m ON m.memory_id = mc.memory_id
+            JOIN memories om ON om.memory_id = mc.other_memory_id
+            LEFT JOIN memories wm ON wm.memory_id = mc.winner_memory_id
+            {where}
+            ORDER BY mc.updated_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+        return [
+            {
+                "conflict_id": row["conflict_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "scope": row["scope"],
+                "memory_id": row["memory_id"],
+                "other_memory_id": row["other_memory_id"],
+                "relation": row["relation"],
+                "status": row["status"],
+                "winner_memory_id": row["winner_memory_id"] or "",
+                "reason": row["reason"],
+                "memory_text": row["memory_text"],
+                "other_memory_text": row["other_memory_text"],
+                "winner_memory_text": row["winner_memory_text"] or "",
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for row in rows
+        ]
+
     def _deactivate_memory(
         self,
         memory_id: str,
@@ -3798,6 +4013,11 @@ class MemoryStore:
     def _candidate(self, candidate_id: str) -> sqlite3.Row | None:
         return self.conn.execute(
             "SELECT * FROM candidate_memories WHERE candidate_id = ?", (candidate_id,)
+        ).fetchone()
+
+    def _memory_row(self, memory_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
 
     def _node_hits(

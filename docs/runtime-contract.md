@@ -245,6 +245,9 @@ Router quality gates:
 - exclude unrelated personal memory from professional-only requests;
 - prefer direct user-stated facts over inferred or assistant-generated facts;
 - suppress stale memory when newer conflicting memory exists;
+- suppress `superseded` memory from prompt-facing retrieval;
+- preserve unresolved conflict records for review instead of silently choosing
+  between equal-trust memories;
 - log selected, skipped, and truncated branches;
 - never leak quarantined, secret, or unauthorized content.
 

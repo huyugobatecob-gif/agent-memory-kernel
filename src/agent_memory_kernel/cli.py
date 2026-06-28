@@ -489,6 +489,51 @@ def cmd_correct(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_supersede(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.supersede_memory(
+        args.old_memory_id,
+        args.new_memory_id,
+        actor=args.actor,
+        reason=args.reason,
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
+def cmd_conflict_record(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.record_memory_conflict(
+        args.memory_id,
+        args.other_memory_id,
+        relation=args.relation,
+        winner_memory_id=args.winner_memory_id,
+        actor=args.actor,
+        reason=args.reason,
+        metadata=json.loads(args.metadata_json),
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
+def cmd_conflict_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_memory_conflicts(
+            status=args.status,
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_delete(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -868,6 +913,38 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("text")
     p.add_argument("--actor", default="user")
     p.set_defaults(func=cmd_correct)
+
+    p = sub.add_parser("supersede", help="Mark old memory as superseded by newer memory")
+    add_common_db(p)
+    p.add_argument("old_memory_id")
+    p.add_argument("new_memory_id")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_supersede)
+
+    p = sub.add_parser("conflict", help="Record or inspect memory conflicts")
+    add_common_db(p)
+    conflict_sub = p.add_subparsers(dest="conflict_command", required=True)
+
+    cp = conflict_sub.add_parser("record", help="Record a conflict between two memories")
+    cp.add_argument("memory_id")
+    cp.add_argument("other_memory_id")
+    cp.add_argument(
+        "--relation",
+        default="conflicts_with",
+        choices=["conflicts_with", "contradicted_by", "supersedes", "context_bound"],
+    )
+    cp.add_argument("--winner-memory-id", default="")
+    cp.add_argument("--actor", default="user")
+    cp.add_argument("--reason", default="")
+    cp.add_argument("--metadata-json", default="{}")
+    cp.set_defaults(func=cmd_conflict_record)
+
+    cp = conflict_sub.add_parser("list", help="List memory conflicts")
+    cp.add_argument("--status", choices=["open", "resolved"])
+    cp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    cp.add_argument("--limit", type=int, default=50)
+    cp.set_defaults(func=cmd_conflict_list)
 
     p = sub.add_parser("delete", help="Soft-delete active memory")
     add_common_db(p)

@@ -64,6 +64,22 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         candidate_id = str(payload.pop("candidate_id"))
         store.reject_candidate(candidate_id, **payload)
         return {"candidate_id": candidate_id, "status": "rejected"}
+    if path == "/supersede":
+        old_memory_id = str(payload.pop("old_memory_id"))
+        new_memory_id = str(payload.pop("new_memory_id"))
+        return store.supersede_memory(old_memory_id, new_memory_id, **payload)
+    if path == "/conflict/record":
+        memory_id = str(payload.pop("memory_id"))
+        other_memory_id = str(payload.pop("other_memory_id"))
+        return store.record_memory_conflict(memory_id, other_memory_id, **payload)
+    if path == "/conflict/list":
+        return {
+            "conflicts": store.list_memory_conflicts(
+                status=payload.get("status"),
+                scope=payload.get("scope"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
     if path == "/slice/seed":
         return seed_vertical_slice(store)
     if path == "/slice/run":

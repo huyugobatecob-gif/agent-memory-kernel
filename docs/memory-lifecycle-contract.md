@@ -154,6 +154,16 @@ When two active memories conflict:
 The prompt envelope should include the chosen memory and may include a concise
 conflict note when it matters for the task.
 
+Implementation surface:
+
+- `conflict record` stores an explicit open relationship without suppressing
+  either memory.
+- `supersede` records a resolved `supersedes` relationship and marks the old
+  memory and its memory item as `superseded`.
+- Superseded memory is removed from active retrieval and active graph export
+  through the same propagation path as delete, distrust, and expire.
+- `conflict list` exposes open and resolved relationships for review and audit.
+
 ## Export
 
 Export must include:
@@ -180,5 +190,6 @@ The lifecycle is not complete until tests cover:
 - delete -> derived graph edge removed or disabled;
 - distrust -> memory visible in audit but absent from prompt;
 - conflict -> newer trusted memory wins;
+- supersede -> old memory is absent from prompt and graph, resolved relation remains;
 - stale -> low-priority retrieval;
 - export/import -> lifecycle state preserved.

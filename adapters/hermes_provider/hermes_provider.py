@@ -188,6 +188,51 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def supersede_memory(
+        self,
+        old_memory_id: str,
+        new_memory_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.supersede_memory(
+            old_memory_id,
+            new_memory_id,
+            actor=actor,
+            reason=reason,
+        )
+
+    def record_memory_conflict(
+        self,
+        memory_id: str,
+        other_memory_id: str,
+        *,
+        relation: str = "conflicts_with",
+        winner_memory_id: str = "",
+        actor: str = "hermes",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.record_memory_conflict(
+            memory_id,
+            other_memory_id,
+            relation=relation,
+            winner_memory_id=winner_memory_id,
+            actor=actor,
+            reason=reason,
+            metadata=metadata,
+        )
+
+    def memory_conflicts(
+        self,
+        *,
+        status: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_memory_conflicts(status=status, scope=scope, limit=limit)
+
     def process_keeper_jobs(self, limit: int = 10, actor: str = "hermes-worker") -> dict[str, Any]:
         return self.store.process_keeper_jobs(limit=limit, actor=actor)
 

@@ -20,6 +20,7 @@ The adapter should:
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
 - inspect graph nodes and Keeper runs while debugging retrieval;
+- record conflicts or supersede stale memory when newer user/project truth wins;
 - leave durable promotion to policy or review;
 - expose pending memory review to the user or operator.
 
@@ -66,3 +67,7 @@ provider.evaluate_shadow_trace(
 Production runtime should then use `before_model_call()` to get the prompt
 envelope and `after_saved_turn()` to save the exchange and create reviewable
 Keeper candidates.
+
+When a later decision replaces an older memory, call `supersede_memory()` rather
+than leaving both facts active. If the winner is unclear, call
+`record_memory_conflict()` and leave the conflict open for review.

@@ -90,6 +90,10 @@ Baseline shadow evals are implemented through `agent-memory shadow-eval`,
 `agent-memory shadow-evals`, `/shadow-eval`, `/shadow-evals`, and the Hermes
 provider wrapper. They turn reviewed traces into stored pass/fail checks for
 branch selection, candidate text, source IDs, token budget, and access mode.
+Conflict and supersession records are implemented through `agent-memory
+conflict`, `agent-memory supersede`, `/conflict/record`, `/conflict/list`, and
+`/supersede`. Superseded memory is suppressed from active retrieval and graph
+export while the resolved relationship remains auditable.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters

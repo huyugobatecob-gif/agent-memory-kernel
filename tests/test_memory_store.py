@@ -160,6 +160,61 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("expire", actions)
             store.close()
 
+    def test_conflict_and_supersede_truth_maintenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            old = store.remember(
+                "Decision: project truth-site refresh cadence is weekly.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            new = store.remember(
+                "Decision: project truth-site refresh cadence is daily.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            conflict = store.record_memory_conflict(
+                old,
+                new,
+                relation="conflicts_with",
+                actor="qa",
+                reason="cadence changed",
+            )
+
+            self.assertEqual(conflict["status"], "open")
+            self.assertEqual(len(store.list_memory_conflicts(status="open")), 1)
+            self.assertTrue(store.search("weekly", scope="professional"))
+            self.assertTrue(store.search("daily", scope="professional"))
+
+            superseded = store.supersede_memory(
+                old,
+                new,
+                actor="qa",
+                reason="newer user decision wins",
+            )
+
+            self.assertEqual(superseded["status"], "superseded")
+            self.assertEqual(superseded["superseded_by"], new)
+            self.assertEqual(store.list_memory_conflicts(status="open"), [])
+            self.assertEqual(store.search("weekly", scope="professional"), [])
+            self.assertTrue(store.search("daily", scope="professional"))
+            conflicts = store.list_memory_conflicts(status="resolved")
+            self.assertTrue(any(item["relation"] == "supersedes" for item in conflicts))
+            self.assertTrue(any(item["winner_memory_id"] == new for item in conflicts))
+            old_item_status = store.conn.execute(
+                "SELECT status FROM memory_items WHERE memory_id = ?",
+                (old,),
+            ).fetchone()["status"]
+            self.assertEqual(old_item_status, "superseded")
+            active_graph_text = "\n".join(
+                node["label"] for node in store.list_graph_nodes(scope="professional")
+            )
+            self.assertNotIn("weekly", active_graph_text)
+            store.close()
+
     def test_approved_memory_creates_graph_nodes_and_edges(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -716,6 +771,43 @@ class MemoryStoreTests(unittest.TestCase):
                 "/shadow-evals",
                 {"shadow_trace_id": shadow["shadow_trace_id"]},
             )
+            conflict_old = handle_api_request(
+                store,
+                "/remember",
+                {
+                    "text": "Decision: project api-truth cadence is monthly.",
+                    "scope": "professional",
+                    "auto_approve": True,
+                },
+            )["candidates"][0]["memory_id"]
+            conflict_new = handle_api_request(
+                store,
+                "/remember",
+                {
+                    "text": "Decision: project api-truth cadence is weekly.",
+                    "scope": "professional",
+                    "auto_approve": True,
+                },
+            )["candidates"][0]["memory_id"]
+            conflict = handle_api_request(
+                store,
+                "/conflict/record",
+                {
+                    "memory_id": conflict_old,
+                    "other_memory_id": conflict_new,
+                    "reason": "cadence changed",
+                },
+            )
+            supersede = handle_api_request(
+                store,
+                "/supersede",
+                {
+                    "old_memory_id": conflict_old,
+                    "new_memory_id": conflict_new,
+                    "reason": "weekly is current",
+                },
+            )
+            conflicts = handle_api_request(store, "/conflict/list", {"status": "resolved"})
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -730,6 +822,9 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(len(traces["traces"]), 1)
             self.assertEqual(shadow_eval["status"], "pass")
             self.assertEqual(len(shadow_evals["evals"]), 1)
+            self.assertEqual(conflict["status"], "open")
+            self.assertEqual(supersede["status"], "superseded")
+            self.assertTrue(conflicts["conflicts"])
             store.close()
 
 
