@@ -96,6 +96,7 @@ CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
+REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 SCHEMA_VERSION = 1
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
@@ -1323,6 +1324,129 @@ class MemoryStore:
             (status, status),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def review_inbox(
+        self,
+        *,
+        status: str = "open",
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Return a reviewable operator inbox for Keeper memory candidates."""
+        status = (status or "open").strip().lower()
+        allowed = {"open", "pending", "quarantined", "approved", "rejected", "all"}
+        if status not in allowed:
+            raise ValueError(f"unsupported review inbox status: {status}")
+        scope = normalize_scope(scope) if scope else None
+        limit = max(1, min(int(limit or 50), 200))
+
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status == "open":
+            clauses.append("cm.status IN ('pending', 'quarantined')")
+        elif status != "all":
+            clauses.append("cm.status = ?")
+            params.append(status)
+        if scope:
+            clauses.append("cm.scope = ?")
+            params.append(scope)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT cm.candidate_id, cm.event_id, cm.created_at,
+                   cm.proposed_text, cm.kind, cm.scope, cm.confidence,
+                   cm.sensitivity, cm.source_trust, cm.status, cm.reason,
+                   cm.extraction_json, e.actor AS event_actor,
+                   e.created_at AS event_created_at, e.source_type, e.source_ref,
+                   e.content AS event_content,
+                   e.metadata_json AS event_metadata_json
+            FROM candidate_memories cm
+            LEFT JOIN events e ON e.event_id = cm.event_id
+            {where}
+            ORDER BY
+                CASE cm.status
+                    WHEN 'quarantined' THEN 0
+                    WHEN 'pending' THEN 1
+                    WHEN 'approved' THEN 2
+                    WHEN 'rejected' THEN 3
+                    ELSE 4
+                END,
+                cm.created_at ASC
+            LIMIT ?
+            """,
+            (*params, limit),
+        ).fetchall()
+
+        candidate_ids = [str(row["candidate_id"]) for row in rows]
+        memories_by_candidate: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for memory in self._memories_for_candidate_ids(candidate_ids):
+            memories_by_candidate[str(memory["candidate_id"])].append(memory)
+        review_actions_by_candidate = self._review_actions_for_candidate_ids(candidate_ids)
+        audit_by_target: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        memory_ids = [
+            str(memory["memory_id"])
+            for memories in memories_by_candidate.values()
+            for memory in memories
+        ]
+        for entry in self._audit_entries_for_targets(candidate_ids + memory_ids):
+            audit_by_target[str(entry["target_id"])].append(entry)
+
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            candidate_id = str(row["candidate_id"])
+            extraction = self._loads_json(row["extraction_json"], {})
+            memories = memories_by_candidate.get(candidate_id, [])
+            item = {
+                "candidate": {
+                    "candidate_id": candidate_id,
+                    "event_id": row["event_id"],
+                    "created_at": row["created_at"],
+                    "proposed_text": self._excerpt(row["proposed_text"], 900),
+                    "kind": row["kind"],
+                    "scope": row["scope"],
+                    "confidence": row["confidence"],
+                    "sensitivity": row["sensitivity"],
+                    "source_trust": row["source_trust"],
+                    "status": row["status"],
+                    "reason": row["reason"],
+                    "extraction": extraction,
+                },
+                "source_event": {
+                    "event_id": row["event_id"],
+                    "created_at": row["event_created_at"] or "",
+                    "actor": row["event_actor"] or "",
+                    "scope": row["scope"],
+                    "source_type": row["source_type"] or "",
+                    "source_ref": row["source_ref"] or "",
+                    "content_excerpt": self._excerpt(row["event_content"] or "", 900),
+                    "metadata": self._loads_json(row["event_metadata_json"], {}),
+                },
+                "graph_preview": self._review_graph_preview(extraction),
+                "active_memories": memories,
+                "review_history": review_actions_by_candidate.get(candidate_id, []),
+                "audit_trail": audit_by_target.get(candidate_id, [])
+                + [
+                    audit
+                    for memory in memories
+                    for audit in audit_by_target.get(str(memory["memory_id"]), [])
+                ],
+            }
+            item["review"] = self._review_recommendation(item)
+            item["operator_handles"] = self._review_operator_handles(candidate_id, memories)
+            items.append(item)
+
+        summary: dict[str, int] = {}
+        for item in items:
+            item_status = str(item["candidate"]["status"])
+            summary[item_status] = summary.get(item_status, 0) + 1
+        return {
+            "version": REVIEW_INBOX_VERSION,
+            "status_filter": status,
+            "scope": scope or "all",
+            "count": len(items),
+            "summary": summary,
+            "items": items,
+        }
 
     def operational_status(
         self,
@@ -7135,6 +7259,200 @@ class MemoryStore:
             for candidate_id in candidate_ids
             if (row := by_id.get(candidate_id)) is not None
         ]
+
+    def _review_actions_for_candidate_ids(
+        self,
+        candidate_ids: list[str],
+    ) -> dict[str, list[dict[str, Any]]]:
+        candidate_ids = [str(item) for item in candidate_ids if item]
+        if not candidate_ids:
+            return {}
+        placeholders = ",".join("?" for _ in candidate_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT review_id, candidate_id, created_at, action, actor, reason
+            FROM review_actions
+            WHERE candidate_id IN ({placeholders})
+            ORDER BY created_at ASC, review_id ASC
+            """,
+            candidate_ids,
+        ).fetchall()
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            grouped[str(row["candidate_id"])].append(
+                {
+                    "review_id": row["review_id"],
+                    "created_at": row["created_at"],
+                    "action": row["action"],
+                    "actor": row["actor"],
+                    "reason": row["reason"],
+                }
+            )
+        return dict(grouped)
+
+    def _review_graph_preview(self, extraction: dict[str, Any]) -> dict[str, Any]:
+        def list_value(*keys: str) -> list[Any]:
+            for key in keys:
+                value = extraction.get(key)
+                if isinstance(value, list):
+                    return value
+            graph = extraction.get("graph")
+            if isinstance(graph, dict):
+                for key in keys:
+                    value = graph.get(key)
+                    if isinstance(value, list):
+                        return value
+            return []
+
+        def compact_node(value: Any) -> dict[str, Any]:
+            if isinstance(value, dict):
+                return {
+                    "type": str(value.get("type") or value.get("node_type") or value.get("kind") or "fact"),
+                    "label": str(value.get("label") or value.get("name") or value.get("text") or "")[:160],
+                }
+            return {"type": "fact", "label": str(value)[:160]}
+
+        def compact_edge(value: Any) -> dict[str, Any]:
+            if isinstance(value, dict):
+                return {
+                    "source": str(value.get("source") or value.get("from") or value.get("source_label") or "")[:120],
+                    "target": str(value.get("target") or value.get("to") or value.get("target_label") or "")[:120],
+                    "type": str(value.get("type") or value.get("edge_type") or value.get("relation") or "related_to"),
+                    "label": str(value.get("label") or value.get("summary") or "")[:160],
+                }
+            return {"source": "", "target": "", "type": "related_to", "label": str(value)[:160]}
+
+        nodes = [compact_node(item) for item in list_value("nodes", "graph_nodes", "entities")]
+        edges = [compact_edge(item) for item in list_value("edges", "graph_edges", "relationships")]
+        facts = [str(item)[:220] for item in list_value("facts", "key_facts", "rules", "decisions")]
+        return {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "fact_count": len(facts),
+            "nodes": nodes[:12],
+            "edges": edges[:12],
+            "facts": facts[:8],
+        }
+
+    def _review_recommendation(self, item: dict[str, Any]) -> dict[str, Any]:
+        candidate = item["candidate"]
+        source_event = item["source_event"]
+        status = str(candidate["status"])
+        reason = str(candidate.get("reason") or "")
+        trust = str(candidate.get("source_trust") or "")
+        sensitivity = str(candidate.get("sensitivity") or "")
+        confidence = str(candidate.get("confidence") or "")
+        kind = str(candidate.get("kind") or "")
+        flags: list[dict[str, str]] = []
+
+        def flag(name: str, severity: str, detail: str) -> None:
+            flags.append({"flag": name, "severity": severity, "detail": detail})
+
+        if status == "quarantined":
+            flag("quarantined_candidate", "high", reason or "candidate was quarantined")
+        if sensitivity == "secret":
+            flag("secret_sensitivity", "high", "secret-like memory must not enter prompts")
+        if trust == "untrusted":
+            flag("untrusted_source", "medium", "candidate came from untrusted source")
+        if confidence == "low":
+            flag("low_confidence", "medium", "candidate confidence is low")
+        if kind == "rule" and trust not in {"trusted", "user", "system"}:
+            flag("untrusted_rule", "high", "rules from untrusted sources require explicit review")
+        source_type = str(source_event.get("source_type") or "")
+        if source_type in {"tool", "external", "web", "assistant"} and trust not in {"trusted", "system"}:
+            flag("external_or_model_source", "medium", f"source_type={source_type}")
+        lowered_reason = reason.lower()
+        if "prompt-injection" in lowered_reason or "injection" in lowered_reason:
+            flag("prompt_injection_like", "high", reason)
+        if "secret" in lowered_reason:
+            flag("secret_like_reason", "high", reason)
+
+        high_risk = any(flag_item["severity"] == "high" for flag_item in flags)
+        if status == "pending":
+            recommended_action = "approve_or_correct" if not high_risk else "reject_or_correct"
+        elif status == "quarantined":
+            recommended_action = "reject_or_manually_rewrite"
+        elif status == "approved":
+            recommended_action = "monitor_or_lifecycle_edit"
+        elif status == "rejected":
+            recommended_action = "no_action"
+        else:
+            recommended_action = "review"
+
+        return {
+            "needs_human_review": status in {"pending", "quarantined"} or bool(flags),
+            "recommended_action": recommended_action,
+            "risk_flags": flags,
+            "prompt_surface": "review_inbox" if status in {"pending", "quarantined"} else "memory_lifecycle",
+        }
+
+    def _review_operator_handles(
+        self,
+        candidate_id: str,
+        memories: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        def handle(
+            cli: str,
+            endpoint: str,
+            tool: str,
+            payload: dict[str, Any],
+        ) -> dict[str, Any]:
+            return {
+                "cli": cli,
+                "http": {"path": endpoint, "payload": payload},
+                "mcp": {"tool": tool, "arguments": payload},
+            }
+
+        handles: dict[str, Any] = {
+            "approve": handle(
+                f"agent-memory review --db <db> approve {candidate_id} --actor reviewer --reason \"approved\"",
+                "/review/approve",
+                "memory_review_approve",
+                {"candidate_id": candidate_id, "actor": "reviewer", "reason": "approved"},
+            ),
+            "reject": handle(
+                f"agent-memory review --db <db> reject {candidate_id} --actor reviewer --reason \"rejected\"",
+                "/review/reject",
+                "memory_review_reject",
+                {"candidate_id": candidate_id, "actor": "reviewer", "reason": "rejected"},
+            ),
+        }
+        if memories:
+            memory_id = str(memories[0]["memory_id"])
+            handles.update(
+                {
+                    "correct": handle(
+                        f"agent-memory correct --db <db> {memory_id} \"<new text>\" --actor reviewer --reason \"correction\"",
+                        "/memory/correct",
+                        "memory_correct",
+                        {
+                            "memory_id": memory_id,
+                            "text": "<new text>",
+                            "actor": "reviewer",
+                            "reason": "correction",
+                        },
+                    ),
+                    "delete": handle(
+                        f"agent-memory delete --db <db> {memory_id} --actor reviewer --reason \"delete\"",
+                        "/memory/delete",
+                        "memory_delete",
+                        {"memory_id": memory_id, "actor": "reviewer", "reason": "delete"},
+                    ),
+                    "distrust": handle(
+                        f"agent-memory distrust --db <db> {memory_id} --actor reviewer --reason \"distrust\"",
+                        "/memory/distrust",
+                        "memory_distrust",
+                        {"memory_id": memory_id, "actor": "reviewer", "reason": "distrust"},
+                    ),
+                    "expire": handle(
+                        f"agent-memory expire --db <db> {memory_id} --actor reviewer --reason \"expire\"",
+                        "/memory/expire",
+                        "memory_expire",
+                        {"memory_id": memory_id, "actor": "reviewer", "reason": "expire"},
+                    ),
+                }
+            )
+        return handles
 
     def _memories_for_candidate_ids(self, candidate_ids: list[str]) -> list[dict[str, Any]]:
         candidate_ids = [str(item) for item in candidate_ids if item]

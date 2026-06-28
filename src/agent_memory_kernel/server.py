@@ -247,6 +247,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return {"tree": store.memory_tree_pack(query, **payload)}
     if path == "/brain/style":
         return store.brain_style_append(scope=str(payload.get("scope", "professional")))
+    if path == "/review/inbox":
+        return store.review_inbox(
+            status=str(payload.get("status", "open")),
+            scope=payload.get("scope"),
+            limit=int(payload.get("limit", 50)),
+        )
     if path == "/review/list":
         return {"candidates": store.list_candidates(str(payload.get("status", "pending")))}
     if path == "/review/approve":
@@ -256,6 +262,23 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         candidate_id = str(payload.pop("candidate_id"))
         store.reject_candidate(candidate_id, **payload)
         return {"candidate_id": candidate_id, "status": "rejected"}
+    if path == "/memory/correct":
+        memory_id = str(payload.pop("memory_id"))
+        text = str(payload.pop("text"))
+        store.correct_memory(memory_id, text, **payload)
+        return {"memory_id": memory_id, "status": "corrected"}
+    if path == "/memory/delete":
+        memory_id = str(payload.pop("memory_id"))
+        store.delete_memory(memory_id, **payload)
+        return {"memory_id": memory_id, "status": "deleted"}
+    if path == "/memory/distrust":
+        memory_id = str(payload.pop("memory_id"))
+        store.distrust_memory(memory_id, **payload)
+        return {"memory_id": memory_id, "status": "distrusted"}
+    if path == "/memory/expire":
+        memory_id = str(payload.pop("memory_id"))
+        store.expire_memory(memory_id, **payload)
+        return {"memory_id": memory_id, "status": "expired"}
     if path == "/memory/revisions":
         memory_id = str(payload.pop("memory_id"))
         return {

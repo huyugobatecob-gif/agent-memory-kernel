@@ -50,6 +50,11 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
+            self.assertIn("memory_review_inbox", names)
+            self.assertIn("memory_correct", names)
+            self.assertIn("memory_delete", names)
+            self.assertIn("memory_distrust", names)
+            self.assertIn("memory_expire", names)
 
             called = server.handle_message(
                 {

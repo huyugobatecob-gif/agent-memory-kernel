@@ -73,8 +73,14 @@ Operator and graph tools:
 - `memory_ingest_graph`: ingest Keeper-style graph updates as reviewable memory.
 - `memory_remember`: record a candidate or policy-approved memory.
 - `memory_review_list`: list review candidates.
+- `memory_review_inbox`: show review candidates with source context, risk
+  flags, graph preview, audit trail, and operator handles.
 - `memory_review_approve`: approve a candidate.
 - `memory_review_reject`: reject a candidate.
+- `memory_correct`: correct active memory text.
+- `memory_delete`: soft-delete active memory and suppress retrieval.
+- `memory_distrust`: keep memory for audit but suppress retrieval.
+- `memory_expire`: expire active memory and suppress retrieval.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
 
@@ -90,6 +96,8 @@ For a normal agent loop:
 4. After the model answers, call `memory_after_turn`.
 5. If Keeper was queued, call `memory_worker_run` out of band.
 6. Use `memory_changes` to audit what was saved or proposed.
+7. Use `memory_review_inbox` to approve, reject, correct, delete, distrust, or
+   expire memory through explicit operator handles.
 
 This keeps the main agent from scanning the entire graph. The Router chooses
 relevant branches, and Keeper updates memory after the response.

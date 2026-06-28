@@ -153,6 +153,14 @@ def cmd_review_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review_inbox(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.review_inbox(status=args.status, scope=args.scope, limit=args.limit))
+    store.close()
+    return 0
+
+
 def cmd_review_approve(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1128,6 +1136,12 @@ def build_parser() -> argparse.ArgumentParser:
     rp = review_sub.add_parser("list", help="List candidate memories")
     rp.add_argument("--status", default="pending", choices=["pending", "approved", "rejected", "quarantined", "all"])
     rp.set_defaults(func=cmd_review_list)
+
+    rp = review_sub.add_parser("inbox", help="Show review candidates with source, risk, and operator handles")
+    rp.add_argument("--status", default="open", choices=["open", "pending", "approved", "rejected", "quarantined", "all"])
+    rp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--limit", type=int, default=50)
+    rp.set_defaults(func=cmd_review_inbox)
 
     rp = review_sub.add_parser("approve", help="Promote a candidate to active memory")
     rp.add_argument("candidate_id")

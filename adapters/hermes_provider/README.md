@@ -35,6 +35,8 @@ The adapter should:
   suppressed loser memories, and unresolved conflicts before prompt injection;
 - expose `memory_changes()` so Hermes can inspect what Keeper changed after a
   saved turn and why;
+- expose `review_inbox()` so Hermes can show source previews, risk flags,
+  graph previews, audit trail, and operator action handles;
 - expose `capability_report()` so Hermes can inspect read/write/export/delete
   permissions before delegating work to an agent;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
@@ -60,7 +62,8 @@ The adapter should:
 - configure read policies so agents cannot inject scopes they are not allowed
   to see;
 - leave durable promotion to policy or review;
-- expose pending memory review to the user or operator.
+- expose pending memory review and active-memory lifecycle controls to the user
+  or operator.
 
 ## Non-Responsibilities
 
@@ -162,6 +165,10 @@ provider.capability_report(actor="writer", scope="professional")
 After review, preserve the expected behavior:
 
 ```python
+provider.review_inbox(status="open", scope="professional")
+provider.approve_candidate("cand_xxxxxxxxxxxxxxxx", actor="reviewer")
+provider.correct_memory("mem_xxxxxxxxxxxxxxxx", "Corrected memory text", actor="reviewer")
+
 provider.evaluate_shadow_trace(
     trace["shadow_trace_id"],
     expected={

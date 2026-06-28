@@ -80,6 +80,8 @@ Included now:
   for contract tests and local operation.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report for memory operations.
+- Operator review inbox with source previews, risk flags, graph previews, audit
+  trail, and CLI/HTTP/MCP action handles.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
@@ -138,6 +140,7 @@ Review candidates:
 
 ```bash
 agent-memory review --db .memory/demo.db list --status pending
+agent-memory review --db .memory/demo.db inbox --status open --scope professional
 ```
 
 Approve one candidate:
@@ -265,6 +268,11 @@ agent-memory memory-changes --db .memory/demo.db --thread-id seo-demo
 `memory-changes` explains the saved turns, Keeper event, candidate memories,
 promoted active memories, affected graph/context surfaces, review or lifecycle
 handles, and audit trail for a post-turn memory update.
+
+For a consolidated operator queue, use `review inbox`. It includes source
+event excerpts, Keeper extraction preview, risk flags, review history, audit
+trail, and ready-to-call CLI/HTTP/MCP handles for approve, reject, correct,
+delete, distrust, or expire.
 
 Record whether selected memory helped and inspect quality signals:
 
@@ -603,6 +611,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_build_prompt_context`, `memory_after_saved_turn`, `memory_after_turn`,
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
+`memory_review_inbox`, `memory_review_approve`, `memory_review_reject`,
+`memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,
 `memory_migration_status`, `memory_backup_database`,
@@ -685,6 +695,7 @@ docs/
   runtime-contract.md      pre-call router and post-turn keeper contract
   observability.md         Router, Keeper, and usage telemetry report
   recovery.md              SQLite backup, restore, and migration checks
+  review-workflow.md       operator inbox and memory lifecycle review flow
   memory-lifecycle-contract.md  durable memory lifecycle contract
   keeper-extraction.md    versioned low-cost keeper extraction contract
   cross-model-context-contract.md  provider-neutral prompt context contract

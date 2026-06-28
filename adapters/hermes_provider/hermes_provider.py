@@ -217,6 +217,15 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def review_inbox(
+        self,
+        *,
+        status: str = "open",
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.review_inbox(status=status, scope=scope, limit=limit)
+
     def operational_status(
         self,
         *,
@@ -562,6 +571,69 @@ class HermesMemoryProvider:
             actor=actor,
             reason=reason,
         )
+
+    def approve_candidate(
+        self,
+        candidate_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return {
+            "memory_id": self.store.approve_candidate(candidate_id, actor=actor, reason=reason),
+            "status": "active",
+        }
+
+    def reject_candidate(
+        self,
+        candidate_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        self.store.reject_candidate(candidate_id, actor=actor, reason=reason)
+        return {"candidate_id": candidate_id, "status": "rejected"}
+
+    def correct_memory(
+        self,
+        memory_id: str,
+        text: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        self.store.correct_memory(memory_id, text, actor=actor, reason=reason)
+        return {"memory_id": memory_id, "status": "corrected"}
+
+    def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        self.store.delete_memory(memory_id, actor=actor, reason=reason)
+        return {"memory_id": memory_id, "status": "deleted"}
+
+    def distrust_memory(
+        self,
+        memory_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        self.store.distrust_memory(memory_id, actor=actor, reason=reason)
+        return {"memory_id": memory_id, "status": "distrusted"}
+
+    def expire_memory(
+        self,
+        memory_id: str,
+        *,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        self.store.expire_memory(memory_id, actor=actor, reason=reason)
+        return {"memory_id": memory_id, "status": "expired"}
 
     def memory_conflicts(
         self,

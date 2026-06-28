@@ -160,6 +160,12 @@ memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted
 memories, affected graph/context surfaces, review or lifecycle handles, and
 audit trail.
+The baseline operator review inbox is implemented through `agent-memory review
+inbox`, `/review/inbox`, the Hermes provider wrapper, and MCP
+`memory_review_inbox`. It returns candidate source previews, risk flags, graph
+previews, review history, audit trail, and CLI/HTTP/MCP handles for approve,
+reject, correct, delete, distrust, and expire. HTTP and MCP also expose
+correct/delete/distrust/expire lifecycle endpoints/tools.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -223,9 +229,9 @@ Goal: make memory maintenance practical for non-technical users.
 
 Planned:
 
-- review inbox;
-- approve/reject/correct flows;
-- source preview;
+- browser UI over the existing review inbox API;
+- batch approve/reject/correct flows;
+- richer source preview;
 - graph browser;
 - conflict warnings;
 - export controls.

@@ -327,6 +327,17 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_review_inbox": {
+        "endpoint": "/review/inbox",
+        "description": "Show review candidates with source context, risk flags, graph preview, and operator handles.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Inbox status filter: open, pending, quarantined, approved, rejected, or all.", "open"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "limit": _integer("Maximum inbox items.", 50),
+            }
+        ),
+    },
     "memory_review_approve": {
         "endpoint": "/review/approve",
         "description": "Approve a pending memory candidate.",
@@ -349,6 +360,55 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "reason": _string("Rejection reason.", ""),
             },
             ["candidate_id"],
+        ),
+    },
+    "memory_correct": {
+        "endpoint": "/memory/correct",
+        "description": "Correct active memory text and invalidate derived memory surfaces.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Active memory id to correct."),
+                "text": _string("Replacement memory text."),
+                "actor": _string("Correcting actor.", "mcp"),
+                "reason": _string("Correction reason.", ""),
+            },
+            ["memory_id", "text"],
+        ),
+    },
+    "memory_delete": {
+        "endpoint": "/memory/delete",
+        "description": "Soft-delete active memory and suppress prompt-facing retrieval.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Active memory id to delete."),
+                "actor": _string("Deleting actor.", "mcp"),
+                "reason": _string("Delete reason.", ""),
+            },
+            ["memory_id"],
+        ),
+    },
+    "memory_distrust": {
+        "endpoint": "/memory/distrust",
+        "description": "Mark active memory as distrusted while keeping it for audit.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Active memory id to distrust."),
+                "actor": _string("Distrusting actor.", "mcp"),
+                "reason": _string("Distrust reason.", ""),
+            },
+            ["memory_id"],
+        ),
+    },
+    "memory_expire": {
+        "endpoint": "/memory/expire",
+        "description": "Expire active memory and suppress prompt-facing retrieval.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Active memory id to expire."),
+                "actor": _string("Expiring actor.", "mcp"),
+                "reason": _string("Expiry reason.", ""),
+            },
+            ["memory_id"],
         ),
     },
     "memory_capability_check": {

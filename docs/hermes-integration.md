@@ -100,6 +100,27 @@ class HermesMemoryProvider:
     def ingest_graph(self, updates: list[dict], **kwargs) -> dict:
         ...
 
+    def review_inbox(self, status: str = "open", scope: str | None = None, limit: int = 50) -> dict:
+        ...
+
+    def approve_candidate(self, candidate_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def reject_candidate(self, candidate_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def correct_memory(self, memory_id: str, text: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def delete_memory(self, memory_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def distrust_memory(self, memory_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
+    def expire_memory(self, memory_id: str, actor: str = "reviewer", reason: str = "") -> dict:
+        ...
+
     def graph_nodes(self, scope: str | None = None, node_type: str | None = None) -> list[dict]:
         ...
 
@@ -220,7 +241,14 @@ Useful endpoints:
 - `POST /read-policy/list`
 - `POST /capability/check`
 - `POST /search`
+- `POST /review/inbox`
 - `POST /review/list`
+- `POST /review/approve`
+- `POST /review/reject`
+- `POST /memory/correct`
+- `POST /memory/delete`
+- `POST /memory/distrust`
+- `POST /memory/expire`
 - `POST /brain/style`
 - `POST /conflict/record`
 - `POST /conflict/list`
@@ -342,6 +370,18 @@ The report shows saved turns, the Keeper event, candidate memories, promoted
 active memories, affected graph/context surfaces, review or lifecycle handles,
 and the audit trail. This is the operator-facing answer to "what changed after
 that turn and why?".
+
+For the broader operator queue, Hermes can call:
+
+```bash
+agent-memory review --db .memory/hermes-memory.db inbox --status open --scope professional
+```
+
+or MCP `memory_review_inbox`. The inbox returns candidate source previews,
+risk flags, graph previews, review history, audit trail, and CLI/HTTP/MCP
+handles for approve/reject or active-memory correct/delete/distrust/expire.
+Hermes should show this to a human reviewer or policy service; the main agent
+should not silently promote its own Keeper output.
 
 Lower-level context builder call:
 

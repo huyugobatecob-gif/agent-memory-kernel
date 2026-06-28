@@ -211,6 +211,11 @@ Already present:
 - Baseline post-turn change inspection through `agent-memory memory-changes`
   and `/memory-changes`, including saved turns, Keeper event, candidates,
   promoted memories, affected surfaces, handles, and audit trail.
+- Baseline operator review inbox through `agent-memory review inbox`,
+  `/review/inbox`, the Hermes provider wrapper, and MCP `memory_review_inbox`;
+  inbox items include source previews, risk flags, graph previews, review
+  history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
+  delete, distrust, and expire.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -258,8 +263,9 @@ Remaining for full memory:
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local
   capability/consent report for read/write/promote/inject/export/delete.
-- Broader inspection flows for undo, distrust, export, and UI review beyond
-  the baseline Router explain and post-turn memory-change endpoints.
+- Broader inspection flows for export governance, batch review, and web UI
+  review beyond the baseline Router explain, post-turn memory-change, and
+  review inbox endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
@@ -282,7 +288,8 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review UI or inbox.
+- Human review web UI, graph browser, batch review, and notification queue
+  beyond the baseline machine-readable review inbox.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
@@ -578,7 +585,9 @@ PYTHONPATH=src python3 -m agent_memory_kernel.server --db /tmp/amk-full-memory.d
 ```
 
 **Verification:** `/before-model-call`, `/after-saved-turn`, `/review/list`,
-`/graph/nodes`, `/graph/edges`, and MCP equivalents return stable JSON.
+`/review/inbox`, `/memory/correct`, `/memory/delete`, `/memory/distrust`,
+`/memory/expire`, `/graph/nodes`, `/graph/edges`, and MCP equivalents return
+stable JSON.
 
 **Result:** Baseline implemented. The repository now has `agent-memory serve`,
 `agent-memory mcp`, `agent-memory-mcp`, `src/agent_memory_kernel/mcp_server.py`,
@@ -651,12 +660,19 @@ automatic lesson extraction, and project-level comparison reports.
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
-PYTHONPATH=src python3 -m agent_memory_kernel.cli review list --db /tmp/amk-full-memory.db --status pending
+PYTHONPATH=src python3 -m agent_memory_kernel.cli review --db /tmp/amk-full-memory.db list --status pending
+PYTHONPATH=src python3 -m agent_memory_kernel.cli review --db /tmp/amk-full-memory.db inbox --status open
 ```
 
 **Verification:** Corrections update active memory, graph summaries, evidence links, and retrieval output.
 
-**Result:** The memory tree can stay clean without requiring direct database edits.
+**Result:** Baseline implemented. `agent-memory review inbox`, `/review/inbox`,
+Hermes `review_inbox()`, and MCP `memory_review_inbox` provide a
+machine-readable operator queue with source preview, risk flags, graph preview,
+review history, audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose
+correct/delete/distrust/expire lifecycle actions. Remaining work is a browser
+review UI, graph browser, batch review, export controls, and reviewer
+notifications.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 
