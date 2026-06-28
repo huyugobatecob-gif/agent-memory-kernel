@@ -818,6 +818,14 @@ def cmd_export_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_control(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.export_control_report(actor=args.actor, scope=args.scope, project=args.project))
+    store.close()
+    return 0
+
+
 def cmd_import_profile(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1579,6 +1587,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", default="")
     p.add_argument("--actor", default="user")
     p.set_defaults(func=cmd_export_profile)
+
+    p = sub.add_parser("export-control", help="Preview export policy and aggregate memory counts")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--actor", default="user")
+    p.set_defaults(func=cmd_export_control)
 
     p = sub.add_parser("import-profile", help="Import project profile JSON")
     add_common_db(p)

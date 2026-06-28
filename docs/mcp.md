@@ -83,6 +83,8 @@ Operator and graph tools:
 - `memory_delete`: soft-delete active memory and suppress retrieval.
 - `memory_distrust`: keep memory for audit but suppress retrieval.
 - `memory_expire`: expire active memory and suppress retrieval.
+- `memory_export_control`: preview export policy, aggregate scope counts, and
+  risk flags before memory leaves the store.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
 

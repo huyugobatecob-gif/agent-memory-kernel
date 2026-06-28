@@ -451,6 +451,17 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_export_control": {
+        "endpoint": "/export/control",
+        "description": "Preview export policy, scope counts, and aggregate risk before memory leaves the store.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Exporting actor.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "project": _string("Optional project filter.", ""),
+            }
+        ),
+    },
     "memory_graph_nodes": {
         "endpoint": "/graph/nodes",
         "description": "List active memory graph nodes.",

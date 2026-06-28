@@ -92,6 +92,8 @@ Included now:
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
+- Export control previews with policy decisions, scope counts, and aggregate
+  risk flags before memory leaves the store.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -325,6 +327,7 @@ agent-memory observability --db .memory/demo.db --thread-id seo-demo
 agent-memory migration-status --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
+agent-memory export-control --db .memory/demo.db --scope professional --actor writer
 agent-memory export-profile --db .memory/demo.db --scope professional
 agent-memory import-profile --db .memory/restored.db exported-profile.json
 ```
@@ -378,6 +381,9 @@ The report shows read actions (`read`, `inject`, `export`) and write actions
 matched policy, reason, and denied actions. Direct `search`, `context-pack`,
 `graph tree`, and profile/markdown export calls can take `--actor` so denied
 read/export policies are enforced outside the prompt hook too.
+Use `export-control` before `export-profile` or markdown export to see whether
+the actor can export the requested scope, what aggregate memory counts are in
+scope, and whether personal, secret, or denied-scope risk flags are present.
 
 Inspect derived-memory invalidation after corrections or lifecycle changes:
 
@@ -616,6 +622,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
+`memory_export_control`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,
 `memory_migration_status`, `memory_backup_database`,

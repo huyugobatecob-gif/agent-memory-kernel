@@ -45,6 +45,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_graph_nodes", names)
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)
+            self.assertIn("memory_export_control", names)
             self.assertIn("memory_derived_invalidations", names)
             self.assertIn("memory_observability", names)
             self.assertIn("memory_migration_status", names)
@@ -91,10 +92,27 @@ class MCPServerTests(unittest.TestCase):
                 "capability-consent-v0.1",
             )
 
-            saved_turn = server.handle_message(
+            export_control = server.handle_message(
                 {
                     "jsonrpc": "2.0",
                     "id": 5,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_export_control",
+                        "arguments": {"actor": "designer", "scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(export_control["result"]["isError"])
+            self.assertEqual(
+                export_control["result"]["structuredContent"]["version"],
+                "export-control-v0.1",
+            )
+
+            saved_turn = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 6,
                     "method": "tools/call",
                     "params": {
                         "name": "memory_after_saved_turn",

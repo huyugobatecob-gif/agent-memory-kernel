@@ -236,6 +236,12 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             read_actions=payload.get("read_actions"),
             write_actions=payload.get("write_actions"),
         )
+    if path == "/export/control":
+        return store.export_control_report(
+            actor=str(payload.get("actor", "user")),
+            scope=payload.get("scope"),
+            project=str(payload.get("project", "")),
+        )
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}

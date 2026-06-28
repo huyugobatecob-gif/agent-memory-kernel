@@ -41,6 +41,8 @@ The adapter should:
   with dry-run and per-item results;
 - expose `capability_report()` so Hermes can inspect read/write/export/delete
   permissions before delegating work to an agent;
+- expose `export_control_report()` so Hermes can preview export policy,
+  aggregate scope counts, and risk flags before memory leaves the store;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
@@ -162,6 +164,7 @@ Check the effective capability matrix before starting an agent:
 
 ```python
 provider.capability_report(actor="writer", scope="professional")
+provider.export_control_report(actor="writer", scope="professional")
 ```
 
 After review, preserve the expected behavior:

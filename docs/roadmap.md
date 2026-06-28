@@ -169,6 +169,11 @@ correct/delete/distrust/expire lifecycle endpoints/tools.
 Baseline batch review is implemented through `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
+Baseline export governance is implemented through `agent-memory export-control`,
+`/export/control`, Hermes `export_control_report()`, and MCP
+`memory_export_control`. Export previews return matched policy, aggregate
+scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
+without returning memory content.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -237,7 +242,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- export controls.
+- export retention policy, redaction profiles, and sensitive export approval.
 
 ## v1.0: Stable Memory Contract
 

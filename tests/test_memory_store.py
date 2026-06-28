@@ -292,6 +292,26 @@ class MemoryStoreTests(unittest.TestCase):
             )
             self.assertEqual(api_report["read"]["export"]["decision"], "deny")
 
+            export_control = store.export_control_report(
+                actor="blocked-export",
+                scope="professional",
+            )
+            self.assertEqual(export_control["version"], "export-control-v0.1")
+            self.assertFalse(export_control["allowed"])
+            self.assertEqual(export_control["denied_scopes"], ["professional"])
+            self.assertEqual(export_control["recommended_action"], "request_consent_or_reduce_scope")
+            self.assertEqual(export_control["scopes"][0]["counts"]["active_memories"], 1)
+            self.assertEqual(export_control["scopes"][0]["counts"]["sensitivity_counts"], {"internal": 1})
+            self.assertEqual(export_control["scopes"][0]["policy"]["decision"], "deny")
+            self.assertIn("export_denied", {flag["flag"] for flag in export_control["risk_flags"]})
+
+            api_export_control = handle_api_request(
+                store,
+                "/export/control",
+                {"actor": "blocked-export", "scope": "professional"},
+            )
+            self.assertFalse(api_export_control["allowed"])
+
             with self.assertRaises(PermissionError):
                 store.search("consent-site", scope="professional", actor="blocked-search")
             with self.assertRaises(PermissionError):
@@ -303,6 +323,8 @@ class MemoryStoreTests(unittest.TestCase):
 
             allowed = store.search("consent-site", scope="professional", actor="allowed-reader")
             self.assertTrue(allowed)
+            allowed_export = store.export_control_report(actor="allowed-reader", scope="professional")
+            self.assertTrue(allowed_export["allowed"])
             store.close()
 
     def test_secret_like_content_is_quarantined(self) -> None:

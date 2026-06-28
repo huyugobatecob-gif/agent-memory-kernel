@@ -98,6 +98,7 @@ OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
+EXPORT_CONTROL_VERSION = "export-control-v0.1"
 SCHEMA_VERSION = 1
 READ_CAPABILITY_ACTIONS = ["read", "inject", "export"]
 WRITE_CAPABILITY_ACTIONS = [
@@ -2985,6 +2986,75 @@ class MemoryStore:
             "keeper_runs": self.list_keeper_runs(limit=500),
             "optimization_runs": self.list_graph_optimization_runs(scope=scope, limit=500),
             "digital_brain": self.digital_brain_state(scope=scope),
+        }
+
+    def export_control_report(
+        self,
+        *,
+        actor: str = "user",
+        scope: str | None = None,
+        project: str = "",
+    ) -> dict[str, Any]:
+        """Preview export scope, policy, and aggregate risk without exporting content."""
+        scope = normalize_scope(scope) if scope else None
+        project = (project or "").strip()
+        scopes = [scope] if scope else ["personal", "professional", "project", "agent", "session"]
+        scope_reports = []
+        denied_scopes: list[str] = []
+        risk_flags: list[dict[str, str]] = []
+
+        for item_scope in scopes:
+            policy = self._resolve_read_policy(actor, item_scope, "export")
+            if policy["decision"] == "deny":
+                denied_scopes.append(item_scope)
+                risk_flags.append(
+                    {
+                        "flag": "export_denied",
+                        "severity": "high",
+                        "scope": item_scope,
+                        "detail": policy["reason"] or "export denied by read policy",
+                    }
+                )
+            counts = self._export_scope_counts(item_scope, project=project)
+            secret_count = counts["sensitivity_counts"].get("secret", 0)
+            if secret_count:
+                risk_flags.append(
+                    {
+                        "flag": "secret_active_memory",
+                        "severity": "high",
+                        "scope": item_scope,
+                        "detail": f"{secret_count} active secret memories would be in export scope",
+                    }
+                )
+            if item_scope == "personal" and counts["active_memories"]:
+                risk_flags.append(
+                    {
+                        "flag": "personal_scope_export",
+                        "severity": "medium",
+                        "scope": item_scope,
+                        "detail": "personal memory is in export scope",
+                    }
+                )
+            scope_reports.append(
+                {
+                    "scope": item_scope,
+                    "policy": policy,
+                    "allowed": policy["decision"] != "deny",
+                    "counts": counts,
+                }
+            )
+
+        allowed = not denied_scopes
+        return {
+            "version": EXPORT_CONTROL_VERSION,
+            "actor": actor,
+            "scope": scope or "all",
+            "project": project,
+            "allowed": allowed,
+            "denied_scopes": denied_scopes,
+            "recommended_action": "export_allowed" if allowed else "request_consent_or_reduce_scope",
+            "risk_flags": risk_flags,
+            "scopes": scope_reports,
         }
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
@@ -6766,8 +6836,94 @@ class MemoryStore:
                     "interest": interest["label"],
                     "matches": [dict(row) for row in matches],
                 }
-            )
+        )
         return findings
+
+    def _export_scope_counts(self, scope: str, *, project: str = "") -> dict[str, Any]:
+        def scalar(sql: str, params: tuple[Any, ...]) -> int:
+            row = self.conn.execute(sql, params).fetchone()
+            return int(row[0] if row else 0)
+
+        def grouped(sql: str, params: tuple[Any, ...]) -> dict[str, int]:
+            rows = self.conn.execute(sql, params).fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
+        project_clause = "AND project = ?" if project else ""
+        project_params: tuple[Any, ...] = (scope, project) if project else (scope,)
+        return {
+            "active_memories": scalar(
+                "SELECT COUNT(*) FROM memories WHERE status = 'active' AND scope = ?",
+                (scope,),
+            ),
+            "candidate_memories": scalar(
+                "SELECT COUNT(*) FROM candidate_memories WHERE scope = ?",
+                (scope,),
+            ),
+            "sensitivity_counts": grouped(
+                """
+                SELECT sensitivity, COUNT(*)
+                FROM memories
+                WHERE status = 'active' AND scope = ?
+                GROUP BY sensitivity
+                """,
+                (scope,),
+            ),
+            "source_trust_counts": grouped(
+                """
+                SELECT source_trust, COUNT(*)
+                FROM memories
+                WHERE status = 'active' AND scope = ?
+                GROUP BY source_trust
+                """,
+                (scope,),
+            ),
+            "kind_counts": grouped(
+                """
+                SELECT kind, COUNT(*)
+                FROM memories
+                WHERE status = 'active' AND scope = ?
+                GROUP BY kind
+                """,
+                (scope,),
+            ),
+            "profile_notes": scalar(
+                "SELECT COUNT(*) FROM profile_notes WHERE status = 'active' AND scope = ?",
+                (scope,),
+            ),
+            "project_profiles": scalar(
+                f"SELECT COUNT(*) FROM project_profiles WHERE scope = ? {project_clause}",
+                project_params,
+            ),
+            "conversation_turns": scalar(
+                "SELECT COUNT(*) FROM conversation_turns WHERE scope = ?",
+                (scope,),
+            ),
+            "thread_summaries": scalar(
+                "SELECT COUNT(*) FROM thread_summaries WHERE scope = ?",
+                (scope,),
+            ),
+            "graph_nodes": scalar(
+                "SELECT COUNT(*) FROM memory_graph_nodes WHERE status = 'active' AND scope = ?",
+                (scope,),
+            ),
+            "graph_edges": scalar(
+                """
+                SELECT COUNT(*)
+                FROM memory_graph_edges ge
+                JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+                WHERE ge.status = 'active' AND src.scope = ?
+                """,
+                (scope,),
+            ),
+            "semantic_analyses": scalar(
+                "SELECT COUNT(*) FROM semantic_analyses WHERE scope = ?",
+                (scope,),
+            ),
+            "llm_usage_stats": scalar(
+                "SELECT COUNT(*) FROM llm_usage_stats WHERE scope = ?",
+                (scope,),
+            ),
+        }
 
     def _export_chat_history(self, *, scope: str | None) -> dict[str, list[dict[str, Any]]]:
         turn_rows = self.conn.execute(

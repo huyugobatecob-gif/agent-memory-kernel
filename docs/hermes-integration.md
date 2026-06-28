@@ -130,6 +130,9 @@ class HermesMemoryProvider:
     def export_profile(self, scope: str | None = None, project: str = "") -> dict:
         ...
 
+    def export_control_report(self, actor: str = "hermes", scope: str | None = None, project: str = "") -> dict:
+        ...
+
     def remember(self, text: str, scope: str = "professional", source_ref: str = "") -> dict:
         ...
 
@@ -243,6 +246,7 @@ Useful endpoints:
 - `POST /read-policy/set`
 - `POST /read-policy/list`
 - `POST /capability/check`
+- `POST /export/control`
 - `POST /search`
 - `POST /review/inbox`
 - `POST /review/batch`
@@ -622,9 +626,14 @@ agent-memory backup --db .memory/hermes-memory.db --out .memory/backups/hermes-m
 Workspace profile export:
 
 ```bash
+agent-memory export-control --scope professional --project demo-site --actor writer
 agent-memory export-profile --scope professional --project demo-site
 agent-memory import-profile exported-profile.json --db .memory/restored.db
 ```
+
+Run export control before export. It returns matched export policy, aggregate
+counts by scope, sensitivity/trust breakdowns, denied scopes, and risk flags
+without returning memory content.
 
 ## Loop Memory Extension
 

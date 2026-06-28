@@ -219,6 +219,11 @@ Already present:
 - Baseline batch review through `agent-memory review batch`, `/review/batch`,
   Hermes `review_batch()`, and MCP `memory_review_batch`; approve/reject
   batches support dry-run and per-candidate results.
+- Baseline export governance through `agent-memory export-control`,
+  `/export/control`, Hermes `export_control_report()`, and MCP
+  `memory_export_control`; export previews show policy decisions, aggregate
+  scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
+  without returning memory content.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -266,9 +271,9 @@ Remaining for full memory:
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local
   capability/consent report for read/write/promote/inject/export/delete.
-- Broader inspection flows for export governance, batch correction, and web UI
+- Broader inspection flows for export retention, batch correction, and web UI
   review beyond the baseline Router explain, post-turn memory-change, and
-  review inbox endpoints.
+  review inbox/export-control endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
@@ -679,6 +684,9 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. Remaining work is a
 browser review UI, graph browser, batch correction, export controls, and reviewer
 notifications.
+Export-control baseline is implemented, but retention policy, redaction
+profiles, encrypted export, and approval workflow for sensitive exports remain
+production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

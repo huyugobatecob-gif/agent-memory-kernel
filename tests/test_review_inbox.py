@@ -294,6 +294,9 @@ class ReviewInboxTests(unittest.TestCase):
                 actor="reviewer",
             )
             self.assertEqual(corrected["status"], "corrected")
+            export_control = provider.export_control_report(actor="reviewer", scope="professional")
+            self.assertEqual(export_control["version"], "export-control-v0.1")
+            self.assertTrue(export_control["allowed"])
             deleted = provider.delete_memory(approved["memory_id"], actor="reviewer")
             self.assertEqual(deleted["status"], "deleted")
             provider.close()
