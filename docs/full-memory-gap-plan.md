@@ -281,7 +281,8 @@ Already present:
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
-- Local stdlib HTTP API service for runtime hooks and review/list operations.
+- Local stdlib HTTP API service for runtime hooks, review/list operations, and
+  browser review/graph pages.
 - Dependency-free stdio MCP server for agents that should call the same memory
   orchestrator through MCP tools instead of CLI, imports, or HTTP.
 - CLI and tests.
@@ -331,10 +332,11 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review web UI, graph browser UI, browser-assisted batch correction,
-  push/email/web notification transports beyond the baseline
-  machine-readable review inbox with inline conflict warnings, notification
-  queue, approve/reject batch flow, and active-memory lifecycle batch flow.
+- Browser-assisted batch correction, richer graph navigation, and
+  push/email/web notification transports beyond the baseline browser review
+  and graph pages, machine-readable review inbox with inline conflict warnings,
+  notification queue, approve/reject batch flow, and active-memory lifecycle
+  batch flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
@@ -729,12 +731,12 @@ notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, SLA status
 filtering, and policy-only escalation reports.
-Remaining work is a browser review UI, graph browser UI, browser-assisted batch
-correction, notification transports, and hosted key-management controls.
+Remaining work is browser-assisted batch correction, richer graph navigation,
+notification transports, and hosted key-management controls.
 Export-control, redaction-profile, sensitive-export approval, export retention,
-and encrypted profile export baselines are implemented, but browser UI, graph
-browser, notification transports, and hosted key-management/off-host
-encryption remain production backlog.
+and encrypted profile export baselines are implemented, but richer browser
+flows, notification transports, and hosted key-management/off-host encryption
+remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

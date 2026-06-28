@@ -155,9 +155,8 @@ prompt context; the operator or governing policy controls durable memory.
 
 The current inbox is a stable data/API baseline. Future product layers can add:
 
-- browser-based review UI;
-- browser UI over graph browser source previews;
 - browser-assisted batch approve/reject and lifecycle correction;
+- richer browser graph navigation over source previews;
 - richer conflict-resolution UI over inline candidate warnings;
 - hosted key-management and export custody controls;
 - push/email/web notification transports.

@@ -64,7 +64,7 @@ Included now:
 - Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
-- Local stdlib HTTP API service: `serve`.
+- Local stdlib HTTP API service with browser review/graph pages: `serve`.
 - Dependency-free stdio MCP server: `mcp` / `agent-memory-mcp`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
@@ -83,6 +83,7 @@ Included now:
 - Operator review inbox with source previews, risk flags, inline
   possible-conflict warnings, graph previews, audit trail, and CLI/HTTP/MCP
   action handles.
+- Browser review UI at `/ui/review` and graph browser UI at `/ui/graph`.
 - Batch review for approve/reject with dry-run and per-candidate results.
 - Batch lifecycle correction for active memories with dry-run and per-item
   results.

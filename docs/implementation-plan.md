@@ -295,7 +295,7 @@ Options:
 
 - FastAPI server;
 - MCP server;
-- browser review UI;
+- richer browser review UI;
 - Obsidian/markdown sync;
 - embedding search plugin.
 

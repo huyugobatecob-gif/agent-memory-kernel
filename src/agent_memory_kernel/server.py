@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from html import escape
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
 from .conformance import (
@@ -517,6 +519,411 @@ def _normalize_after_turn_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def render_review_ui(
+    store: MemoryStore,
+    *,
+    status: str = "open",
+    scope: str | None = None,
+    limit: int = 50,
+) -> str:
+    safe_limit = max(1, min(int(limit or 50), 200))
+    inbox = store.review_inbox(status=status, scope=scope or None, limit=safe_limit)
+    summary = inbox.get("summary", {})
+    summary_html = "".join(
+        f"<span class=\"pill\"><strong>{_h(key)}</strong> {_h(value)}</span>"
+        for key, value in sorted(summary.items())
+    )
+    items_html = "".join(_review_item_html(item) for item in inbox.get("items", []))
+    if not items_html:
+        items_html = "<p class=\"empty\">No candidates found.</p>"
+    body = f"""
+    <section class="toolbar">
+      <form method="get" action="/ui/review" class="filters">
+        <label>Status {_select("status", ["open", "pending", "quarantined", "approved", "rejected", "all"], str(inbox.get("status_filter", status)))}</label>
+        <label>Scope <input name="scope" value="{_h(scope or "")}" placeholder="all"></label>
+        <label>Limit <input name="limit" type="number" min="1" max="200" value="{_h(safe_limit)}"></label>
+        <button type="submit">Apply</button>
+      </form>
+      <div class="summary">{summary_html or '<span class="pill">0 items</span>'}</div>
+    </section>
+    <main class="stack" id="review-items">{items_html}</main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    """
+    return _html_shell("Review Inbox", body, script=_REVIEW_UI_SCRIPT)
+
+
+def render_graph_ui(
+    store: MemoryStore,
+    *,
+    scope: str | None = None,
+    node_type: str | None = None,
+    query: str = "",
+    limit: int = 50,
+    evidence_limit: int = 3,
+) -> str:
+    graph = store.graph_browser(
+        scope=scope or None,
+        node_type=node_type or None,
+        query=query,
+        limit=limit,
+        evidence_limit=evidence_limit,
+    )
+    nodes_html = "".join(_graph_node_html(node) for node in graph.get("nodes", []))
+    edges_html = "".join(_graph_edge_html(edge) for edge in graph.get("edges", []))
+    if not nodes_html:
+        nodes_html = "<p class=\"empty\">No graph nodes found.</p>"
+    if not edges_html:
+        edges_html = "<p class=\"empty\">No graph edges found.</p>"
+    counts = graph.get("counts", {})
+    body = f"""
+    <section class="toolbar">
+      <form method="get" action="/ui/graph" class="filters">
+        <label>Scope <input name="scope" value="{_h(scope or "")}" placeholder="all"></label>
+        <label>Type <input name="node_type" value="{_h(node_type or "")}" placeholder="all"></label>
+        <label>Query <input name="query" value="{_h(query)}"></label>
+        <label>Limit <input name="limit" type="number" min="1" max="200" value="{_h(limit)}"></label>
+        <button type="submit">Apply</button>
+      </form>
+      <div class="summary">
+        <span class="pill"><strong>nodes</strong> {_h(counts.get("nodes", 0))}</span>
+        <span class="pill"><strong>edges</strong> {_h(counts.get("edges", 0))}</span>
+      </div>
+    </section>
+    <main class="columns">
+      <section>
+        <h2>Nodes</h2>
+        <div class="stack">{nodes_html}</div>
+      </section>
+      <section>
+        <h2>Edges</h2>
+        <div class="stack">{edges_html}</div>
+      </section>
+    </main>
+    """
+    return _html_shell("Graph Browser", body)
+
+
+def _review_item_html(item: dict[str, Any]) -> str:
+    candidate = item.get("candidate", {})
+    source_event = item.get("source_event", {})
+    review = item.get("review", {})
+    candidate_id = str(candidate.get("candidate_id", ""))
+    status = str(candidate.get("status", ""))
+    risk_flags = review.get("risk_flags", [])
+    conflict_warnings = review.get("conflict_warnings", [])
+    actions = ""
+    if status in {"pending", "quarantined"}:
+        actions = f"""
+        <div class="actions">
+          <button data-action="approve" data-candidate-id="{_h(candidate_id)}">Approve</button>
+          <button data-action="reject" data-candidate-id="{_h(candidate_id)}" class="danger">Reject</button>
+        </div>
+        """
+    active_memories = "".join(
+        f"<li><code>{_h(memory.get('memory_id', ''))}</code> {_h(memory.get('text', ''))}</li>"
+        for memory in item.get("active_memories", [])
+    )
+    graph_preview = item.get("graph_preview", {})
+    return f"""
+    <article class="card" data-candidate="{_h(candidate_id)}">
+      <header>
+        <div>
+          <h2>{_h(candidate.get("kind", "memory"))}</h2>
+          <p class="muted"><code>{_h(candidate_id)}</code></p>
+        </div>
+        <div class="meta">
+          <span>{_h(status)}</span>
+          <span>{_h(candidate.get("scope", ""))}</span>
+          <span>{_h(candidate.get("confidence", ""))}</span>
+          <span>{_h(candidate.get("source_trust", ""))}</span>
+        </div>
+      </header>
+      <p class="text">{_h(candidate.get("proposed_text", ""))}</p>
+      <dl class="grid">
+        <div><dt>Recommended</dt><dd>{_h(review.get("recommended_action", ""))}</dd></div>
+        <div><dt>Source</dt><dd>{_h(source_event.get("source_type", ""))} {_h(source_event.get("source_ref", ""))}</dd></div>
+        <div><dt>Graph</dt><dd>{_h(graph_preview.get("node_count", 0))} nodes, {_h(graph_preview.get("edge_count", 0))} edges, {_h(graph_preview.get("fact_count", 0))} facts</dd></div>
+      </dl>
+      {_flag_list("Risk Flags", risk_flags)}
+      {_conflict_warning_html(conflict_warnings)}
+      <details>
+        <summary>Source excerpt</summary>
+        <p class="text">{_h(source_event.get("content_excerpt", ""))}</p>
+      </details>
+      {_list_block("Active memories", active_memories)}
+      {actions}
+    </article>
+    """
+
+
+def _graph_node_html(node: dict[str, Any]) -> str:
+    previews = "".join(
+        f"<li>{_h(preview.get('quote', '') or preview.get('memory_text', ''))}</li>"
+        for preview in node.get("source_previews", [])
+    )
+    return f"""
+    <article class="card">
+      <header>
+        <div>
+          <h2>{_h(node.get("label", ""))}</h2>
+          <p class="muted"><code>{_h(node.get("graph_node_id", ""))}</code></p>
+        </div>
+        <div class="meta">
+          <span>{_h(node.get("node_type", ""))}</span>
+          <span>{_h(node.get("scope", ""))}</span>
+          <span>{_h(node.get("confidence", ""))}</span>
+        </div>
+      </header>
+      <p class="text">{_h(node.get("summary", "") or node.get("blob", ""))}</p>
+      {_list_block("Sources", previews)}
+    </article>
+    """
+
+
+def _graph_edge_html(edge: dict[str, Any]) -> str:
+    previews = "".join(
+        f"<li>{_h(preview.get('quote', '') or preview.get('memory_text', ''))}</li>"
+        for preview in edge.get("source_previews", [])
+    )
+    return f"""
+    <article class="card">
+      <header>
+        <div>
+          <h2>{_h(edge.get("source_label", ""))} -> {_h(edge.get("target_label", ""))}</h2>
+          <p class="muted"><code>{_h(edge.get("graph_edge_id", ""))}</code></p>
+        </div>
+        <div class="meta">
+          <span>{_h(edge.get("edge_type", ""))}</span>
+          <span>weight {_h(edge.get("weight", ""))}</span>
+        </div>
+      </header>
+      <p class="text">{_h(edge.get("label", ""))}</p>
+      {_list_block("Sources", previews)}
+    </article>
+    """
+
+
+def _flag_list(title: str, flags: list[dict[str, Any]]) -> str:
+    if not flags:
+        return ""
+    items = "".join(
+        f"<li><strong>{_h(flag.get('flag', ''))}</strong> <span>{_h(flag.get('severity', ''))}</span> {_h(flag.get('detail', ''))}</li>"
+        for flag in flags
+    )
+    return _list_block(title, items)
+
+
+def _conflict_warning_html(warnings: list[dict[str, Any]]) -> str:
+    if not warnings:
+        return ""
+    rows = "".join(
+        f"""
+        <tr>
+          <td><code>{_h(warning.get("memory_id", ""))}</code></td>
+          <td>{_h(warning.get("memory_text_excerpt", ""))}</td>
+          <td>{_h(", ".join(str(token) for token in warning.get("overlap_tokens", [])))}</td>
+        </tr>
+        """
+        for warning in warnings
+    )
+    return f"""
+    <section class="table-wrap">
+      <h3>Possible Conflicts</h3>
+      <table>
+        <thead><tr><th>Memory</th><th>Active text</th><th>Overlap</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </section>
+    """
+
+
+def _list_block(title: str, items_html: str) -> str:
+    if not items_html:
+        return ""
+    return f"<section><h3>{_h(title)}</h3><ul>{items_html}</ul></section>"
+
+
+def _select(name: str, options: list[str], selected: str) -> str:
+    option_html = "".join(
+        f"<option value=\"{_h(option)}\"{' selected' if option == selected else ''}>{_h(option)}</option>"
+        for option in options
+    )
+    return f"<select name=\"{_h(name)}\">{option_html}</select>"
+
+
+def _html_shell(title: str, body: str, *, script: str = "") -> str:
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{_h(title)} - Agent Memory Kernel</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #64707d;
+      --line: #d9ded6;
+      --accent: #0f766e;
+      --danger: #b42318;
+      --warn: #9a6700;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    nav {{
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }}
+    nav strong {{ margin-right: auto; }}
+    nav a {{ color: var(--ink); text-decoration: none; }}
+    nav a:hover {{ color: var(--accent); }}
+    .page {{ max-width: 1280px; margin: 0 auto; padding: 24px; }}
+    .toolbar {{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 18px;
+    }}
+    .filters {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }}
+    label {{ display: grid; gap: 4px; color: var(--muted); font-size: 12px; }}
+    input, select, button {{
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 6px 9px;
+      font: inherit;
+    }}
+    button {{ cursor: pointer; background: var(--ink); color: #fff; border-color: var(--ink); }}
+    button:hover {{ background: var(--accent); border-color: var(--accent); }}
+    button.danger {{ background: var(--danger); border-color: var(--danger); }}
+    .summary, .meta, .actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .pill, .meta span {{
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #fff;
+      color: var(--muted);
+      white-space: nowrap;
+    }}
+    .stack {{ display: grid; gap: 14px; }}
+    .columns {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }}
+    .card {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }}
+    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: start; }}
+    h1 {{ margin: 0; font-size: 20px; }}
+    h2 {{ margin: 0; font-size: 16px; line-height: 1.3; }}
+    h3 {{ margin: 14px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; }}
+    .muted {{ color: var(--muted); margin: 4px 0 0; }}
+    .text {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
+    .grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }}
+    dt {{ color: var(--muted); font-size: 12px; }}
+    dd {{ margin: 2px 0 0; overflow-wrap: anywhere; }}
+    ul {{ margin: 0; padding-left: 18px; }}
+    li {{ margin: 4px 0; overflow-wrap: anywhere; }}
+    details {{ border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; }}
+    summary {{ cursor: pointer; color: var(--accent); }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th, td {{ border-top: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }}
+    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }}
+    .empty {{ color: var(--muted); }}
+    .toast {{ position: fixed; right: 18px; bottom: 18px; max-width: 420px; }}
+    .toast:not(:empty) {{
+      background: var(--ink);
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.16);
+    }}
+    @media (max-width: 760px) {{
+      .page {{ padding: 16px; }}
+      .toolbar, .columns, .grid {{ grid-template-columns: 1fr; }}
+      header {{ display: grid; }}
+    }}
+  </style>
+</head>
+<body>
+  <nav>
+    <strong>Agent Memory Kernel</strong>
+    <a href="/ui/review">Review</a>
+    <a href="/ui/graph">Graph</a>
+    <a href="/health">Health</a>
+  </nav>
+  <div class="page">
+    <h1>{_h(title)}</h1>
+    {body}
+  </div>
+  {script}
+</body>
+</html>"""
+
+
+_REVIEW_UI_SCRIPT = """
+<script>
+const toast = document.getElementById("toast");
+function showToast(message) {
+  if (!toast) return;
+  toast.textContent = message;
+  window.setTimeout(() => { toast.textContent = ""; }, 4000);
+}
+async function postJson(path, payload) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.detail || data.error || "request failed");
+  return data;
+}
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const action = button.dataset.action;
+  const candidateId = button.dataset.candidateId;
+  const endpoint = action === "approve" ? "/review/approve" : "/review/reject";
+  button.disabled = true;
+  try {
+    await postJson(endpoint, {
+      candidate_id: candidateId,
+      actor: "browser-reviewer",
+      reason: action + " via browser review UI"
+    });
+    showToast(action + " completed");
+    window.setTimeout(() => window.location.reload(), 350);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+});
+</script>
+"""
+
+
+def _h(value: Any) -> str:
+    return escape(str(value if value is not None else ""), quote=True)
+
+
 def run_server(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765) -> None:
     """Run the blocking HTTP service."""
     handler = make_handler(db_path)
@@ -537,8 +944,47 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
         server_version = "AgentMemoryKernel/0.1"
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler name
-            if _normalize_path(self.path) == "/health":
+            parsed = urlparse(self.path)
+            path = _normalize_path(parsed.path)
+            params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+            if path == "/health":
                 self._send_json(200, {"status": "ok"})
+                return
+            if path in {"/", "/ui", "/ui/review"}:
+                try:
+                    store = MemoryStore(db_path)
+                    store.init_db()
+                    try:
+                        body = render_review_ui(
+                            store,
+                            status=str(params.get("status", "open")),
+                            scope=params.get("scope") or None,
+                            limit=int(params.get("limit", 50) or 50),
+                        )
+                    finally:
+                        store.close()
+                    self._send_html(200, body)
+                except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                    self._send_json(400, {"error": "bad_request", "detail": str(exc)})
+                return
+            if path == "/ui/graph":
+                try:
+                    store = MemoryStore(db_path)
+                    store.init_db()
+                    try:
+                        body = render_graph_ui(
+                            store,
+                            scope=params.get("scope") or None,
+                            node_type=params.get("node_type") or None,
+                            query=str(params.get("query", "")),
+                            limit=int(params.get("limit", 50) or 50),
+                            evidence_limit=int(params.get("evidence_limit", 3) or 3),
+                        )
+                    finally:
+                        store.close()
+                    self._send_html(200, body)
+                except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                    self._send_json(400, {"error": "bad_request", "detail": str(exc)})
                 return
             self._send_json(404, {"error": "not_found"})
 
@@ -574,6 +1020,14 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
             self.send_header("content-length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _send_html(self, status: int, body: str) -> None:
+            encoded = body.encode("utf-8")
+            self.send_response(status)
+            self.send_header("content-type", "text/html; charset=utf-8")
+            self.send_header("content-length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
 
     return MemoryAPIHandler
 

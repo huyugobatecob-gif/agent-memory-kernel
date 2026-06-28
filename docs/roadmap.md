@@ -169,6 +169,8 @@ previews, inline possible-conflict warnings against active memory, review
 history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
 delete, distrust, and expire. HTTP and MCP also expose the matching lifecycle
 endpoints/tools.
+The stdlib HTTP service also exposes baseline browser operator pages at
+`/ui/review` and `/ui/graph` for local review and graph inspection.
 The baseline operator notification queue is implemented through `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 `memory_notifications_list` / `memory_notification_assign` /
@@ -277,10 +279,8 @@ Goal: make memory maintenance practical for non-technical users.
 
 Planned:
 
-- browser UI over the existing review inbox API;
 - browser-assisted batch correction flows;
-- richer source preview;
-- browser UI over graph browser data;
+- richer source preview and graph navigation;
 - richer conflict-resolution UI over inline warnings;
 - push/email/web notification transports;
 - hosted key-management and export custody controls.

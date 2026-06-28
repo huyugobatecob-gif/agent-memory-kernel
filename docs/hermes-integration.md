@@ -253,6 +253,9 @@ Hermes can call the same hooks through the local HTTP service:
 agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
 ```
 
+The same stdlib server exposes browser operator pages at
+`http://127.0.0.1:8765/ui/review` and `http://127.0.0.1:8765/ui/graph`.
+
 For agents that speak MCP, run the stdio server instead of HTTP:
 
 ```bash
@@ -488,7 +491,7 @@ and export-retention cleanup. A notification can be acknowledged without
 mutating memory, then resolved automatically by the underlying approve/reject or
 purge action, or manually through `resolve_notification()`.
 Notifications can also be assigned to a reviewer with optional `due_at`, so
-Hermes can show per-operator queues before a browser UI exists.
+Hermes can show per-operator queues before a richer hosted UI exists.
 Every notification includes computed SLA metadata from `due_at`; Hermes can
 filter `sla_status=overdue` or `sla_status=due_soon` for escalation queues.
 Hermes can call `notification_escalations()` or MCP
