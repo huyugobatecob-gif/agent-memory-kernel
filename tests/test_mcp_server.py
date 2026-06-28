@@ -50,6 +50,8 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_export_control", names)
             self.assertIn("memory_export_custody", names)
             self.assertIn("memory_export_profile", names)
+            self.assertIn("memory_vault_export", names)
+            self.assertIn("memory_vault_import", names)
             self.assertIn("memory_export_encrypted_profile", names)
             self.assertIn("memory_import_encrypted_profile", names)
             self.assertIn("memory_export_approval_request", names)
@@ -184,6 +186,46 @@ class MCPServerTests(unittest.TestCase):
                 "safe",
             )
             self.assertNotIn("Hermes SEO agents", json.dumps(export_profile["result"]["structuredContent"]))
+
+            vault_export = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 61,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_vault_export",
+                        "arguments": {
+                            "out_dir": str(Path(tmp) / "mcp-vault"),
+                            "actor": "designer",
+                            "scope": "professional",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(vault_export["result"]["isError"])
+            self.assertEqual(
+                vault_export["result"]["structuredContent"]["version"],
+                "vault-adapter-v0.1",
+            )
+            vault_import = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 62,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_vault_import",
+                        "arguments": {
+                            "in_dir": str(Path(tmp) / "mcp-vault"),
+                            "actor": "designer",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(vault_import["result"]["isError"])
+            self.assertEqual(
+                vault_import["result"]["structuredContent"]["version"],
+                "vault-adapter-v0.1",
+            )
 
             saved_turn = server.handle_message(
                 {

@@ -126,7 +126,7 @@ def looks_like_prompt_injection(text: str) -> bool:
 
 def source_trust_for(source_type: str) -> str:
     source_type = (source_type or "manual").strip().lower()
-    if source_type in {"manual", "user", "profile"}:
+    if source_type in {"manual", "user", "profile", "vault"}:
         return "trusted"
     if source_type in {"system"}:
         return "system"

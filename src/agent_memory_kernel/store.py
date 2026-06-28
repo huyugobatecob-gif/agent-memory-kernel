@@ -115,6 +115,7 @@ EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
 EXPORT_RETENTION_VERSION = "export-retention-v0.1"
 EXPORT_CUSTODY_VERSION = "export-custody-v0.1"
+VAULT_ADAPTER_VERSION = "vault-adapter-v0.1"
 ENCRYPTED_EXPORT_VERSION = "encrypted-export-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
@@ -7052,6 +7053,185 @@ class MemoryStore:
         self._refresh_digital_brain_state(candidate["scope"])
         return item_id
 
+    def export_vault(
+        self,
+        out_dir: str | Path,
+        *,
+        actor: str = "user",
+        scope: str | None = None,
+        redaction_profile: str = "full",
+        approval_id: str = "",
+        retention_days: int | None = None,
+    ) -> dict[str, Any]:
+        """Export active memory as a machine-readable local markdown vault."""
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        scope = normalize_scope(scope) if scope else None
+        self._enforce_export_policy(actor, scope)
+        approval = self._enforce_sensitive_export_approval(
+            actor=actor,
+            scope=scope,
+            project="",
+            export_kind="markdown",
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+        )
+        out_path = Path(out_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        retention = self._record_export_record(
+            actor=actor,
+            scope=scope,
+            project="",
+            export_kind="markdown",
+            redaction_profile=redaction_profile,
+            approval_id=str(approval.get("approval_id", "")),
+            retention_days=retention_days,
+            artifact_ref=str(out_path),
+            risk_flags=approval["sensitive_export"]["risk_flags"],
+        )
+        rows = self.conn.execute(
+            """
+            SELECT memory_id, text, kind, scope, confidence, source_trust, created_at, updated_at
+            FROM memories
+            WHERE status = 'active'
+              AND (? IS NULL OR scope = ?)
+            ORDER BY scope, updated_at DESC, memory_id
+            """,
+            (scope, scope),
+        ).fetchall()
+        scopes = sorted({str(row["scope"]) for row in rows})
+        for item_scope in scopes:
+            self._enforce_read_policy(actor, item_scope, "export")
+
+        files: list[dict[str, Any]] = []
+        redacted_fields = ["text"] if redaction_profile != "full" else []
+        for row in rows:
+            item_scope = str(row["scope"])
+            memory_id = str(row["memory_id"])
+            text = (
+                str(row["text"])
+                if redaction_profile == "full"
+                else self._redaction_marker(redaction_profile, "text")
+            )
+            metadata = {
+                "version": VAULT_ADAPTER_VERSION,
+                "memory_id": memory_id,
+                "kind": row["kind"],
+                "scope": item_scope,
+                "confidence": row["confidence"],
+                "source_trust": row["source_trust"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "redaction_profile": redaction_profile,
+                "redacted_fields": redacted_fields,
+            }
+            rel_path = Path("memories") / item_scope / f"{memory_id}.md"
+            file_path = out_path / rel_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(
+                self._vault_document(metadata, text),
+                encoding="utf-8",
+            )
+            files.append(
+                {
+                    "path": rel_path.as_posix(),
+                    "memory_id": memory_id,
+                    "scope": item_scope,
+                    "kind": row["kind"],
+                    "redacted": bool(redacted_fields),
+                }
+            )
+
+        manifest = {
+            "version": VAULT_ADAPTER_VERSION,
+            "created_at": now_iso(),
+            "scope": scope or "all",
+            "count": len(files),
+            "scopes": scopes,
+            "files": files,
+            "approval": approval,
+            "retention": retention,
+            "redaction": self._export_redaction_metadata(
+                redaction_profile,
+                len(files) if redaction_profile != "full" else 0,
+                redacted_fields,
+            ),
+        }
+        (out_path / ".agent-memory-vault.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        return manifest
+
+    def import_vault(
+        self,
+        in_dir: str | Path,
+        *,
+        actor: str = "vault-import",
+        auto_approve: bool = False,
+    ) -> dict[str, Any]:
+        """Import a local markdown vault through the normal review lifecycle."""
+        root = Path(in_dir)
+        manifest_path = root / ".agent-memory-vault.json"
+        manifest: dict[str, Any] = {}
+        files: list[Path] = []
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for item in manifest.get("files", []):
+                if isinstance(item, dict) and item.get("path"):
+                    files.append(root / str(item["path"]))
+        if not files:
+            files = sorted((root / "memories").glob("*/*.md"))
+
+        counts: defaultdict[str, int] = defaultdict(int)
+        imported: list[dict[str, Any]] = []
+        for file_path in files:
+            if not file_path.exists() or not file_path.is_file():
+                counts["missing_files"] += 1
+                continue
+            metadata, text = self._parse_vault_document(file_path.read_text(encoding="utf-8"))
+            if metadata.get("version") != VAULT_ADAPTER_VERSION:
+                counts["skipped_unsupported"] += 1
+                continue
+            text = text.strip()
+            if not text or self._is_redaction_marker(text):
+                counts["skipped_redacted"] += 1
+                continue
+            scope = normalize_scope(str(metadata.get("scope", "professional")))
+            result = self.remember(
+                text,
+                scope=scope,
+                actor=actor,
+                source_type="vault",
+                source_ref=f"vault://{file_path.relative_to(root).as_posix()}",
+                auto_approve=auto_approve,
+                metadata={
+                    "vault_version": VAULT_ADAPTER_VERSION,
+                    "original_memory_id": metadata.get("memory_id", ""),
+                    "original_kind": metadata.get("kind", ""),
+                    "manifest_version": manifest.get("version", ""),
+                },
+            )
+            counts["documents"] += 1
+            counts["candidates"] += len(result.get("candidates", []))
+            if any(candidate.get("status") == "approved" for candidate in result.get("candidates", [])):
+                counts["approved"] += 1
+            imported.append(
+                {
+                    "path": file_path.relative_to(root).as_posix(),
+                    "original_memory_id": metadata.get("memory_id", ""),
+                    "scope": scope,
+                    "candidate_ids": [
+                        candidate.get("candidate_id") for candidate in result.get("candidates", [])
+                    ],
+                }
+            )
+        return {
+            "version": VAULT_ADAPTER_VERSION,
+            "status": "imported",
+            "counts": dict(counts),
+            "imported": imported,
+        }
+
     def _apply_extraction_graph_commands(
         self,
         raw_commands: Any,
@@ -8651,6 +8831,27 @@ class MemoryStore:
         if isinstance(value, list):
             return sum(MemoryStore._count_redaction_markers(item) for item in value)
         return 0
+
+    @staticmethod
+    def _vault_document(metadata: dict[str, Any], text: str) -> str:
+        return (
+            "---agent-memory-json\n"
+            + json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+            + "\n---\n\n"
+            + (text or "").strip()
+            + "\n"
+        )
+
+    @staticmethod
+    def _parse_vault_document(content: str) -> tuple[dict[str, Any], str]:
+        lines = (content or "").splitlines()
+        if len(lines) < 3 or lines[0].strip() != "---agent-memory-json":
+            return {}, content or ""
+        metadata = json.loads(lines[1])
+        if lines[2].strip() != "---":
+            return {}, content or ""
+        body = "\n".join(lines[3:]).strip()
+        return metadata if isinstance(metadata, dict) else {}, body
 
     @staticmethod
     def _export_redaction_metadata(

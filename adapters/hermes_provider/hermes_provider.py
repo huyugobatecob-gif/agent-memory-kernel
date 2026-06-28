@@ -928,6 +928,38 @@ class HermesMemoryProvider:
             artifact_ref=artifact_ref,
         )
 
+    def export_vault(
+        self,
+        out_dir: str,
+        *,
+        actor: str = "hermes",
+        scope: str | None = None,
+        redaction_profile: str = "full",
+        approval_id: str = "",
+        retention_days: int | None = None,
+    ) -> dict[str, Any]:
+        return self.store.export_vault(
+            out_dir,
+            actor=actor,
+            scope=scope,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+        )
+
+    def import_vault(
+        self,
+        in_dir: str,
+        *,
+        actor: str = "vault-import",
+        auto_approve: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.import_vault(
+            in_dir,
+            actor=actor,
+            auto_approve=auto_approve,
+        )
+
     def export_encrypted_profile(
         self,
         *,

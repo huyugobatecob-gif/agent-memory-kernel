@@ -119,6 +119,8 @@ Included now:
   passphrase configuration, off-host artifact custody, and zero secret storage
   in the memory database.
 - Markdown vault export.
+- File-based machine-readable markdown vault adapter with export/import through
+  normal review lifecycle.
 - CLI.
 - Tests and demo commands.
 
@@ -521,6 +523,13 @@ Export a readable vault:
 agent-memory export --db .memory/demo.db --out memory-vault
 ```
 
+Export and import a machine-readable vault:
+
+```bash
+agent-memory vault --db .memory/demo.db export --out agent-memory-vault --scope professional
+agent-memory vault --db .memory/restored.db import agent-memory-vault --auto-approve
+```
+
 ## Core Model
 
 The kernel uses a simple lifecycle:
@@ -727,6 +736,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_export_control`, `memory_export_profile`,
 `memory_export_custody`, `memory_export_encrypted_profile`,
 `memory_import_encrypted_profile`,
+`memory_vault_export`, `memory_vault_import`,
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`,
 `memory_export_retention_list`, `memory_export_retention_enforce`,

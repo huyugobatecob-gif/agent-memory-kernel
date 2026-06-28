@@ -1140,6 +1140,37 @@ def cmd_import_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vault_export(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.export_vault(
+            args.out,
+            actor=args.actor,
+            scope=args.scope,
+            redaction_profile=args.redaction_profile,
+            approval_id=args.approval_id,
+            retention_days=args.retention_days,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_vault_import(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.import_vault(
+            args.path,
+            actor=args.actor,
+            auto_approve=args.auto_approve,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_correct(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2113,6 +2144,23 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("path")
     p.set_defaults(func=cmd_import_profile)
+
+    p = sub.add_parser("vault", help="Export or import a machine-readable markdown memory vault")
+    add_common_db(p)
+    vault_sub = p.add_subparsers(dest="vault_command", required=True)
+    vp = vault_sub.add_parser("export", help="Export active memory as a file-based vault")
+    vp.add_argument("--out", default="agent-memory-vault")
+    vp.add_argument("--actor", default="user")
+    vp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    vp.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    vp.add_argument("--approval-id", default="")
+    vp.add_argument("--retention-days", type=int)
+    vp.set_defaults(func=cmd_vault_export)
+    vp = vault_sub.add_parser("import", help="Import a file-based vault through review lifecycle")
+    vp.add_argument("path")
+    vp.add_argument("--actor", default="vault-import")
+    vp.add_argument("--auto-approve", action="store_true")
+    vp.set_defaults(func=cmd_vault_import)
 
     p = sub.add_parser("import-encrypted-profile", help="Import an encrypted project profile export")
     add_common_db(p)

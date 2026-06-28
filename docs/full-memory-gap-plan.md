@@ -264,6 +264,11 @@ Already present:
   `memory_export_custody`; reports verify export policy, sensitive approval,
   passphrase environment configuration, off-host artifact reference, retention,
   and zero secret storage in SQLite.
+- Baseline file-based vault adapter through `agent-memory vault export/import`,
+  `/vault/export`, `/vault/import`, Hermes `export_vault()` / `import_vault()`,
+  and MCP `memory_vault_export` / `memory_vault_import`; exports use
+  dependency-free markdown files with JSON frontmatter and imports flow through
+  the normal review lifecycle.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -749,9 +754,10 @@ Remaining work is richer browser batch editing, richer graph navigation,
 managed notification delivery, and hosted KMS/off-host backup recipes beyond
 the local custody report.
 Export-control, redaction-profile, sensitive-export approval, export retention,
-encrypted profile export, notification transport payloads, and local export
-custody baselines are implemented, but richer browser flows, managed
-notification delivery, and hosted KMS/off-host backup remain production backlog.
+encrypted profile export, notification transport payloads, local export
+custody, and file-based vault adapter baselines are implemented, but richer
+browser flows, managed notification delivery, and hosted KMS/off-host backup
+remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

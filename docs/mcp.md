@@ -109,6 +109,11 @@ Operator and graph tools:
   passphrase-environment configuration, off-host artifact custody, retention,
   and the zero-secret-storage guarantee before an export leaves the local
   machine.
+- `memory_vault_export`: export active memory as a machine-readable local
+  markdown vault with JSON frontmatter and governed redaction.
+- `memory_vault_import`: import a machine-readable local markdown vault through
+  the normal review lifecycle, optionally auto-approving when write policy
+  allows it.
 - `memory_export_encrypted_profile`: export the governed profile payload as an
   authenticated `encrypted-export-v0.1` envelope using a passphrase from a
   configured environment variable.

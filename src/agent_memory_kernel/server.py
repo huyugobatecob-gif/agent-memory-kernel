@@ -330,6 +330,21 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             passphrase_env=str(payload.get("passphrase_env", "AGENT_MEMORY_EXPORT_PASSPHRASE")),
             offhost_required=bool(payload.get("offhost_required", True)),
         )
+    if path == "/vault/export":
+        return store.export_vault(
+            payload.get("out_dir") or payload.get("out") or "agent-memory-vault",
+            actor=str(payload.get("actor", "user")),
+            scope=payload.get("scope"),
+            redaction_profile=str(payload.get("redaction_profile", "full")),
+            approval_id=str(payload.get("approval_id", "")),
+            retention_days=payload.get("retention_days"),
+        )
+    if path == "/vault/import":
+        return store.import_vault(
+            payload.get("in_dir") or payload.get("path") or "agent-memory-vault",
+            actor=str(payload.get("actor", "vault-import")),
+            auto_approve=bool(payload.get("auto_approve", False)),
+        )
     if path == "/export/approval/request":
         return store.request_export_approval(
             actor=str(payload.get("actor", "user")),

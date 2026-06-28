@@ -607,6 +607,31 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_vault_export": {
+        "endpoint": "/vault/export",
+        "description": "Export active memory as a machine-readable local markdown vault.",
+        "inputSchema": _schema(
+            {
+                "out_dir": _string("Output directory for the vault.", "agent-memory-vault"),
+                "actor": _string("Exporting actor.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+                "approval_id": _string("Optional approved sensitive export approval id.", ""),
+                "retention_days": _integer("Optional retention days for this export.", 0),
+            }
+        ),
+    },
+    "memory_vault_import": {
+        "endpoint": "/vault/import",
+        "description": "Import a machine-readable local markdown vault through the review lifecycle.",
+        "inputSchema": _schema(
+            {
+                "in_dir": _string("Vault directory to import.", "agent-memory-vault"),
+                "actor": _string("Importing actor.", "vault-import"),
+                "auto_approve": _boolean("Auto-approve imported candidates when policy allows it.", False),
+            }
+        ),
+    },
     "memory_export_encrypted_profile": {
         "endpoint": "/export/encrypted-profile",
         "description": "Export an encrypted project profile envelope.",

@@ -479,6 +479,37 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(manifest["version"], "export-retention-v0.1")
             self.assertEqual(manifest["export"]["export_kind"], "markdown")
             self.assertEqual(manifest["export"]["retention_days"], 30)
+
+            machine_vault = Path(tmp) / "machine-vault"
+            vault_manifest = store.export_vault(
+                machine_vault,
+                actor="analyst",
+                scope="professional",
+                retention_days=30,
+            )
+            self.assertEqual(vault_manifest["version"], "vault-adapter-v0.1")
+            self.assertEqual(vault_manifest["count"], 1)
+            exported_path = machine_vault / vault_manifest["files"][0]["path"]
+            self.assertIn("---agent-memory-json", exported_path.read_text(encoding="utf-8"))
+
+            restored = MemoryStore(Path(tmp) / "restored.db")
+            restored.init_db()
+            imported = restored.import_vault(machine_vault, auto_approve=True)
+            self.assertEqual(imported["version"], "vault-adapter-v0.1")
+            self.assertEqual(imported["counts"]["documents"], 1)
+            self.assertEqual(imported["counts"]["approved"], 1)
+            self.assertTrue(restored.search("retention-site exports", scope="professional"))
+
+            redacted_vault = Path(tmp) / "redacted-vault"
+            store.export_vault(
+                redacted_vault,
+                actor="analyst",
+                scope="professional",
+                redaction_profile="safe",
+            )
+            redacted_import = restored.import_vault(redacted_vault, auto_approve=True)
+            self.assertEqual(redacted_import["counts"]["skipped_redacted"], 1)
+            restored.close()
             store.close()
 
     def test_export_custody_report_checks_key_and_artifact_controls(self) -> None:

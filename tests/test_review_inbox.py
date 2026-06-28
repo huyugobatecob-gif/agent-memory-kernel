@@ -620,13 +620,25 @@ class ReviewInboxTests(unittest.TestCase):
             )
             self.assertEqual(safe_export["export_metadata"]["redaction"]["profile"], "safe")
             self.assertNotIn("provider wrapper is corrected", str(safe_export))
+            vault_export = provider.export_vault(
+                str(Path(tmp) / "provider-vault"),
+                actor="reviewer",
+                scope="professional",
+                retention_days=30,
+            )
+            self.assertEqual(vault_export["version"], "vault-adapter-v0.1")
+            vault_import = provider.import_vault(
+                str(Path(tmp) / "provider-vault"),
+                actor="reviewer",
+            )
+            self.assertEqual(vault_import["version"], "vault-adapter-v0.1")
             retention_records = provider.export_retention_records(
                 status="active",
                 actor="reviewer",
             )
-            self.assertEqual(
-                retention_records[0]["export_id"],
+            self.assertIn(
                 safe_export["export_metadata"]["retention"]["export_id"],
+                {record["export_id"] for record in retention_records},
             )
             encrypted = provider.export_encrypted_profile(
                 passphrase="provider export passphrase",

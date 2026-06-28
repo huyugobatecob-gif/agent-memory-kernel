@@ -187,6 +187,8 @@ provider.export_control_report(
     redaction_profile="safe",
 )
 provider.export_profile(scope="professional", redaction_profile="safe")
+provider.export_vault("agent-memory-vault", scope="professional", redaction_profile="safe")
+provider.import_vault("agent-memory-vault", actor="reviewer")
 encrypted = provider.export_encrypted_profile(
     passphrase="change-me",
     scope="professional",

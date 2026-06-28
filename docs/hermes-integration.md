@@ -168,6 +168,12 @@ class HermesMemoryProvider:
     def import_encrypted_profile(self, envelope: dict, **kwargs) -> dict:
         ...
 
+    def export_vault(self, out_dir: str, **kwargs) -> dict:
+        ...
+
+    def import_vault(self, in_dir: str, **kwargs) -> dict:
+        ...
+
     def export_control_report(
         self,
         actor: str = "hermes",
@@ -784,6 +790,8 @@ Workspace profile export:
 agent-memory export-control --scope professional --project demo-site --actor writer --redaction-profile safe
 agent-memory export-custody --scope professional --project demo-site --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo-site/exported-profile.encrypted.json
 agent-memory export-profile --scope professional --project demo-site --redaction-profile safe
+agent-memory vault --db .memory/hermes-memory.db export --out agent-memory-vault --scope professional --redaction-profile safe
+agent-memory vault --db .memory/restored.db import agent-memory-vault
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --scope professional --project demo-site --redaction-profile safe --out exported-profile.encrypted.json
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile exported-profile.encrypted.json --db .memory/restored.db
 agent-memory import-profile exported-profile.json --db .memory/restored.db
@@ -800,6 +808,9 @@ database; Hermes should pass only an environment variable name to MCP/HTTP, not
 the passphrase itself.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when Hermes
 should share memory structure without sharing content-bearing fields.
+Use `vault export/import` when Hermes needs a file-based adapter rather than a
+single JSON payload. Vault import writes through normal `remember` policy, so
+without `--auto-approve` imported files become reviewable candidates.
 For `full` exports that include personal or secret active memory, Hermes should
 call `export-approval request`, wait for operator approval, then pass
 `--approval-id` to `export-profile` or markdown export. Approvals are one-time:
