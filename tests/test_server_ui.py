@@ -6,7 +6,7 @@ from pathlib import Path
 
 from agent_memory_kernel import MemoryStore
 from agent_memory_kernel.extractors.base import ExtractedMemory
-from agent_memory_kernel.server import render_graph_ui, render_review_ui
+from agent_memory_kernel.server import render_conflicts_ui, render_graph_ui, render_review_ui
 
 
 class UIExtractor:
@@ -95,6 +95,38 @@ class ServerUITests(unittest.TestCase):
             self.assertIn(memory_id, html)
             self.assertIn("/ui/graph?scope=professional&amp;node_type=project", html)
             self.assertIn("/ui/graph?scope=professional&amp;query=ui-site", html)
+            store.close()
+
+    def test_conflicts_ui_renders_detection_and_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db", extractor=UIExtractor())
+            store.init_db()
+            first = store.remember(
+                "Decision: conflict-site owner is Alice.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            second = store.remember(
+                "Decision: conflict-site owner is Bob.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            html = render_conflicts_ui(store, scope="professional", kind="decision", limit=10)
+
+            self.assertIn("Conflicts", html)
+            self.assertIn(first, html)
+            self.assertIn(second, html)
+            self.assertIn('data-conflict-record', html)
+            self.assertIn("/conflict/detect", html)
+            store.record_memory_conflict(first, second, actor="reviewer")
+            recorded_html = render_conflicts_ui(store, scope="professional", kind="decision", limit=10)
+            self.assertIn("Recorded", recorded_html)
+            self.assertIn("conflicts_with", recorded_html)
             store.close()
 
 

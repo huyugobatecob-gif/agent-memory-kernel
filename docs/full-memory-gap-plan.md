@@ -282,7 +282,7 @@ Already present:
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
 - Local stdlib HTTP API service for runtime hooks, review/list operations, and
-  browser review/graph pages.
+  browser review/graph/conflict pages.
 - Dependency-free stdio MCP server for agents that should call the same memory
   orchestrator through MCP tools instead of CLI, imports, or HTTP.
 - CLI and tests.
@@ -333,10 +333,10 @@ Remaining for full memory:
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Richer browser batch editing queues, deeper graph exploration views, and
-  push/email/web notification transports beyond the baseline browser review
-  and graph pages, machine-readable review inbox with inline conflict warnings,
-  notification queue, approve/reject batch flow, and active-memory lifecycle
-  batch correction flow.
+  push/email/web notification transports beyond the baseline browser review,
+  graph, and conflict pages, machine-readable review inbox with inline conflict
+  warnings, notification queue, approve/reject batch flow, and active-memory
+  lifecycle batch correction flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Production current-best-answer resolution beyond the baseline explicit

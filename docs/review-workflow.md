@@ -157,6 +157,6 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 
 - richer browser batch editing queues;
 - deeper browser graph exploration views;
-- richer conflict-resolution UI over inline candidate warnings;
+- richer conflict-resolution workflows beyond scan/record;
 - hosted key-management and export custody controls;
 - push/email/web notification transports.

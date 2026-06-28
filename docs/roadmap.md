@@ -170,11 +170,12 @@ history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
 delete, distrust, and expire. HTTP and MCP also expose the matching lifecycle
 endpoints/tools.
 The stdlib HTTP service also exposes baseline browser operator pages at
-`/ui/review` and `/ui/graph` for local review and graph inspection. The review
-page supports individual and batch approve/reject, dry-run batch preview, and
-active-memory correction preview/apply through the lifecycle batch API. The
-graph page includes node type/focus links, source/target edge links, and source
-metadata for evidence previews.
+`/ui/review`, `/ui/graph`, and `/ui/conflicts` for local review, graph
+inspection, and conflict scan/record flows. The review page supports individual
+and batch approve/reject, dry-run batch preview, and active-memory correction
+preview/apply through the lifecycle batch API. The graph page includes node
+type/focus links, source/target edge links, and source metadata for evidence
+previews.
 The baseline operator notification queue is implemented through `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 `memory_notifications_list` / `memory_notification_assign` /
@@ -288,7 +289,7 @@ Planned:
 
 - deeper graph exploration views;
 - richer browser batch editing queues;
-- richer conflict-resolution UI over inline warnings;
+- richer conflict-resolution workflows beyond scan/record;
 - push/email/web notification transports;
 - hosted key-management and export custody controls.
 

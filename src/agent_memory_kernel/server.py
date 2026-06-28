@@ -622,6 +622,62 @@ def render_graph_ui(
     return _html_shell("Graph Browser", body)
 
 
+def render_conflicts_ui(
+    store: MemoryStore,
+    *,
+    scope: str | None = None,
+    kind: str | None = None,
+    status: str = "open",
+    limit: int = 50,
+) -> str:
+    safe_limit = max(1, min(int(limit or 50), 200))
+    detection = store.detect_memory_conflicts(
+        scope=scope or None,
+        kind=kind or None,
+        limit=safe_limit,
+    )
+    status_filter = (status or "open").strip().lower()
+    if status_filter not in {"open", "resolved", "all"}:
+        status_filter = "open"
+    conflicts = store.list_memory_conflicts(
+        status=None if status_filter == "all" else status_filter,
+        scope=scope or None,
+        limit=safe_limit,
+    )
+    body = f"""
+    <section class="toolbar">
+      <form method="get" action="/ui/conflicts" class="filters">
+        <label>Scope <input name="scope" value="{_h(scope or "")}" placeholder="all"></label>
+        <label>Kind <input name="kind" value="{_h(kind or "")}" placeholder="all"></label>
+        <label>Status {_select("status", ["open", "resolved", "all"], status_filter)}</label>
+        <label>Limit <input name="limit" type="number" min="1" max="200" value="{_h(safe_limit)}"></label>
+        <button type="submit">Apply</button>
+      </form>
+      <div class="summary">
+        <span class="pill"><strong>detected</strong> {_h(detection.get("count", 0))}</span>
+        <span class="pill"><strong>records</strong> {_h(len(conflicts))}</span>
+      </div>
+    </section>
+    <section class="bulkbar">
+      <div class="actions">
+        <button data-conflict-record data-scope="{_h(scope or "")}" data-kind="{_h(kind or "")}" data-limit="{_h(safe_limit)}">Record Detected</button>
+      </div>
+    </section>
+    <main class="columns">
+      <section>
+        <h2>Detected</h2>
+        {_conflict_detection_table(detection.get("detections", []))}
+      </section>
+      <section>
+        <h2>Recorded</h2>
+        {_conflict_record_table(conflicts)}
+      </section>
+    </main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    """
+    return _html_shell("Conflicts", body, script=_CONFLICT_UI_SCRIPT)
+
+
 def _review_item_html(item: dict[str, Any]) -> str:
     candidate = item.get("candidate", {})
     source_event = item.get("source_event", {})
@@ -823,6 +879,52 @@ def _conflict_warning_html(warnings: list[dict[str, Any]]) -> str:
     """
 
 
+def _conflict_detection_table(detections: list[dict[str, Any]]) -> str:
+    if not detections:
+        return "<p class=\"empty\">No likely conflicts found.</p>"
+    rows = "".join(
+        f"""
+        <tr>
+          <td><code>{_h(item.get("memory_id", ""))}</code><br><code>{_h(item.get("other_memory_id", ""))}</code></td>
+          <td>{_h(item.get("memory_text_excerpt", ""))}<hr>{_h(item.get("other_memory_text_excerpt", ""))}</td>
+          <td>{_h(", ".join(str(token) for token in item.get("overlap_tokens", [])))}</td>
+        </tr>
+        """
+        for item in detections
+    )
+    return f"""
+    <section class="table-wrap">
+      <table>
+        <thead><tr><th>Memories</th><th>Texts</th><th>Overlap</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </section>
+    """
+
+
+def _conflict_record_table(conflicts: list[dict[str, Any]]) -> str:
+    if not conflicts:
+        return "<p class=\"empty\">No conflict records found.</p>"
+    rows = "".join(
+        f"""
+        <tr>
+          <td><code>{_h(item.get("conflict_id", ""))}</code><br>{_h(item.get("status", ""))}</td>
+          <td>{_h(item.get("relation", ""))}<br><code>{_h(item.get("winner_memory_id", ""))}</code></td>
+          <td>{_h(item.get("memory_text", ""))}<hr>{_h(item.get("other_memory_text", ""))}</td>
+        </tr>
+        """
+        for item in conflicts
+    )
+    return f"""
+    <section class="table-wrap">
+      <table>
+        <thead><tr><th>Conflict</th><th>Relation</th><th>Texts</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </section>
+    """
+
+
 def _list_block(title: str, items_html: str) -> str:
     if not items_html:
         return ""
@@ -996,6 +1098,7 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
     <strong>Agent Memory Kernel</strong>
     <a href="/ui/review">Review</a>
     <a href="/ui/graph">Graph</a>
+    <a href="/ui/conflicts">Conflicts</a>
     <a href="/health">Health</a>
   </nav>
   <div class="page">
@@ -1109,6 +1212,48 @@ document.addEventListener("click", async (event) => {
 """
 
 
+_CONFLICT_UI_SCRIPT = """
+<script>
+const toast = document.getElementById("toast");
+function showToast(message) {
+  if (!toast) return;
+  toast.textContent = message;
+  window.setTimeout(() => { toast.textContent = ""; }, 4000);
+}
+async function postJson(path, payload) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.detail || data.error || "request failed");
+  return data;
+}
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-conflict-record]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const data = await postJson("/conflict/detect", {
+      scope: button.dataset.scope || "",
+      kind: button.dataset.kind || "",
+      limit: Number(button.dataset.limit || 50),
+      record: true,
+      actor: "browser-reviewer",
+      reason: "record via conflict UI"
+    });
+    showToast(JSON.stringify({recorded: data.count}));
+    window.setTimeout(() => window.location.reload(), 450);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+});
+</script>
+"""
+
+
 def _h(value: Any) -> str:
     return escape(str(value if value is not None else ""), quote=True)
 
@@ -1168,6 +1313,24 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
                             query=str(params.get("query", "")),
                             limit=int(params.get("limit", 50) or 50),
                             evidence_limit=int(params.get("evidence_limit", 3) or 3),
+                        )
+                    finally:
+                        store.close()
+                    self._send_html(200, body)
+                except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                    self._send_json(400, {"error": "bad_request", "detail": str(exc)})
+                return
+            if path == "/ui/conflicts":
+                try:
+                    store = MemoryStore(db_path)
+                    store.init_db()
+                    try:
+                        body = render_conflicts_ui(
+                            store,
+                            scope=params.get("scope") or None,
+                            kind=params.get("kind") or None,
+                            status=str(params.get("status", "open")),
+                            limit=int(params.get("limit", 50) or 50),
                         )
                     finally:
                         store.close()
