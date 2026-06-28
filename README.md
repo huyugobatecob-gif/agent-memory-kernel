@@ -292,6 +292,12 @@ The detailed build plan is in
 future agent or contributor can continue from this template without needing the
 original planning conversation.
 
+The gap plan for the full automatic memory system is in
+[docs/full-memory-gap-plan.md](docs/full-memory-gap-plan.md). It maps the
+reference-memory findings to the missing repository layers: automatic Keeper,
+Memory Router, prompt envelope, Hermes hooks, API/MCP service mode, review, and
+security hardening.
+
 ## Safety Model
 
 The kernel is intentionally conservative:
@@ -331,6 +337,7 @@ src/agent_memory_kernel/
   extractors/            deterministic v0 extractor and extension seams
 docs/
   implementation-plan.md  phased build plan
+  full-memory-gap-plan.md  gap plan for automatic full memory
   memory-tree-pack.md     tree-shaped retrieval format
   v0-memory-contract.md  lifecycle and data contract
   hermes-integration.md  adapter architecture

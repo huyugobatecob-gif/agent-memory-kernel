@@ -42,6 +42,20 @@ Planned:
 This is the layer that makes loops powerful for SEO projects, QA projects,
 research projects, and agent optimization.
 
+## v0.2 Full Memory Gap
+
+The automatic memory gap plan is tracked in
+[full-memory-gap-plan.md](full-memory-gap-plan.md). It adds the missing
+production layers around the local kernel:
+
+- pre-turn Memory Router;
+- post-turn Keeper;
+- prompt envelope;
+- Hermes before/after hooks;
+- API/MCP service mode;
+- background worker;
+- review and security hardening.
+
 ## v0.3: Adapters
 
 Goal: let agent frameworks use the kernel without copy-pasting logic.
