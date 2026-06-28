@@ -27,6 +27,7 @@ Status: implemented in this template.
 - Memory revision history and rollback.
 - Formal Memory Contract and deterministic acceptance harness.
 - Dependency-free semantic reranking for Memory Tree retrieval.
+- Versioned LLM Keeper extraction contract.
 - OpenAI-compatible lightweight extractor adapter.
 - Markdown vault export.
 - Tests.
@@ -114,6 +115,10 @@ Baseline read-time policy and Router explainability are implemented through
 Baseline Router usefulness feedback and quality reporting are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
+Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
+`keeper-extraction-v0.1`, local schema validation, deterministic fallback, and
+candidate extraction metadata. Production Keeper prompt tuning, live provider
+configuration, and trace-based quality evals are still backlog.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.

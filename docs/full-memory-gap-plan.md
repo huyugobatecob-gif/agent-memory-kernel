@@ -182,6 +182,9 @@ Already present:
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
+- Baseline versioned LLM Keeper extraction contract through
+  `LLMKeeperExtractor`, `keeper-extraction-v0.1`, local schema validation,
+  deterministic fallback, and candidate extraction metadata.
 - Baseline read-time policy and Router explainability through prompt metadata,
   `router_runs`, `/router-explain`, and `agent-memory router-explain`.
 - Baseline Router usefulness feedback through `router_feedback`,
@@ -238,8 +241,9 @@ Remaining for full memory:
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
   post-turn Keeper retry guard.
-- Production LLM-backed Keeper eval suite, managed model configuration, and
-  reviewed extraction prompts for natural-language graph updates.
+- Production LLM-backed Keeper eval suite, managed model configuration,
+  provider-specific adapters, and reviewed extraction prompts for
+  natural-language graph updates beyond the baseline schema contract.
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
 - Deeper prompt budget adapters per model provider.
 - Production evals for guarded brain/style append across real prompt adapters.
@@ -392,7 +396,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 **Verification:** Contract tests validate the JSON schema without requiring a live provider. Optional integration tests run only when provider keys are present.
 
-**Result:** The Keeper can extract user profile facts, interests, project facts, decisions, rules, attempts, outcomes, gotchas, and graph relationships from normal dialogue.
+**Result:** Baseline implemented. `LLMKeeperExtractor` defines a strict
+`keeper-extraction-v0.1` JSON schema, provider-neutral request shape,
+fallback behavior, metadata preservation, and local contract tests that do not
+require a live model. Remaining work is production prompt tuning, real trace
+evals, provider-specific latency/cost tracking, and broader precision/recall
+measurement on natural dialogue.
 
 ### Step 5: Implement Graph Normalization And Commands
 

@@ -22,6 +22,9 @@ The adapter should:
 - expose `retrieve_context()`, `build_prompt_context()`,
   `keeper_analyze_turn()`, and `ingest_graph()` for service-style
   orchestration;
+- accept a configured `LLMKeeperExtractor` or `OpenAIExtractor` so Hermes can
+  run Keeper extraction through a low-cost model while preserving the memory
+  contract;
 - build Memory Tree Packs before an agent plans work;
 - build full context builder packs for tasks that need profile, summaries,
   recent messages, and graph branches together;
@@ -88,13 +91,21 @@ also checks that repeated post-turn Keeper calls are idempotent.
 Hermes can pass a configured extractor into the provider:
 
 ```python
-from agent_memory_kernel.extractors import OpenAIExtractor
+from agent_memory_kernel.extractors import LLMKeeperExtractor
+
+
+def cheap_model_complete(request: dict):
+    return provider_client.responses.create(**request)
 
 provider = HermesMemoryProvider(
     ".memory/hermes-memory.db",
-    extractor=OpenAIExtractor(client=openai_client, model="gpt-4.1-mini"),
+    extractor=LLMKeeperExtractor(cheap_model_complete, model="cheap-memory-model"),
 )
 ```
+
+`OpenAIExtractor` remains available for direct OpenAI-compatible clients. Use
+`LLMKeeperExtractor` when Hermes wants the versioned Keeper schema and strict
+contract tests.
 
 Recommended planning call:
 

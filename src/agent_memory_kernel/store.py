@@ -907,6 +907,7 @@ class MemoryStore:
                         {
                             "nodes": extracted.nodes,
                             "edges": extracted.edges,
+                            "metadata": extracted.metadata,
                         },
                         sort_keys=True,
                     ),

@@ -13,6 +13,7 @@ class ExtractedMemory:
     confidence: str = "medium"
     nodes: list[dict] = field(default_factory=list)
     edges: list[dict] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 
 class Extractor:

@@ -71,6 +71,8 @@ Included now:
 - Graph groups and optimization runs.
 - Light Model semantic analyses: facts, chronology, key topics, people, events,
   verified entities.
+- Versioned LLM Keeper extraction contract through `LLMKeeperExtractor` for
+  low-cost model memory writes without requiring a live provider in tests.
 - OpenAI-compatible lightweight extractor adapter with deterministic fallback
   for contract tests and local operation.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
@@ -372,13 +374,21 @@ Use a model-backed extractor from an application:
 
 ```python
 from agent_memory_kernel import MemoryStore
-from agent_memory_kernel.extractors import OpenAIExtractor
+from agent_memory_kernel.extractors import LLMKeeperExtractor
+
+
+def cheap_model_complete(request: dict):
+    return provider.responses.create(**request)
 
 store = MemoryStore(
     ".memory/demo.db",
-    extractor=OpenAIExtractor(client=openai_client, model="gpt-4.1-mini"),
+    extractor=LLMKeeperExtractor(cheap_model_complete, model="cheap-memory-model"),
 )
 ```
+
+For OpenAI-compatible clients that should be passed directly, see
+`OpenAIExtractor`. The versioned Keeper contract itself is documented in
+[docs/keeper-extraction.md](docs/keeper-extraction.md).
 
 Export a readable vault:
 
@@ -656,6 +666,7 @@ docs/
   full-memory-gap-plan.md  gap plan for automatic full memory
   runtime-contract.md      pre-call router and post-turn keeper contract
   memory-lifecycle-contract.md  durable memory lifecycle contract
+  keeper-extraction.md    versioned low-cost keeper extraction contract
   cross-model-context-contract.md  provider-neutral prompt context contract
   security-identity-contract.md  identity, permissions, and trust contract
   end-to-end-vertical-slice.md  first full-memory acceptance scenario
