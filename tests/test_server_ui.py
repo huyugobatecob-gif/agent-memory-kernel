@@ -58,7 +58,20 @@ class ServerUITests(unittest.TestCase):
             self.assertIn(active_memory_id, html)
             self.assertIn("Possible Conflicts", html)
             self.assertIn('data-action="approve"', html)
+            self.assertIn('class="candidate-check"', html)
+            self.assertIn('data-batch-action="approve"', html)
             self.assertIn("/review/approve", html)
+            self.assertIn("/review/batch", html)
+
+            approved_html = render_review_ui(
+                store,
+                status="approved",
+                scope="professional",
+                limit=10,
+            )
+            self.assertIn(active_memory_id, approved_html)
+            self.assertIn('data-lifecycle-action="correct"', approved_html)
+            self.assertIn("/memory/lifecycle-batch", approved_html)
             store.close()
 
     def test_graph_ui_renders_nodes_edges_and_source_previews(self) -> None:

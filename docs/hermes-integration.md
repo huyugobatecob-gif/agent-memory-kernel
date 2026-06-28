@@ -255,6 +255,8 @@ agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
 
 The same stdlib server exposes browser operator pages at
 `http://127.0.0.1:8765/ui/review` and `http://127.0.0.1:8765/ui/graph`.
+The review page can approve/reject individual or selected candidates, preview
+batch decisions, and preview/apply active-memory corrections.
 
 For agents that speak MCP, run the stdio server instead of HTTP:
 

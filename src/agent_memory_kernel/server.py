@@ -546,6 +546,14 @@ def render_review_ui(
       </form>
       <div class="summary">{summary_html or '<span class="pill">0 items</span>'}</div>
     </section>
+    <section class="bulkbar">
+      <div class="actions">
+        <button data-batch-action="approve" data-dry-run="true">Preview Approve</button>
+        <button data-batch-action="approve">Approve Selected</button>
+        <button data-batch-action="reject" data-dry-run="true" class="danger">Preview Reject</button>
+        <button data-batch-action="reject" class="danger">Reject Selected</button>
+      </div>
+    </section>
     <main class="stack" id="review-items">{items_html}</main>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     """
@@ -611,18 +619,20 @@ def _review_item_html(item: dict[str, Any]) -> str:
     status = str(candidate.get("status", ""))
     risk_flags = review.get("risk_flags", [])
     conflict_warnings = review.get("conflict_warnings", [])
+    selection = ""
     actions = ""
     if status in {"pending", "quarantined"}:
+        selection = (
+            f"<label class=\"checkline\"><input type=\"checkbox\" "
+            f"class=\"candidate-check\" value=\"{_h(candidate_id)}\"> Select</label>"
+        )
         actions = f"""
         <div class="actions">
           <button data-action="approve" data-candidate-id="{_h(candidate_id)}">Approve</button>
           <button data-action="reject" data-candidate-id="{_h(candidate_id)}" class="danger">Reject</button>
         </div>
         """
-    active_memories = "".join(
-        f"<li><code>{_h(memory.get('memory_id', ''))}</code> {_h(memory.get('text', ''))}</li>"
-        for memory in item.get("active_memories", [])
-    )
+    active_memories = _active_memory_html(item.get("active_memories", []))
     graph_preview = item.get("graph_preview", {})
     return f"""
     <article class="card" data-candidate="{_h(candidate_id)}">
@@ -630,6 +640,7 @@ def _review_item_html(item: dict[str, Any]) -> str:
         <div>
           <h2>{_h(candidate.get("kind", "memory"))}</h2>
           <p class="muted"><code>{_h(candidate_id)}</code></p>
+          {selection}
         </div>
         <div class="meta">
           <span>{_h(status)}</span>
@@ -650,10 +661,37 @@ def _review_item_html(item: dict[str, Any]) -> str:
         <summary>Source excerpt</summary>
         <p class="text">{_h(source_event.get("content_excerpt", ""))}</p>
       </details>
-      {_list_block("Active memories", active_memories)}
+      {active_memories}
       {actions}
     </article>
     """
+
+
+def _active_memory_html(memories: list[dict[str, Any]]) -> str:
+    if not memories:
+        return ""
+    rows = []
+    for memory in memories:
+        memory_id = str(memory.get("memory_id", ""))
+        text = str(memory.get("text", ""))
+        rows.append(
+            f"""
+            <section class="memory-row" data-memory-id="{_h(memory_id)}">
+              <div>
+                <p class="muted"><code>{_h(memory_id)}</code></p>
+                <p class="text">{_h(text)}</p>
+              </div>
+              <label>Correction
+                <textarea data-correction-text="{_h(memory_id)}">{_h(text)}</textarea>
+              </label>
+              <div class="actions">
+                <button data-lifecycle-action="correct" data-memory-id="{_h(memory_id)}" data-dry-run="true">Preview Correction</button>
+                <button data-lifecycle-action="correct" data-memory-id="{_h(memory_id)}">Apply Correction</button>
+              </div>
+            </section>
+            """
+        )
+    return f"<section><h3>Active Memories</h3><div class=\"memory-list\">{''.join(rows)}</div></section>"
 
 
 def _graph_node_html(node: dict[str, Any]) -> str:
@@ -799,9 +837,22 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
       align-items: center;
       margin-bottom: 18px;
     }}
+    .bulkbar {{
+      display: flex;
+      justify-content: flex-end;
+      margin: -6px 0 18px;
+    }}
     .filters {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }}
     label {{ display: grid; gap: 4px; color: var(--muted); font-size: 12px; }}
-    input, select, button {{
+    .checkline {{
+      display: inline-flex;
+      grid-auto-flow: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      color: var(--ink);
+    }}
+    input, select, button, textarea {{
       min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -810,6 +861,7 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
       padding: 6px 9px;
       font: inherit;
     }}
+    textarea {{ width: 100%; min-height: 96px; resize: vertical; }}
     button {{ cursor: pointer; background: var(--ink); color: #fff; border-color: var(--ink); }}
     button:hover {{ background: var(--accent); border-color: var(--accent); }}
     button.danger {{ background: var(--danger); border-color: var(--danger); }}
@@ -841,6 +893,15 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
     dd {{ margin: 2px 0 0; overflow-wrap: anywhere; }}
     ul {{ margin: 0; padding-left: 18px; }}
     li {{ margin: 4px 0; overflow-wrap: anywhere; }}
+    .memory-list {{ display: grid; gap: 10px; }}
+    .memory-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
+      gap: 12px;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }}
+    .memory-row .actions {{ grid-column: 1 / -1; justify-content: flex-end; }}
     details {{ border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; }}
     summary {{ cursor: pointer; color: var(--accent); }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
@@ -857,7 +918,8 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
     }}
     @media (max-width: 760px) {{
       .page {{ padding: 16px; }}
-      .toolbar, .columns, .grid {{ grid-template-columns: 1fr; }}
+      .toolbar, .columns, .grid, .memory-row {{ grid-template-columns: 1fr; }}
+      .bulkbar {{ justify-content: stretch; }}
       header {{ display: grid; }}
     }}
   </style>
@@ -897,6 +959,66 @@ async function postJson(path, payload) {
   return data;
 }
 document.addEventListener("click", async (event) => {
+  const batchButton = event.target.closest("button[data-batch-action]");
+  if (batchButton) {
+    const action = batchButton.dataset.batchAction;
+    const dryRun = batchButton.dataset.dryRun === "true";
+    const candidateIds = Array.from(document.querySelectorAll(".candidate-check:checked"))
+      .map((item) => item.value)
+      .filter(Boolean);
+    if (!candidateIds.length) {
+      showToast("No candidates selected");
+      return;
+    }
+    batchButton.disabled = true;
+    try {
+      const data = await postJson("/review/batch", {
+        action,
+        candidate_ids: candidateIds,
+        actor: "browser-reviewer",
+        reason: (dryRun ? "preview " : "") + action + " via browser review UI",
+        dry_run: dryRun
+      });
+      showToast(JSON.stringify(data.summary || data));
+      if (!dryRun) window.setTimeout(() => window.location.reload(), 450);
+    } catch (error) {
+      showToast(error.message);
+      batchButton.disabled = false;
+    }
+    return;
+  }
+
+  const lifecycleButton = event.target.closest("button[data-lifecycle-action]");
+  if (lifecycleButton) {
+    const action = lifecycleButton.dataset.lifecycleAction;
+    const memoryId = lifecycleButton.dataset.memoryId;
+    const dryRun = lifecycleButton.dataset.dryRun === "true";
+    const textInput = document.querySelector(`[data-correction-text="${memoryId}"]`);
+    const text = textInput ? textInput.value.trim() : "";
+    if (action === "correct" && !text) {
+      showToast("Correction text is empty");
+      return;
+    }
+    lifecycleButton.disabled = true;
+    try {
+      const operation = action === "correct"
+        ? {action, memory_id: memoryId, text}
+        : {action, memory_id: memoryId};
+      const data = await postJson("/memory/lifecycle-batch", {
+        operations: [operation],
+        actor: "browser-reviewer",
+        reason: (dryRun ? "preview " : "") + action + " via browser review UI",
+        dry_run: dryRun
+      });
+      showToast(JSON.stringify(data.summary || data.results || data));
+      if (!dryRun) window.setTimeout(() => window.location.reload(), 450);
+    } catch (error) {
+      showToast(error.message);
+      lifecycleButton.disabled = false;
+    }
+    return;
+  }
+
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const action = button.dataset.action;

@@ -332,11 +332,11 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Browser-assisted batch correction, richer graph navigation, and
+- Richer browser batch editing queues, richer graph navigation, and
   push/email/web notification transports beyond the baseline browser review
   and graph pages, machine-readable review inbox with inline conflict warnings,
   notification queue, approve/reject batch flow, and active-memory lifecycle
-  batch flow.
+  batch correction flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Automatic conflict detection heuristics and production current-best-answer
@@ -731,7 +731,7 @@ notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, SLA status
 filtering, and policy-only escalation reports.
-Remaining work is browser-assisted batch correction, richer graph navigation,
+Remaining work is richer browser batch editing, richer graph navigation,
 notification transports, and hosted key-management controls.
 Export-control, redaction-profile, sensitive-export approval, export retention,
 and encrypted profile export baselines are implemented, but richer browser
