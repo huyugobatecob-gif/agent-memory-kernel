@@ -228,6 +228,10 @@ Already present:
   `agent-memory export`, `/export/profile`, Hermes `export_profile()`, and MCP
   `memory_export_profile`; `full`, `safe`, and `metadata` profiles preserve
   export shape while making content inclusion explicit.
+- Baseline sensitive full-export approval through `agent-memory
+  export-approval`, `/export/approval/*`, Hermes export approval wrappers, and
+  MCP `memory_export_approval_*`; full exports containing personal or secret
+  active memory require an approved one-time request.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -688,9 +692,9 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. Remaining work is a
 browser review UI, graph browser, batch correction, export controls, and reviewer
 notifications.
-Export-control and redaction-profile baselines are implemented, but retention
-policy, encrypted export, and approval workflow for sensitive exports remain
-production backlog.
+Export-control, redaction-profile, and sensitive-export approval baselines are
+implemented, but retention policy, encrypted export, browser UI, and reviewer
+notifications remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

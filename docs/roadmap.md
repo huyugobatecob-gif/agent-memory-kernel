@@ -180,6 +180,11 @@ Baseline export redaction profiles are implemented through
 `export_profile()`, and MCP `memory_export_profile`. The supported profiles are
 `full`, `safe`, and `metadata`; safe modes preserve graph/export structure while
 replacing content-bearing fields with explicit redaction markers.
+Baseline sensitive full-export approval is implemented through `agent-memory
+export-approval`, `/export/approval/*`, Hermes export approval wrappers, and MCP
+`memory_export_approval_*`. Full exports containing personal or secret active
+memory require an approved one-time request; safe/metadata exports remain the
+default structure-sharing path.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -248,7 +253,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- export retention policy, redaction profiles, and sensitive export approval.
+- export retention policy and encrypted export.
 
 ## v1.0: Stable Memory Contract
 

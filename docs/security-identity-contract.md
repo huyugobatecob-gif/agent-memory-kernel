@@ -172,6 +172,8 @@ hosted modes should define:
 - encrypted database option;
 - encrypted export option;
 - secret redaction before active memory;
+- one-time approval for full exports that include personal or secret active
+  memory;
 - no provider API keys in profile exports unless explicitly encrypted;
 - key rotation plan;
 - backup and restore handling.

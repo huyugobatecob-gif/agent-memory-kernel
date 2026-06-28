@@ -45,6 +45,9 @@ The adapter should:
   aggregate scope counts, and risk flags before memory leaves the store;
 - expose `export_profile(..., redaction_profile="safe")` when Hermes needs to
   share memory structure without exporting content-bearing fields;
+- expose `request_export_approval()`, `export_approvals()`,
+  `approve_export_approval()`, and `reject_export_approval()` for one-time full
+  exports that include personal or secret active memory;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
@@ -181,6 +184,10 @@ Export redaction profiles are explicit:
   and graph shape.
 - `metadata`: redacts content plus additional human-readable metadata labels for
   safer sharing of structure.
+
+Full exports that include personal or secret active memory require a one-time
+approval id. Use `request_export_approval()`, approve it through an operator
+role, then pass `approval_id` to `export_profile()`.
 
 After review, preserve the expected behavior:
 

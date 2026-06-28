@@ -819,6 +819,7 @@ def cmd_export_profile(args: argparse.Namespace) -> int:
             project=args.project,
             actor=args.actor,
             redaction_profile=args.redaction_profile,
+            approval_id=args.approval_id,
         )
     )
     store.close()
@@ -834,6 +835,71 @@ def cmd_export_control(args: argparse.Namespace) -> int:
             scope=args.scope,
             project=args.project,
             redaction_profile=args.redaction_profile,
+            approval_id=args.approval_id,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_approval_request(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.request_export_approval(
+            actor=args.actor,
+            requested_by=args.requested_by,
+            scope=args.scope,
+            project=args.project,
+            export_kind=args.export_kind,
+            redaction_profile=args.redaction_profile,
+            reason=args.reason,
+            metadata=json.loads(args.metadata_json),
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_approval_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        {
+            "approvals": store.list_export_approvals(
+                status=args.status,
+                actor=args.actor,
+                scope=args.scope,
+                limit=args.limit,
+            )
+        }
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_approval_approve(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.approve_export_approval(
+            args.approval_id,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_approval_reject(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.reject_export_approval(
+            args.approval_id,
+            actor=args.actor,
+            reason=args.reason,
         )
     )
     store.close()
@@ -1089,7 +1155,12 @@ def cmd_mcp(args: argparse.Namespace) -> int:
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    store.export_markdown(args.out, actor=args.actor, redaction_profile=args.redaction_profile)
+    store.export_markdown(
+        args.out,
+        actor=args.actor,
+        redaction_profile=args.redaction_profile,
+        approval_id=args.approval_id,
+    )
     store.close()
     print(f"exported markdown vault to {args.out}")
     return 0
@@ -1601,6 +1672,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", default="")
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
     p.set_defaults(func=cmd_export_profile)
 
     p = sub.add_parser("export-control", help="Preview export policy and aggregate memory counts")
@@ -1609,7 +1681,42 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", default="")
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
     p.set_defaults(func=cmd_export_control)
+
+    p = sub.add_parser("export-approval", help="Request or decide sensitive export approval")
+    add_common_db(p)
+    approval_sub = p.add_subparsers(dest="export_approval_command", required=True)
+
+    ap = approval_sub.add_parser("request", help="Request approval for a sensitive full export")
+    ap.add_argument("--actor", default="user", help="Actor that will perform the export")
+    ap.add_argument("--requested-by", default="", help="Operator requesting approval")
+    ap.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    ap.add_argument("--project", default="")
+    ap.add_argument("--export-kind", default="profile", choices=["profile", "markdown"])
+    ap.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    ap.add_argument("--reason", default="")
+    ap.add_argument("--metadata-json", default="{}")
+    ap.set_defaults(func=cmd_export_approval_request)
+
+    ap = approval_sub.add_parser("list", help="List export approval requests")
+    ap.add_argument("--status", default="pending", choices=["pending", "approved", "rejected", "used", "not_required", "all"])
+    ap.add_argument("--actor")
+    ap.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    ap.add_argument("--limit", type=int, default=50)
+    ap.set_defaults(func=cmd_export_approval_list)
+
+    ap = approval_sub.add_parser("approve", help="Approve a sensitive export request")
+    ap.add_argument("approval_id")
+    ap.add_argument("--actor", default="reviewer")
+    ap.add_argument("--reason", default="")
+    ap.set_defaults(func=cmd_export_approval_approve)
+
+    ap = approval_sub.add_parser("reject", help="Reject a sensitive export request")
+    ap.add_argument("approval_id")
+    ap.add_argument("--actor", default="reviewer")
+    ap.add_argument("--reason", default="")
+    ap.set_defaults(func=cmd_export_approval_reject)
 
     p = sub.add_parser("import-profile", help="Import project profile JSON")
     add_common_db(p)
@@ -1776,6 +1883,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default="memory-vault")
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
     p.set_defaults(func=cmd_export)
 
     return parser

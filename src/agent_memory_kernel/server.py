@@ -242,6 +242,39 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             project=str(payload.get("project", "")),
             redaction_profile=str(payload.get("redaction_profile", "full")),
+            approval_id=str(payload.get("approval_id", "")),
+        )
+    if path == "/export/approval/request":
+        return store.request_export_approval(
+            actor=str(payload.get("actor", "user")),
+            requested_by=str(payload.get("requested_by", "")),
+            scope=payload.get("scope"),
+            project=str(payload.get("project", "")),
+            export_kind=str(payload.get("export_kind", "profile")),
+            redaction_profile=str(payload.get("redaction_profile", "full")),
+            reason=str(payload.get("reason", "")),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+    if path == "/export/approval/list":
+        return {
+            "approvals": store.list_export_approvals(
+                status=payload.get("status"),
+                actor=payload.get("actor"),
+                scope=payload.get("scope"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/export/approval/approve":
+        return store.approve_export_approval(
+            str(payload.get("approval_id", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            reason=str(payload.get("reason", "")),
+        )
+    if path == "/export/approval/reject":
+        return store.reject_export_approval(
+            str(payload.get("approval_id", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            reason=str(payload.get("reason", "")),
         )
     if path == "/search":
         query = str(payload.pop("query"))
@@ -260,6 +293,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             project=str(payload.get("project", "")),
             actor=str(payload.get("actor", "user")),
             redaction_profile=str(payload.get("redaction_profile", "full")),
+            approval_id=str(payload.get("approval_id", "")),
         )
     if path == "/review/inbox":
         return store.review_inbox(

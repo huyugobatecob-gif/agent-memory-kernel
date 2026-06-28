@@ -131,7 +131,9 @@ class HermesMemoryProvider:
         self,
         scope: str | None = None,
         project: str = "",
+        actor: str = "hermes",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict:
         ...
 
@@ -141,7 +143,20 @@ class HermesMemoryProvider:
         scope: str | None = None,
         project: str = "",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict:
+        ...
+
+    def request_export_approval(self, **kwargs) -> dict:
+        ...
+
+    def export_approvals(self, **kwargs) -> list[dict]:
+        ...
+
+    def approve_export_approval(self, approval_id: str, **kwargs) -> dict:
+        ...
+
+    def reject_export_approval(self, approval_id: str, **kwargs) -> dict:
         ...
 
     def remember(self, text: str, scope: str = "professional", source_ref: str = "") -> dict:
@@ -213,6 +228,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
 `memory_graph_edges`, `memory_export_control`, `memory_export_profile`, and
+`memory_export_approval_request`, `memory_export_approval_list`,
+`memory_export_approval_approve`, `memory_export_approval_reject`, and
 `memory_worker_run`.
 
 Useful endpoints:
@@ -260,6 +277,10 @@ Useful endpoints:
 - `POST /capability/check`
 - `POST /export/control`
 - `POST /export/profile`
+- `POST /export/approval/request`
+- `POST /export/approval/list`
+- `POST /export/approval/approve`
+- `POST /export/approval/reject`
 - `POST /search`
 - `POST /review/inbox`
 - `POST /review/batch`
@@ -649,6 +670,10 @@ counts by scope, sensitivity/trust breakdowns, denied scopes, and risk flags
 without returning memory content.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when Hermes
 should share memory structure without sharing content-bearing fields.
+For `full` exports that include personal or secret active memory, Hermes should
+call `export-approval request`, wait for operator approval, then pass
+`--approval-id` to `export-profile` or markdown export. Approvals are one-time:
+after a successful full export the approval status becomes `used`.
 
 ## Loop Memory Extension
 

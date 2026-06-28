@@ -330,6 +330,94 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(allowed_export["allowed"])
             store.close()
 
+    def test_sensitive_export_requires_one_time_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Preference: user prefers private memory briefings.",
+                scope="personal",
+                auto_approve=True,
+            )
+
+            control = store.export_control_report(
+                actor="analyst",
+                scope="personal",
+                redaction_profile="full",
+            )
+            self.assertTrue(control["allowed"])
+            self.assertTrue(control["sensitive_export"]["approval_required"])
+            self.assertEqual(control["recommended_action"], "request_sensitive_export_approval")
+            self.assertIn(
+                "personal_scope_export",
+                set(control["sensitive_export"]["approval_reasons"]),
+            )
+
+            safe_export = store.export_profile(
+                actor="analyst",
+                scope="personal",
+                redaction_profile="safe",
+            )
+            self.assertFalse(
+                safe_export["export_metadata"]["approval"]["sensitive_export"]["approval_required"]
+            )
+            self.assertNotIn("private memory briefings", str(safe_export))
+
+            with self.assertRaises(PermissionError):
+                store.export_profile(actor="analyst", scope="personal")
+
+            request = store.request_export_approval(
+                actor="analyst",
+                requested_by="operator",
+                scope="personal",
+                export_kind="profile",
+                reason="user requested portable full export",
+            )
+            approval_id = request["approval_id"]
+            self.assertEqual(request["status"], "pending")
+            self.assertTrue(request["approval_required"])
+
+            with self.assertRaises(PermissionError):
+                store.export_profile(
+                    actor="analyst",
+                    scope="personal",
+                    approval_id=approval_id,
+                )
+
+            approved = store.approve_export_approval(
+                approval_id,
+                actor="reviewer",
+                reason="explicit user request",
+            )
+            self.assertEqual(approved["status"], "approved")
+
+            full_export = store.export_profile(
+                actor="analyst",
+                scope="personal",
+                approval_id=approval_id,
+            )
+            self.assertEqual(
+                full_export["export_metadata"]["approval"]["status"],
+                "used",
+            )
+            self.assertIn("private memory briefings", str(full_export))
+
+            with self.assertRaises(PermissionError):
+                store.export_profile(
+                    actor="analyst",
+                    scope="personal",
+                    approval_id=approval_id,
+                )
+
+            listed = handle_api_request(
+                store,
+                "/export/approval/list",
+                {"status": "used", "actor": "analyst"},
+            )
+            self.assertEqual(listed["approvals"][0]["approval_id"], approval_id)
+            store.close()
+
     def test_secret_like_content_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

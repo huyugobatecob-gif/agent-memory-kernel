@@ -96,6 +96,7 @@ Included now:
   risk flags before memory leaves the store.
 - Export redaction profiles for JSON profile and Markdown vault exports:
   `full`, `safe`, and `metadata`.
+- Sensitive full-export approval requests for personal or secret active memory.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -389,6 +390,8 @@ scope, and whether personal, secret, or denied-scope risk flags are present.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when the
 export should preserve structure while replacing memory content-bearing fields
 with explicit redaction markers. `full` is the default and includes content.
+When a `full` export includes personal or secret active memory, request and
+approve a one-time export approval before passing `--approval-id`.
 
 ```bash
 agent-memory export-control --db .memory/demo.db \
@@ -403,6 +406,21 @@ agent-memory export-profile --db .memory/demo.db \
 agent-memory export --db .memory/demo.db \
   --out memory-vault \
   --redaction-profile safe
+
+agent-memory export-approval --db .memory/demo.db request \
+  --actor writer \
+  --scope personal \
+  --export-kind profile \
+  --reason "user requested a full portable export"
+
+agent-memory export-approval --db .memory/demo.db approve xapr_xxxxxxxxxxxxxxxx \
+  --actor reviewer \
+  --reason "explicit user request"
+
+agent-memory export-profile --db .memory/demo.db \
+  --actor writer \
+  --scope personal \
+  --approval-id xapr_xxxxxxxxxxxxxxxx
 ```
 
 Inspect derived-memory invalidation after corrections or lifecycle changes:
@@ -643,6 +661,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
 `memory_export_control`, `memory_export_profile`,
+`memory_export_approval_request`, `memory_export_approval_list`,
+`memory_export_approval_approve`, `memory_export_approval_reject`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,
 `memory_migration_status`, `memory_backup_database`,

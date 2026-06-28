@@ -460,6 +460,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "scope": _string("Optional memory scope/lane.", ""),
                 "project": _string("Optional project filter.", ""),
                 "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+                "approval_id": _string("Optional approved sensitive export approval id.", ""),
             }
         ),
     },
@@ -472,7 +473,59 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "scope": _string("Optional memory scope/lane.", ""),
                 "project": _string("Optional project filter.", ""),
                 "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+                "approval_id": _string("Optional approved sensitive export approval id.", ""),
             }
+        ),
+    },
+    "memory_export_approval_request": {
+        "endpoint": "/export/approval/request",
+        "description": "Request one-time approval for a sensitive full export.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Actor that will perform the export.", "mcp"),
+                "requested_by": _string("Operator requesting approval.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "project": _string("Optional project filter.", ""),
+                "export_kind": _string("Export kind: profile or markdown.", "profile"),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+                "reason": _string("Reason for the export request.", ""),
+            }
+        ),
+    },
+    "memory_export_approval_list": {
+        "endpoint": "/export/approval/list",
+        "description": "List sensitive export approval requests.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Status filter.", "pending"),
+                "actor": _string("Optional exporting actor filter.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "limit": _integer("Maximum approvals.", 50),
+            }
+        ),
+    },
+    "memory_export_approval_approve": {
+        "endpoint": "/export/approval/approve",
+        "description": "Approve a pending sensitive export approval request.",
+        "inputSchema": _schema(
+            {
+                "approval_id": _string("Export approval id."),
+                "actor": _string("Approving operator.", "reviewer"),
+                "reason": _string("Approval reason.", ""),
+            },
+            ["approval_id"],
+        ),
+    },
+    "memory_export_approval_reject": {
+        "endpoint": "/export/approval/reject",
+        "description": "Reject a pending sensitive export approval request.",
+        "inputSchema": _schema(
+            {
+                "approval_id": _string("Export approval id."),
+                "actor": _string("Rejecting operator.", "reviewer"),
+                "reason": _string("Rejection reason.", ""),
+            },
+            ["approval_id"],
         ),
     },
     "memory_graph_nodes": {

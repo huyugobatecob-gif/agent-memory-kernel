@@ -351,6 +351,27 @@ CREATE TABLE IF NOT EXISTS graph_optimization_runs (
     metadata_json   TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS memory_export_approvals (
+    approval_id       TEXT PRIMARY KEY,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    requested_by      TEXT NOT NULL DEFAULT 'user',
+    actor             TEXT NOT NULL DEFAULT 'user',
+    approved_by       TEXT NOT NULL DEFAULT '',
+    rejected_by       TEXT NOT NULL DEFAULT '',
+    scope             TEXT NOT NULL DEFAULT 'all',
+    project           TEXT NOT NULL DEFAULT '',
+    export_kind       TEXT NOT NULL DEFAULT 'profile',
+    redaction_profile TEXT NOT NULL DEFAULT 'full',
+    status            TEXT NOT NULL DEFAULT 'pending',
+    reason            TEXT NOT NULL DEFAULT '',
+    decision_reason   TEXT NOT NULL DEFAULT '',
+    risk_flags_json   TEXT NOT NULL DEFAULT '[]',
+    scope_counts_json TEXT NOT NULL DEFAULT '{}',
+    used_at           TEXT,
+    metadata_json     TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS router_runs (
     router_run_id            TEXT PRIMARY KEY,
     created_at               TEXT NOT NULL,
@@ -516,6 +537,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_conflicts_scope ON memory_conflicts(scope)
 CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id);
 CREATE INDEX IF NOT EXISTS idx_memory_write_policies_lookup ON memory_write_policies(agent_id, scope, action);
 CREATE INDEX IF NOT EXISTS idx_memory_read_policies_lookup ON memory_read_policies(agent_id, scope, action);
+CREATE INDEX IF NOT EXISTS idx_memory_export_approvals_status ON memory_export_approvals(status, scope);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_turns_thread ON conversation_turns(thread_id);

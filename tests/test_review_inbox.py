@@ -297,6 +297,16 @@ class ReviewInboxTests(unittest.TestCase):
             export_control = provider.export_control_report(actor="reviewer", scope="professional")
             self.assertEqual(export_control["version"], "export-control-v0.1")
             self.assertTrue(export_control["allowed"])
+            export_request = provider.request_export_approval(
+                actor="reviewer",
+                requested_by="operator",
+                scope="professional",
+                redaction_profile="safe",
+                reason="share redacted provider export",
+            )
+            self.assertEqual(export_request["status"], "not_required")
+            approvals = provider.export_approvals(status="not_required", actor="reviewer")
+            self.assertEqual(approvals[0]["approval_id"], export_request["approval_id"])
             safe_export = provider.export_profile(
                 actor="reviewer",
                 scope="professional",

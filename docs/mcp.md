@@ -90,6 +90,11 @@ Operator and graph tools:
 - `memory_export_profile`: export the profile, memory tree, graph, evidence,
   outcomes, and related metadata. Accepts `redaction_profile` (`full`, `safe`,
   or `metadata`) to preserve structure while redacting content-bearing fields.
+- `memory_export_approval_request`: request one-time approval for a sensitive
+  full export.
+- `memory_export_approval_list`: list sensitive export approval requests.
+- `memory_export_approval_approve`: approve a pending sensitive export request.
+- `memory_export_approval_reject`: reject a pending sensitive export request.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
 

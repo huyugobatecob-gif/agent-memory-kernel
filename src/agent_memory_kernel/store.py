@@ -100,8 +100,10 @@ REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
+EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
+EXPORT_APPROVAL_KINDS = {"profile", "markdown"}
 EXPORT_SAFE_REDACT_KEYS = {
     "blob",
     "aliases_json",
@@ -1620,6 +1622,7 @@ class MemoryStore:
             "keeper_jobs",
             "router_runs",
             "graph_commands",
+            "memory_export_approvals",
         }
         try:
             rows = self.conn.execute(
@@ -1749,6 +1752,15 @@ class MemoryStore:
                 "metadata_json",
             ],
             "llm_usage_stats": ["usage_id", "provider", "model", "total_tokens", "cost"],
+            "memory_export_approvals": [
+                "approval_id",
+                "actor",
+                "scope",
+                "export_kind",
+                "redaction_profile",
+                "status",
+                "risk_flags_json",
+            ],
         }
         checks: list[dict[str, Any]] = []
 
@@ -3002,11 +3014,20 @@ class MemoryStore:
         project: str = "",
         actor: str = "user",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict[str, Any]:
         scope = normalize_scope(scope) if scope else None
         redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
         self._enforce_export_policy(actor, scope)
         project = (project or "").strip()
+        approval = self._enforce_sensitive_export_approval(
+            actor=actor,
+            scope=scope,
+            project=project,
+            export_kind="profile",
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+        )
         profiles = self.conn.execute(
             """
             SELECT *
@@ -3040,6 +3061,7 @@ class MemoryStore:
             actor=actor,
             scope=scope,
             project=project,
+            approval=approval,
         )
 
     def export_control_report(
@@ -3049,6 +3071,7 @@ class MemoryStore:
         scope: str | None = None,
         project: str = "",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict[str, Any]:
         """Preview export scope, policy, and aggregate risk without exporting content."""
         scope = normalize_scope(scope) if scope else None
@@ -3058,6 +3081,12 @@ class MemoryStore:
         scope_reports = []
         denied_scopes: list[str] = []
         risk_flags: list[dict[str, str]] = []
+
+        sensitive_export = self._sensitive_export_assessment(
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+        )
 
         for item_scope in scopes:
             policy = self._resolve_read_policy(actor, item_scope, "export")
@@ -3072,25 +3101,6 @@ class MemoryStore:
                     }
                 )
             counts = self._export_scope_counts(item_scope, project=project)
-            secret_count = counts["sensitivity_counts"].get("secret", 0)
-            if secret_count:
-                risk_flags.append(
-                    {
-                        "flag": "secret_active_memory",
-                        "severity": "high",
-                        "scope": item_scope,
-                        "detail": f"{secret_count} active secret memories would be in export scope",
-                    }
-                )
-            if item_scope == "personal" and counts["active_memories"]:
-                risk_flags.append(
-                    {
-                        "flag": "personal_scope_export",
-                        "severity": "medium",
-                        "scope": item_scope,
-                        "detail": "personal memory is in export scope",
-                    }
-                )
             scope_reports.append(
                 {
                     "scope": item_scope,
@@ -3100,7 +3110,16 @@ class MemoryStore:
                 }
             )
 
+        risk_flags.extend(sensitive_export["risk_flags"])
+        if approval_id:
+            sensitive_export["approval"] = self._export_approval_summary(approval_id)
         allowed = not denied_scopes
+        if not allowed:
+            recommended_action = "request_consent_or_reduce_scope"
+        elif sensitive_export["approval_required"]:
+            recommended_action = "request_sensitive_export_approval"
+        else:
+            recommended_action = "export_allowed"
         return {
             "version": EXPORT_CONTROL_VERSION,
             "actor": actor,
@@ -3110,10 +3129,146 @@ class MemoryStore:
             "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
             "allowed": allowed,
             "denied_scopes": denied_scopes,
-            "recommended_action": "export_allowed" if allowed else "request_consent_or_reduce_scope",
+            "recommended_action": recommended_action,
+            "sensitive_export": sensitive_export,
             "risk_flags": risk_flags,
             "scopes": scope_reports,
         }
+
+    def request_export_approval(
+        self,
+        *,
+        actor: str = "user",
+        requested_by: str = "user",
+        scope: str | None = None,
+        project: str = "",
+        export_kind: str = "profile",
+        redaction_profile: str = "full",
+        reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create an operator-reviewable approval request for sensitive exports."""
+        actor = (actor or "user").strip() or "user"
+        requested_by = (requested_by or actor).strip() or actor
+        scope = normalize_scope(scope) if scope else None
+        project = (project or "").strip()
+        export_kind = self._normalize_export_kind(export_kind)
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        self._enforce_export_policy(actor, scope)
+        assessment = self._sensitive_export_assessment(
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+        )
+        status = "pending" if assessment["approval_required"] else "not_required"
+        approval_id = new_id("xapr")
+        ts = now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO memory_export_approvals
+              (approval_id, created_at, updated_at, requested_by, actor, scope,
+               project, export_kind, redaction_profile, status, reason,
+               risk_flags_json, scope_counts_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                approval_id,
+                ts,
+                ts,
+                requested_by,
+                actor,
+                scope or "all",
+                project,
+                export_kind,
+                redaction_profile,
+                status,
+                reason,
+                json.dumps(assessment["risk_flags"], sort_keys=True),
+                json.dumps(assessment["scope_counts"], sort_keys=True),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "export_approval_requested",
+            "memory_export_approval",
+            approval_id,
+            actor=requested_by,
+            details={
+                "actor": actor,
+                "scope": scope or "all",
+                "project": project,
+                "export_kind": export_kind,
+                "redaction_profile": redaction_profile,
+                "status": status,
+                "approval_required": assessment["approval_required"],
+                "reason": reason,
+            },
+        )
+        self.conn.commit()
+        row = self._get_export_approval_row(approval_id)
+        return self._export_approval_to_dict(row, assessment=assessment)
+
+    def list_export_approvals(
+        self,
+        *,
+        status: str | None = None,
+        actor: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status and status != "all":
+            clauses.append("status = ?")
+            params.append(status.strip().lower())
+        if actor:
+            clauses.append("actor = ?")
+            params.append(actor.strip())
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT *
+            FROM memory_export_approvals
+            {where}
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [self._export_approval_to_dict(row) for row in rows]
+
+    def approve_export_approval(
+        self,
+        approval_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self._decide_export_approval(
+            approval_id,
+            actor=actor,
+            action="approve",
+            status="approved",
+            reason=reason,
+        )
+
+    def reject_export_approval(
+        self,
+        approval_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self._decide_export_approval(
+            approval_id,
+            actor=actor,
+            action="reject",
+            status="rejected",
+            reason=reason,
+        )
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
@@ -5483,8 +5638,18 @@ class MemoryStore:
         *,
         actor: str = "user",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> None:
         redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        self._enforce_export_policy(actor, None)
+        approval = self._enforce_sensitive_export_approval(
+            actor=actor,
+            scope=None,
+            project="",
+            export_kind="markdown",
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+        )
         out_path = Path(out_dir)
         out_path.mkdir(parents=True, exist_ok=True)
         rows = self.conn.execute(
@@ -5543,11 +5708,14 @@ class MemoryStore:
                 "",
                 "<!-- export-redaction "
                 + json.dumps(
-                    self._export_redaction_metadata(
-                        redaction_profile,
-                        0 if redaction_profile == "full" else len(review_items),
-                        ["proposed_text"] if redaction_profile != "full" and review_items else [],
-                    ),
+                    {
+                        "redaction": self._export_redaction_metadata(
+                            redaction_profile,
+                            0 if redaction_profile == "full" else len(review_items),
+                            ["proposed_text"] if redaction_profile != "full" and review_items else [],
+                        ),
+                        "approval": approval,
+                    },
                     sort_keys=True,
                 )
                 + " -->",
@@ -6929,6 +7097,74 @@ class MemoryStore:
         )
         return findings
 
+    @staticmethod
+    def _export_scopes(scope: str | None) -> list[str]:
+        if scope:
+            return [normalize_scope(scope)]
+        return ["personal", "professional", "project", "agent", "session"]
+
+    @staticmethod
+    def _normalize_export_kind(export_kind: str) -> str:
+        export_kind = (export_kind or "profile").strip().lower()
+        if export_kind not in EXPORT_APPROVAL_KINDS:
+            raise ValueError(
+                "export_kind must be one of: "
+                + ", ".join(sorted(EXPORT_APPROVAL_KINDS))
+            )
+        return export_kind
+
+    def _sensitive_export_assessment(
+        self,
+        *,
+        scope: str | None,
+        project: str,
+        redaction_profile: str,
+    ) -> dict[str, Any]:
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        content_included = redaction_profile == "full"
+        risk_flags: list[dict[str, str]] = []
+        approval_reasons: set[str] = set()
+        scope_counts: dict[str, Any] = {}
+        for item_scope in self._export_scopes(scope):
+            counts = self._export_scope_counts(item_scope, project=project)
+            scope_counts[item_scope] = counts
+            secret_count = counts["sensitivity_counts"].get("secret", 0)
+            if secret_count:
+                risk_flags.append(
+                    {
+                        "flag": "secret_active_memory",
+                        "severity": "high",
+                        "scope": item_scope,
+                        "detail": f"{secret_count} active secret memories would be in export scope",
+                    }
+                )
+                if content_included:
+                    approval_reasons.add("secret_active_memory")
+            if item_scope == "personal" and counts["active_memories"]:
+                risk_flags.append(
+                    {
+                        "flag": "personal_scope_export",
+                        "severity": "medium",
+                        "scope": item_scope,
+                        "detail": "personal memory is in export scope",
+                    }
+                )
+                if content_included:
+                    approval_reasons.add("personal_scope_export")
+        return {
+            "version": EXPORT_APPROVAL_VERSION,
+            "content_included": content_included,
+            "approval_required": bool(approval_reasons),
+            "approval_reasons": sorted(approval_reasons),
+            "risk_flags": risk_flags,
+            "scope_counts": scope_counts,
+            "redaction_profile": redaction_profile,
+            "approval_policy": (
+                "full exports containing personal or secret active memory require "
+                "an approved one-time export approval"
+            ),
+        }
+
     def _export_scope_counts(self, scope: str, *, project: str = "") -> dict[str, Any]:
         def scalar(sql: str, params: tuple[Any, ...]) -> int:
             row = self.conn.execute(sql, params).fetchone()
@@ -7033,6 +7269,7 @@ class MemoryStore:
         actor: str,
         scope: str | None,
         project: str,
+        approval: dict[str, Any],
     ) -> dict[str, Any]:
         if redaction_profile == "full":
             return {
@@ -7042,6 +7279,7 @@ class MemoryStore:
                     "scope": scope or "all",
                     "project": project,
                     "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
+                    "approval": approval,
                 },
             }
         redacted_keys: set[str] = set()
@@ -7075,6 +7313,7 @@ class MemoryStore:
                     redaction_count,
                     sorted(redacted_keys),
                 ),
+                "approval": approval,
             },
         }
 
@@ -7105,6 +7344,190 @@ class MemoryStore:
             "redacted_keys": redacted_keys,
             "content_included": profile == "full",
         }
+
+    def _get_export_approval_row(self, approval_id: str) -> sqlite3.Row:
+        approval_id = (approval_id or "").strip()
+        if not approval_id:
+            raise ValueError("approval_id is required")
+        row = self.conn.execute(
+            """
+            SELECT *
+            FROM memory_export_approvals
+            WHERE approval_id = ?
+            """,
+            (approval_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"export approval not found: {approval_id}")
+        return row
+
+    def _export_approval_summary(self, approval_id: str) -> dict[str, Any]:
+        try:
+            return self._export_approval_to_dict(self._get_export_approval_row(approval_id))
+        except (KeyError, ValueError) as exc:
+            return {"approval_id": approval_id, "status": "missing", "error": str(exc)}
+
+    def _export_approval_to_dict(
+        self,
+        row: sqlite3.Row,
+        *,
+        assessment: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        result = {
+            "version": EXPORT_APPROVAL_VERSION,
+            "approval_id": row["approval_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "requested_by": row["requested_by"],
+            "actor": row["actor"],
+            "approved_by": row["approved_by"],
+            "rejected_by": row["rejected_by"],
+            "scope": row["scope"],
+            "project": row["project"],
+            "export_kind": row["export_kind"],
+            "redaction_profile": row["redaction_profile"],
+            "status": row["status"],
+            "reason": row["reason"],
+            "decision_reason": row["decision_reason"],
+            "risk_flags": self._loads_json(row["risk_flags_json"], []),
+            "scope_counts": self._loads_json(row["scope_counts_json"], {}),
+            "used_at": row["used_at"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+        if assessment is not None:
+            result["sensitive_export"] = assessment
+            result["approval_required"] = assessment["approval_required"]
+        return result
+
+    def _decide_export_approval(
+        self,
+        approval_id: str,
+        *,
+        actor: str,
+        action: str,
+        status: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        row = self._get_export_approval_row(approval_id)
+        if row["status"] != "pending":
+            raise ValueError(
+                f"export approval must be pending, got status={row['status']}"
+            )
+        scope = None if row["scope"] == "all" else str(row["scope"])
+        for item_scope in self._export_scopes(scope):
+            self._enforce_write_policy(actor, item_scope, action)
+        ts = now_iso()
+        actor_column = "approved_by" if action == "approve" else "rejected_by"
+        self.conn.execute(
+            f"""
+            UPDATE memory_export_approvals
+            SET updated_at = ?, status = ?, {actor_column} = ?,
+                decision_reason = ?
+            WHERE approval_id = ?
+            """,
+            (ts, status, actor, reason, approval_id),
+        )
+        self._audit(
+            f"export_approval_{status}",
+            "memory_export_approval",
+            approval_id,
+            actor=actor,
+            details={"reason": reason, "previous_status": row["status"]},
+        )
+        self.conn.commit()
+        return self._export_approval_to_dict(self._get_export_approval_row(approval_id))
+
+    def _enforce_sensitive_export_approval(
+        self,
+        *,
+        actor: str,
+        scope: str | None,
+        project: str,
+        export_kind: str,
+        redaction_profile: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        export_kind = self._normalize_export_kind(export_kind)
+        assessment = self._sensitive_export_assessment(
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+        )
+        if not assessment["approval_required"]:
+            return {
+                "version": EXPORT_APPROVAL_VERSION,
+                "required": False,
+                "status": "not_required",
+                "approval_id": "",
+                "sensitive_export": assessment,
+            }
+        if not approval_id:
+            self._audit(
+                "export_approval_required",
+                "memory_export_approval",
+                "",
+                actor=actor,
+                details={
+                    "scope": scope or "all",
+                    "project": project,
+                    "export_kind": export_kind,
+                    "redaction_profile": redaction_profile,
+                    "approval_reasons": assessment["approval_reasons"],
+                },
+            )
+            self.conn.commit()
+            raise PermissionError(
+                "sensitive full export requires an approved export approval"
+            )
+        row = self._get_export_approval_row(approval_id)
+        expected = {
+            "actor": actor,
+            "scope": scope or "all",
+            "project": project,
+            "export_kind": export_kind,
+            "redaction_profile": redaction_profile,
+        }
+        actual = {key: row[key] for key in expected}
+        mismatches = {
+            key: {"expected": value, "actual": actual[key]}
+            for key, value in expected.items()
+            if actual[key] != value
+        }
+        if mismatches:
+            raise PermissionError(
+                "export approval does not match requested export: "
+                + json.dumps(mismatches, sort_keys=True)
+            )
+        if row["status"] != "approved":
+            raise PermissionError(
+                f"export approval must be approved, got status={row['status']}"
+            )
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_export_approvals
+            SET updated_at = ?, status = 'used', used_at = ?
+            WHERE approval_id = ?
+            """,
+            (ts, ts, approval_id),
+        )
+        self._audit(
+            "export_approval_used",
+            "memory_export_approval",
+            approval_id,
+            actor=actor,
+            details={
+                "scope": scope or "all",
+                "project": project,
+                "export_kind": export_kind,
+                "redaction_profile": redaction_profile,
+            },
+        )
+        self.conn.commit()
+        return self._export_approval_to_dict(
+            self._get_export_approval_row(approval_id),
+            assessment=assessment,
+        )
 
     def _export_chat_history(self, *, scope: str | None) -> dict[str, list[dict[str, Any]]]:
         turn_rows = self.conn.execute(

@@ -759,12 +759,14 @@ class HermesMemoryProvider:
         project: str = "",
         actor: str = "hermes",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict[str, Any]:
         return self.store.export_profile(
             scope=scope,
             project=project,
             actor=actor,
             redaction_profile=redaction_profile,
+            approval_id=approval_id,
         )
 
     def export_control_report(
@@ -773,12 +775,76 @@ class HermesMemoryProvider:
         scope: str | None = None,
         project: str = "",
         redaction_profile: str = "full",
+        approval_id: str = "",
     ) -> dict[str, Any]:
         return self.store.export_control_report(
             actor=actor,
             scope=scope,
             project=project,
             redaction_profile=redaction_profile,
+            approval_id=approval_id,
+        )
+
+    def request_export_approval(
+        self,
+        *,
+        actor: str = "hermes",
+        requested_by: str = "reviewer",
+        scope: str | None = None,
+        project: str = "",
+        export_kind: str = "profile",
+        redaction_profile: str = "full",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.request_export_approval(
+            actor=actor,
+            requested_by=requested_by,
+            scope=scope,
+            project=project,
+            export_kind=export_kind,
+            redaction_profile=redaction_profile,
+            reason=reason,
+        )
+
+    def export_approvals(
+        self,
+        *,
+        status: str | None = "pending",
+        actor: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_export_approvals(
+            status=status,
+            actor=actor,
+            scope=scope,
+            limit=limit,
+        )
+
+    def approve_export_approval(
+        self,
+        approval_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.approve_export_approval(
+            approval_id,
+            actor=actor,
+            reason=reason,
+        )
+
+    def reject_export_approval(
+        self,
+        approval_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.reject_export_approval(
+            approval_id,
+            actor=actor,
+            reason=reason,
         )
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
