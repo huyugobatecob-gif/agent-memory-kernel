@@ -64,6 +64,8 @@ class HermesMemoryProvider:
         mode: str = "chat",
         token_budget: int = 12000,
         requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
         limit: int = 8,
     ) -> dict[str, Any]:
         return self.store.before_model_call(
@@ -76,6 +78,8 @@ class HermesMemoryProvider:
             mode=mode,
             token_budget=token_budget,
             requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
             limit=limit,
         )
 

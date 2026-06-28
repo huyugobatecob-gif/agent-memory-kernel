@@ -433,6 +433,62 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(keeper_job_count, 1)
             store.close()
 
+    def test_before_model_call_enforces_scope_access_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "I prefer concise memory review updates.",
+                scope="personal",
+                auto_approve=True,
+            )
+            store.remember(
+                "Rule: professional project updates should cite provenance.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            denied = store.before_model_call(
+                "What is my memory review preference?",
+                scope="personal",
+                requested_lanes=["personal", "professional"],
+                allowed_scopes=["professional"],
+                user_id="user-1",
+                agent_id="agent-1",
+            )
+            denied_content = "\n".join(
+                message["content"] for message in denied["prompt_envelope"]["messages"]
+            )
+
+            self.assertFalse(denied["prompt_envelope"]["metadata"]["memory_allowed"])
+            self.assertEqual(denied["selected_branch_ids"], [])
+            self.assertEqual(denied["prompt_envelope"]["metadata"]["source_ids"], [])
+            self.assertIn("memory access denied for scope: personal", denied["warnings"])
+            self.assertTrue(
+                any(
+                    item["scope"] == "personal" and item["decision"] == "deny"
+                    for item in denied["access_decisions"]
+                )
+            )
+            self.assertNotIn("concise memory review updates", denied_content)
+
+            allowed = store.before_model_call(
+                "What is my memory review preference?",
+                scope="personal",
+                allowed_scopes=["personal"],
+                user_id="user-1",
+                agent_id="agent-1",
+            )
+            allowed_content = "\n".join(
+                message["content"] for message in allowed["prompt_envelope"]["messages"]
+            )
+
+            self.assertTrue(allowed["prompt_envelope"]["metadata"]["memory_allowed"])
+            self.assertTrue(allowed["selected_branch_ids"])
+            self.assertIn("concise memory review updates", allowed_content)
+            store.close()
+
     def test_executable_vertical_slice_seed_run_assert(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

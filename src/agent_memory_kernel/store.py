@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .extractors.rules import RuleBasedExtractor
-from .policy import admission_policy, normalize_confidence, normalize_scope
+from .policy import admission_policy, normalize_confidence, normalize_scope, resolve_scope_access
 
 
 def now_iso() -> str:
@@ -1463,6 +1463,8 @@ class MemoryStore:
         mode: str = "chat",
         token_budget: int = 12000,
         requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
         limit: int = 8,
         recent_messages: int = 6,
     ) -> dict[str, Any]:
@@ -1471,40 +1473,37 @@ class MemoryStore:
         if not query:
             raise ValueError("query must not be empty")
         scope = normalize_scope(scope)
-        lanes = [normalize_scope(lane) for lane in (requested_lanes or [scope])]
-        if scope not in lanes:
-            lanes.insert(0, scope)
-        warnings: list[str] = []
-        if len(set(lanes)) > 1:
-            warnings.append("multi-lane retrieval is represented as access decisions in v0")
+        memory_allowed, access_decisions, warnings = resolve_scope_access(
+            scope,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+        )
+        lanes = [item["scope"] for item in access_decisions]
 
-        tree = self.retrieve_tree(
-            query,
-            scope=scope,
-            limit=limit,
-            include_raw=True,
+        tree = (
+            self.retrieve_tree(
+                query,
+                scope=scope,
+                limit=limit,
+                include_raw=True,
+            )
+            if memory_allowed
+            else self._empty_tree_pack(query, scope)
         )
         selected_branch_ids = self._selected_branch_ids(tree)
         memory_context = self._memory_tree_supplement(tree)
-        context_pack = self.context_builder_pack(
-            query,
-            scope=scope,
-            thread_id=thread_id,
-            limit=limit,
-            recent_messages=recent_messages,
+        context_pack = (
+            self.context_builder_pack(
+                query,
+                scope=scope,
+                thread_id=thread_id,
+                limit=limit,
+                recent_messages=recent_messages,
+            )
+            if memory_allowed
+            else self._access_denied_context_pack(query, scope, warnings)
         )
-        access_decisions = [
-            {
-                "scope": lane,
-                "decision": "allow" if lane == scope else "not_requested_in_v0",
-                "reason": (
-                    "scope requested for this model call"
-                    if lane == scope
-                    else "v0 runtime uses one active scope per call"
-                ),
-            }
-            for lane in lanes
-        ]
         system = "\n".join(
             [
                 "Use the supplied memory as selected prior context, not as unquestioned truth.",
@@ -1536,6 +1535,9 @@ class MemoryStore:
                 "thread_id": thread_id,
                 "scope": scope,
                 "requested_lanes": lanes,
+                "memory_allowed": memory_allowed,
+                "allowed_scopes": allowed_scopes or [scope],
+                "denied_scopes": denied_scopes or [],
                 "selected_branch_ids": selected_branch_ids,
                 "source_ids": self._source_ids_from_tree(tree),
                 "token_estimate": self._rough_token_count(system + context_pack + memory_context + query),
@@ -1580,6 +1582,7 @@ class MemoryStore:
                 "thread_id": thread_id,
                 "scope": scope,
                 "selected_branch_ids": selected_branch_ids,
+                "access_decisions": access_decisions,
             },
         )
         self.conn.commit()
@@ -3445,6 +3448,26 @@ class MemoryStore:
         if assistant_text:
             parts.append(f"Assistant answered: {assistant_text}")
         return "\n".join(parts).strip()
+
+    @staticmethod
+    def _access_denied_context_pack(query: str, scope: str, warnings: list[str]) -> str:
+        lines = [
+            "## Agent Context Builder",
+            "",
+            "Memory access:",
+            f"- scope: {scope}",
+            "- decision: denied",
+        ]
+        for warning in warnings:
+            lines.append(f"- warning: {warning}")
+        lines.extend(
+            [
+                "",
+                "No memories, profile notes, summaries, graph branches, or prior messages were injected.",
+                f"Current request: {query}",
+            ]
+        )
+        return "\n".join(lines)
 
     @staticmethod
     def _without_memory_tree_supplement(context_pack: str) -> str:

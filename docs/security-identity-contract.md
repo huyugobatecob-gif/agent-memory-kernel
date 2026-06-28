@@ -47,6 +47,14 @@ Rules:
 - session memory expires or is summarized before becoming durable;
 - cross-tenant access is denied by default.
 
+Implemented local runtime behavior:
+
+- `before_model_call` accepts `allowed_scopes` and `denied_scopes`;
+- a denied active scope returns a no-memory prompt envelope;
+- denied scopes produce `access_decisions` and warnings;
+- the main model never receives profile notes, thread messages, graph branches,
+  source ids, or memory text for a denied active scope.
+
 ## Permissions
 
 Minimum permissions:

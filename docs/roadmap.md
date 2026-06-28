@@ -77,7 +77,8 @@ Router/envelope/Keeper candidate loop. The richer `slice seed/run/assert`
 fixture now checks corrected memory, deleted memory, professional/personal lane
 separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
 now has a local stdlib HTTP API service through `agent-memory serve`; hosted
-auth, MCP, and the remaining permission gates are still backlog.
+auth and MCP are still backlog. Runtime scope allow/deny enforcement is
+implemented for Router retrieval.
 Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters

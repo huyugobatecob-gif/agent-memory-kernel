@@ -129,6 +129,7 @@ Then call:
 ```bash
 agent-memory before-model-call "planning SEO content refresh loop" \
   --scope professional \
+  --allowed-scopes professional \
   --thread-id seo-demo \
   --agent-id writer \
   --model-id gpt-4.1-mini
@@ -136,6 +137,8 @@ agent-memory before-model-call "planning SEO content refresh loop" \
 
 The response includes `prompt_envelope`, `router_run_id`,
 `selected_branch_ids`, `access_decisions`, and warnings.
+If the active scope is not allowed, the Router returns a no-memory envelope and
+records a denied access decision.
 
 Lower-level context builder call:
 

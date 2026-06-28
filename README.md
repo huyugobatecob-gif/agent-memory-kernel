@@ -44,6 +44,7 @@ Included now:
 - Active memory search.
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
+- Scope access enforcement for runtime memory retrieval.
 - Local stdlib HTTP API service: `serve`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
@@ -294,6 +295,7 @@ Runtime hook shape:
 agent-memory before-model-call "Plan the next SEO loop" \
   --thread-id seo-demo \
   --scope professional \
+  --allowed-scopes professional \
   --agent-id writer \
   --model-id gpt-4.1-mini
 

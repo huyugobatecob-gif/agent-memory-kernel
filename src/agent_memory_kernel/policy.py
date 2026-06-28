@@ -39,6 +39,75 @@ def normalize_scope(scope: str) -> str:
     return scope if scope in ALLOWED_SCOPES else "professional"
 
 
+def normalize_scope_list(scopes: list[str] | tuple[str, ...] | set[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for scope in scopes or []:
+        item = normalize_scope(str(scope))
+        if item not in normalized:
+            normalized.append(item)
+    return normalized
+
+
+def resolve_scope_access(
+    scope: str,
+    *,
+    requested_lanes: list[str] | None = None,
+    allowed_scopes: list[str] | None = None,
+    denied_scopes: list[str] | None = None,
+) -> tuple[bool, list[dict[str, str]], list[str]]:
+    active_scope = normalize_scope(scope)
+    lanes = normalize_scope_list(requested_lanes or [active_scope])
+    if active_scope not in lanes:
+        lanes.insert(0, active_scope)
+    allowed = set(normalize_scope_list(allowed_scopes if allowed_scopes is not None else [active_scope]))
+    denied = set(normalize_scope_list(denied_scopes))
+    warnings: list[str] = []
+    decisions: list[dict[str, str]] = []
+
+    for lane in lanes:
+        if lane in denied:
+            decisions.append(
+                {
+                    "scope": lane,
+                    "decision": "deny",
+                    "reason": "scope explicitly denied",
+                }
+            )
+        elif lane not in allowed:
+            decisions.append(
+                {
+                    "scope": lane,
+                    "decision": "deny",
+                    "reason": "scope not in allowed_scopes",
+                }
+            )
+        elif lane == active_scope:
+            decisions.append(
+                {
+                    "scope": lane,
+                    "decision": "allow",
+                    "reason": "scope allowed for this model call",
+                }
+            )
+        else:
+            decisions.append(
+                {
+                    "scope": lane,
+                    "decision": "not_selected",
+                    "reason": "v0 runtime retrieves one active scope per call",
+                }
+            )
+
+    active_allowed = any(
+        item["scope"] == active_scope and item["decision"] == "allow" for item in decisions
+    )
+    if not active_allowed:
+        warnings.append(f"memory access denied for scope: {active_scope}")
+    if len(set(lanes)) > 1:
+        warnings.append("multi-lane request evaluated by scope access policy")
+    return active_allowed, decisions, warnings
+
+
 def normalize_confidence(confidence: str) -> str:
     confidence = (confidence or "medium").strip().lower()
     return confidence if confidence in ALLOWED_CONFIDENCE else "medium"
