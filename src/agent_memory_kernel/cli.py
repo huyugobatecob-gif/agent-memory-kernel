@@ -820,6 +820,7 @@ def cmd_export_profile(args: argparse.Namespace) -> int:
             actor=args.actor,
             redaction_profile=args.redaction_profile,
             approval_id=args.approval_id,
+            retention_days=args.retention_days,
         )
     )
     store.close()
@@ -836,6 +837,7 @@ def cmd_export_control(args: argparse.Namespace) -> int:
             project=args.project,
             redaction_profile=args.redaction_profile,
             approval_id=args.approval_id,
+            retention_days=args.retention_days,
         )
     )
     store.close()
@@ -898,6 +900,46 @@ def cmd_export_approval_reject(args: argparse.Namespace) -> int:
     print_json(
         store.reject_export_approval(
             args.approval_id,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_retention_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        {
+            "exports": store.list_export_records(
+                status=args.status,
+                actor=args.actor,
+                scope=args.scope,
+                expired_only=args.expired_only,
+                limit=args.limit,
+            )
+        }
+    )
+    store.close()
+    return 0
+
+
+def cmd_export_retention_enforce(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.enforce_export_retention(actor=args.actor))
+    store.close()
+    return 0
+
+
+def cmd_export_retention_purge(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.purge_export_record(
+            args.export_id,
             actor=args.actor,
             reason=args.reason,
         )
@@ -1160,6 +1202,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         actor=args.actor,
         redaction_profile=args.redaction_profile,
         approval_id=args.approval_id,
+        retention_days=args.retention_days,
     )
     store.close()
     print(f"exported markdown vault to {args.out}")
@@ -1673,6 +1716,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
     p.set_defaults(func=cmd_export_profile)
 
     p = sub.add_parser("export-control", help="Preview export policy and aggregate memory counts")
@@ -1682,6 +1726,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
     p.set_defaults(func=cmd_export_control)
 
     p = sub.add_parser("export-approval", help="Request or decide sensitive export approval")
@@ -1717,6 +1762,28 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--actor", default="reviewer")
     ap.add_argument("--reason", default="")
     ap.set_defaults(func=cmd_export_approval_reject)
+
+    p = sub.add_parser("export-retention", help="Inspect and enforce export retention ledger")
+    add_common_db(p)
+    retention_sub = p.add_subparsers(dest="export_retention_command", required=True)
+
+    rp = retention_sub.add_parser("list", help="List recorded exports")
+    rp.add_argument("--status", default="active", choices=["active", "expired", "purged", "all"])
+    rp.add_argument("--actor")
+    rp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--expired-only", action="store_true")
+    rp.add_argument("--limit", type=int, default=50)
+    rp.set_defaults(func=cmd_export_retention_list)
+
+    rp = retention_sub.add_parser("enforce", help="Mark export records expired after expires_at")
+    rp.add_argument("--actor", default="system")
+    rp.set_defaults(func=cmd_export_retention_enforce)
+
+    rp = retention_sub.add_parser("purge", help="Mark an export record purged after artifact cleanup")
+    rp.add_argument("export_id")
+    rp.add_argument("--actor", default="reviewer")
+    rp.add_argument("--reason", default="")
+    rp.set_defaults(func=cmd_export_retention_purge)
 
     p = sub.add_parser("import-profile", help="Import project profile JSON")
     add_common_db(p)
@@ -1884,6 +1951,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="user")
     p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
     p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
     p.set_defaults(func=cmd_export)
 
     return parser

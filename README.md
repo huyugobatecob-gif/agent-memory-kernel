@@ -97,6 +97,8 @@ Included now:
 - Export redaction profiles for JSON profile and Markdown vault exports:
   `full`, `safe`, and `metadata`.
 - Sensitive full-export approval requests for personal or secret active memory.
+- Export retention ledger with expiry, purge status, and Markdown export
+  manifests.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -405,7 +407,8 @@ agent-memory export-profile --db .memory/demo.db \
 
 agent-memory export --db .memory/demo.db \
   --out memory-vault \
-  --redaction-profile safe
+  --redaction-profile safe \
+  --retention-days 30
 
 agent-memory export-approval --db .memory/demo.db request \
   --actor writer \
@@ -421,6 +424,9 @@ agent-memory export-profile --db .memory/demo.db \
   --actor writer \
   --scope personal \
   --approval-id xapr_xxxxxxxxxxxxxxxx
+
+agent-memory export-retention --db .memory/demo.db list --status active
+agent-memory export-retention --db .memory/demo.db enforce --actor janitor
 ```
 
 Inspect derived-memory invalidation after corrections or lifecycle changes:
@@ -663,6 +669,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_export_control`, `memory_export_profile`,
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`,
+`memory_export_retention_list`, `memory_export_retention_enforce`,
+`memory_export_retention_purge`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,
 `memory_migration_status`, `memory_backup_database`,

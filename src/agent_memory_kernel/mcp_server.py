@@ -461,6 +461,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "project": _string("Optional project filter.", ""),
                 "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
                 "approval_id": _string("Optional approved sensitive export approval id.", ""),
+                "retention_days": _integer("Optional retention days for this export.", 0),
             }
         ),
     },
@@ -474,6 +475,8 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "project": _string("Optional project filter.", ""),
                 "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
                 "approval_id": _string("Optional approved sensitive export approval id.", ""),
+                "retention_days": _integer("Optional retention days for this export.", 0),
+                "artifact_ref": _string("Optional external artifact reference.", ""),
             }
         ),
     },
@@ -526,6 +529,40 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "reason": _string("Rejection reason.", ""),
             },
             ["approval_id"],
+        ),
+    },
+    "memory_export_retention_list": {
+        "endpoint": "/export/retention/list",
+        "description": "List recorded exports and retention status.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Status filter.", "active"),
+                "actor": _string("Optional exporting actor filter.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "expired_only": _boolean("Only active records past expires_at.", False),
+                "limit": _integer("Maximum records.", 50),
+            }
+        ),
+    },
+    "memory_export_retention_enforce": {
+        "endpoint": "/export/retention/enforce",
+        "description": "Mark active export records expired after expires_at.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Retention actor.", "system"),
+            }
+        ),
+    },
+    "memory_export_retention_purge": {
+        "endpoint": "/export/retention/purge",
+        "description": "Mark an export record purged after external artifact cleanup.",
+        "inputSchema": _schema(
+            {
+                "export_id": _string("Export record id."),
+                "actor": _string("Purging operator.", "reviewer"),
+                "reason": _string("Purge reason.", ""),
+            },
+            ["export_id"],
         ),
     },
     "memory_graph_nodes": {

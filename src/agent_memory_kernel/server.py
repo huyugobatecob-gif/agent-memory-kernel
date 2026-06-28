@@ -243,6 +243,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             project=str(payload.get("project", "")),
             redaction_profile=str(payload.get("redaction_profile", "full")),
             approval_id=str(payload.get("approval_id", "")),
+            retention_days=payload.get("retention_days"),
         )
     if path == "/export/approval/request":
         return store.request_export_approval(
@@ -276,6 +277,24 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "reviewer")),
             reason=str(payload.get("reason", "")),
         )
+    if path == "/export/retention/list":
+        return {
+            "exports": store.list_export_records(
+                status=payload.get("status"),
+                actor=payload.get("actor"),
+                scope=payload.get("scope"),
+                expired_only=bool(payload.get("expired_only", False)),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/export/retention/enforce":
+        return store.enforce_export_retention(actor=str(payload.get("actor", "system")))
+    if path == "/export/retention/purge":
+        return store.purge_export_record(
+            str(payload.get("export_id", "")),
+            actor=str(payload.get("actor", "reviewer")),
+            reason=str(payload.get("reason", "")),
+        )
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}
@@ -294,6 +313,8 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "user")),
             redaction_profile=str(payload.get("redaction_profile", "full")),
             approval_id=str(payload.get("approval_id", "")),
+            retention_days=payload.get("retention_days"),
+            artifact_ref=str(payload.get("artifact_ref", "")),
         )
     if path == "/review/inbox":
         return store.review_inbox(

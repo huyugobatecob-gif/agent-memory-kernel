@@ -760,6 +760,8 @@ class HermesMemoryProvider:
         actor: str = "hermes",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
     ) -> dict[str, Any]:
         return self.store.export_profile(
             scope=scope,
@@ -767,6 +769,8 @@ class HermesMemoryProvider:
             actor=actor,
             redaction_profile=redaction_profile,
             approval_id=approval_id,
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
         )
 
     def export_control_report(
@@ -776,6 +780,7 @@ class HermesMemoryProvider:
         project: str = "",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
     ) -> dict[str, Any]:
         return self.store.export_control_report(
             actor=actor,
@@ -783,6 +788,7 @@ class HermesMemoryProvider:
             project=project,
             redaction_profile=redaction_profile,
             approval_id=approval_id,
+            retention_days=retention_days,
         )
 
     def request_export_approval(
@@ -843,6 +849,39 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.reject_export_approval(
             approval_id,
+            actor=actor,
+            reason=reason,
+        )
+
+    def export_retention_records(
+        self,
+        *,
+        status: str | None = "active",
+        actor: str | None = None,
+        scope: str | None = None,
+        expired_only: bool = False,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_export_records(
+            status=status,
+            actor=actor,
+            scope=scope,
+            expired_only=expired_only,
+            limit=limit,
+        )
+
+    def enforce_export_retention(self, *, actor: str = "system") -> dict[str, Any]:
+        return self.store.enforce_export_retention(actor=actor)
+
+    def purge_export_record(
+        self,
+        export_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.purge_export_record(
+            export_id,
             actor=actor,
             reason=reason,
         )

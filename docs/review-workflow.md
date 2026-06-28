@@ -111,5 +111,5 @@ The current inbox is a stable data/API baseline. Future product layers can add:
 - graph browser with source previews;
 - browser-assisted batch approve/reject;
 - conflict warnings inline with candidates;
-- export controls and retention policy;
+- encrypted export controls;
 - reviewer assignment and notification queues.

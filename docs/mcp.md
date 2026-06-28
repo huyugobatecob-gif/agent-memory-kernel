@@ -95,6 +95,11 @@ Operator and graph tools:
 - `memory_export_approval_list`: list sensitive export approval requests.
 - `memory_export_approval_approve`: approve a pending sensitive export request.
 - `memory_export_approval_reject`: reject a pending sensitive export request.
+- `memory_export_retention_list`: list recorded exports and retention status.
+- `memory_export_retention_enforce`: mark export records expired after
+  `expires_at`.
+- `memory_export_retention_purge`: mark an export record purged after external
+  artifact cleanup.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
 

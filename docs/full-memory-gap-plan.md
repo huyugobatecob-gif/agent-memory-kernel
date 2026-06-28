@@ -232,6 +232,10 @@ Already present:
   export-approval`, `/export/approval/*`, Hermes export approval wrappers, and
   MCP `memory_export_approval_*`; full exports containing personal or secret
   active memory require an approved one-time request.
+- Baseline export retention ledger through `agent-memory export-retention`,
+  `/export/retention/*`, Hermes retention wrappers, MCP
+  `memory_export_retention_*`, and Markdown export manifests; real exports are
+  recorded with retention days, expiry, and purge status.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -279,9 +283,9 @@ Remaining for full memory:
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local
   capability/consent report for read/write/promote/inject/export/delete.
-- Broader inspection flows for export retention, batch correction, and web UI
-  review beyond the baseline Router explain, post-turn memory-change, and
-  review inbox/export-control endpoints.
+- Broader inspection flows for batch correction and web UI review beyond the
+  baseline Router explain, post-turn memory-change, review inbox/export-control,
+  and export retention endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
@@ -692,9 +696,9 @@ correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 approve/reject batches with dry-run and per-item results. Remaining work is a
 browser review UI, graph browser, batch correction, export controls, and reviewer
 notifications.
-Export-control, redaction-profile, and sensitive-export approval baselines are
-implemented, but retention policy, encrypted export, browser UI, and reviewer
-notifications remain production backlog.
+Export-control, redaction-profile, sensitive-export approval, and export
+retention baselines are implemented, but encrypted export, browser UI, and
+reviewer notifications remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

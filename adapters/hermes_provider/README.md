@@ -48,6 +48,8 @@ The adapter should:
 - expose `request_export_approval()`, `export_approvals()`,
   `approve_export_approval()`, and `reject_export_approval()` for one-time full
   exports that include personal or secret active memory;
+- expose `export_retention_records()`, `enforce_export_retention()`, and
+  `purge_export_record()` so Hermes can inspect and expire export artifacts;
 - expose `derived_invalidations()` so Hermes can audit stale derived surfaces
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
@@ -188,6 +190,9 @@ Export redaction profiles are explicit:
 Full exports that include personal or secret active memory require a one-time
 approval id. Use `request_export_approval()`, approve it through an operator
 role, then pass `approval_id` to `export_profile()`.
+Every export returns retention metadata. Use `export_retention_records()` to
+inspect active/expired/purged records and `enforce_export_retention()` from a
+maintenance worker.
 
 After review, preserve the expected behavior:
 

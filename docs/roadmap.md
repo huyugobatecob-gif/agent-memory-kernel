@@ -185,6 +185,10 @@ export-approval`, `/export/approval/*`, Hermes export approval wrappers, and MCP
 `memory_export_approval_*`. Full exports containing personal or secret active
 memory require an approved one-time request; safe/metadata exports remain the
 default structure-sharing path.
+Baseline export retention is implemented through `agent-memory
+export-retention`, `/export/retention/*`, Hermes retention wrappers, and MCP
+`memory_export_retention_*`. Real exports are recorded with retention days,
+expiry, purge status, and markdown manifests.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -253,7 +257,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- export retention policy and encrypted export.
+- encrypted export.
 
 ## v1.0: Stable Memory Contract
 

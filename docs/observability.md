@@ -35,4 +35,5 @@ The report returns:
 
 This is a baseline local report. Production deployments should still add
 supervisor metrics, wall-clock latency, provider billing reconciliation,
-retention policies, dashboards, and alerts.
+dashboards, alerts, and hosted retention policy enforcement beyond the local
+export retention ledger.

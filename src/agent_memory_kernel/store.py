@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import re
 import sqlite3
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -101,9 +101,15 @@ REVIEW_BATCH_VERSION = "review-batch-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
+EXPORT_RETENTION_VERSION = "export-retention-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
 EXPORT_APPROVAL_KINDS = {"profile", "markdown"}
+EXPORT_RETENTION_DEFAULT_DAYS = {
+    "full": 7,
+    "safe": 30,
+    "metadata": 90,
+}
 EXPORT_SAFE_REDACT_KEYS = {
     "blob",
     "aliases_json",
@@ -1623,6 +1629,7 @@ class MemoryStore:
             "router_runs",
             "graph_commands",
             "memory_export_approvals",
+            "memory_export_records",
         }
         try:
             rows = self.conn.execute(
@@ -1760,6 +1767,16 @@ class MemoryStore:
                 "redaction_profile",
                 "status",
                 "risk_flags_json",
+            ],
+            "memory_export_records": [
+                "export_id",
+                "actor",
+                "scope",
+                "export_kind",
+                "redaction_profile",
+                "retention_days",
+                "expires_at",
+                "status",
             ],
         }
         checks: list[dict[str, Any]] = []
@@ -3015,6 +3032,8 @@ class MemoryStore:
         actor: str = "user",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
     ) -> dict[str, Any]:
         scope = normalize_scope(scope) if scope else None
         redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
@@ -3055,6 +3074,17 @@ class MemoryStore:
             "optimization_runs": self.list_graph_optimization_runs(scope=scope, limit=500),
             "digital_brain": self.digital_brain_state(scope=scope),
         }
+        retention = self._record_export_record(
+            actor=actor,
+            scope=scope,
+            project=project,
+            export_kind="profile",
+            redaction_profile=redaction_profile,
+            approval_id=str(approval.get("approval_id", "")),
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
+            risk_flags=approval["sensitive_export"]["risk_flags"],
+        )
         return self._apply_export_redaction_profile(
             payload,
             redaction_profile=redaction_profile,
@@ -3062,6 +3092,7 @@ class MemoryStore:
             scope=scope,
             project=project,
             approval=approval,
+            retention=retention,
         )
 
     def export_control_report(
@@ -3072,6 +3103,7 @@ class MemoryStore:
         project: str = "",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
     ) -> dict[str, Any]:
         """Preview export scope, policy, and aggregate risk without exporting content."""
         scope = normalize_scope(scope) if scope else None
@@ -3127,6 +3159,10 @@ class MemoryStore:
             "project": project,
             "redaction_profile": redaction_profile,
             "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
+            "retention": self._export_retention_preview(
+                redaction_profile=redaction_profile,
+                retention_days=retention_days,
+            ),
             "allowed": allowed,
             "denied_scopes": denied_scopes,
             "recommended_action": recommended_action,
@@ -3268,6 +3304,125 @@ class MemoryStore:
             action="reject",
             status="rejected",
             reason=reason,
+        )
+
+    def list_export_records(
+        self,
+        *,
+        status: str | None = None,
+        actor: str | None = None,
+        scope: str | None = None,
+        expired_only: bool = False,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status and status != "all":
+            clauses.append("status = ?")
+            params.append(status.strip().lower())
+        if actor:
+            clauses.append("actor = ?")
+            params.append(actor.strip())
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        if expired_only:
+            clauses.append("status = 'active' AND expires_at <= ?")
+            params.append(now_iso())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT *
+            FROM memory_export_records
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [self._export_record_to_dict(row) for row in rows]
+
+    def enforce_export_retention(self, *, actor: str = "system") -> dict[str, Any]:
+        """Mark active export records expired once their retention window closes."""
+        ts = now_iso()
+        rows = self.conn.execute(
+            """
+            SELECT *
+            FROM memory_export_records
+            WHERE status = 'active'
+              AND expires_at <= ?
+            ORDER BY expires_at ASC
+            """,
+            (ts,),
+        ).fetchall()
+        expired: list[dict[str, Any]] = []
+        for row in rows:
+            self.conn.execute(
+                """
+                UPDATE memory_export_records
+                SET updated_at = ?, status = 'expired'
+                WHERE export_id = ?
+                """,
+                (ts, row["export_id"]),
+            )
+            self._audit(
+                "export_retention_expired",
+                "memory_export_record",
+                row["export_id"],
+                actor=actor,
+                details={"expires_at": row["expires_at"]},
+            )
+            expired.append(self._export_record_to_dict(row, status_override="expired", updated_at=ts))
+        self.conn.commit()
+        return {
+            "version": EXPORT_RETENTION_VERSION,
+            "status": "enforced",
+            "expired_count": len(expired),
+            "expired": expired,
+        }
+
+    def purge_export_record(
+        self,
+        export_id: str,
+        *,
+        actor: str = "reviewer",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Mark an export record purged after external artifact cleanup."""
+        row = self.conn.execute(
+            "SELECT * FROM memory_export_records WHERE export_id = ?",
+            ((export_id or "").strip(),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"export record not found: {export_id}")
+        if row["status"] == "purged":
+            return self._export_record_to_dict(row)
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_export_records
+            SET updated_at = ?, status = 'purged', purged_at = ?, purge_reason = ?
+            WHERE export_id = ?
+            """,
+            (ts, ts, reason, row["export_id"]),
+        )
+        self._audit(
+            "export_retention_purged",
+            "memory_export_record",
+            row["export_id"],
+            actor=actor,
+            details={
+                "reason": reason,
+                "artifact_ref": row["artifact_ref"],
+                "external_artifact_cleanup_required": bool(row["artifact_ref"]),
+            },
+        )
+        self.conn.commit()
+        return self._export_record_to_dict(
+            self.conn.execute(
+                "SELECT * FROM memory_export_records WHERE export_id = ?",
+                (row["export_id"],),
+            ).fetchone()
         )
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
@@ -5639,6 +5794,7 @@ class MemoryStore:
         actor: str = "user",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
     ) -> None:
         redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
         self._enforce_export_policy(actor, None)
@@ -5649,6 +5805,17 @@ class MemoryStore:
             export_kind="markdown",
             redaction_profile=redaction_profile,
             approval_id=approval_id,
+        )
+        retention = self._record_export_record(
+            actor=actor,
+            scope=None,
+            project="",
+            export_kind="markdown",
+            redaction_profile=redaction_profile,
+            approval_id=str(approval.get("approval_id", "")),
+            retention_days=retention_days,
+            artifact_ref=str(Path(out_dir)),
+            risk_flags=approval["sensitive_export"]["risk_flags"],
         )
         out_path = Path(out_dir)
         out_path.mkdir(parents=True, exist_ok=True)
@@ -5715,6 +5882,7 @@ class MemoryStore:
                             ["proposed_text"] if redaction_profile != "full" and review_items else [],
                         ),
                         "approval": approval,
+                        "retention": retention,
                     },
                     sort_keys=True,
                 )
@@ -5723,6 +5891,25 @@ class MemoryStore:
         )
         (out_path / "pending-review.md").write_text(
             "\n".join(pending_lines) + "\n", encoding="utf-8"
+        )
+        (out_path / ".agent-memory-export-manifest.json").write_text(
+            json.dumps(
+                {
+                    "version": EXPORT_RETENTION_VERSION,
+                    "export": retention,
+                    "approval": approval,
+                    "redaction": self._export_redaction_metadata(
+                        redaction_profile,
+                        0,
+                        [],
+                    ),
+                },
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
         )
 
     def _activate_candidate(self, candidate_id: str, *, actor: str = "user") -> str:
@@ -7165,6 +7352,153 @@ class MemoryStore:
             ),
         }
 
+    def _normalize_export_retention_days(
+        self,
+        *,
+        redaction_profile: str,
+        retention_days: int | None,
+    ) -> int:
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        if retention_days is None:
+            return EXPORT_RETENTION_DEFAULT_DAYS[redaction_profile]
+        days = int(retention_days)
+        if days < 0 or days > 3650:
+            raise ValueError("retention_days must be between 0 and 3650")
+        return days
+
+    @staticmethod
+    def _iso_plus_days(created_at: str, days: int) -> str:
+        base = datetime.fromisoformat(created_at)
+        if base.tzinfo is None:
+            base = base.replace(tzinfo=timezone.utc)
+        return (base + timedelta(days=days)).replace(microsecond=0).isoformat()
+
+    def _export_retention_preview(
+        self,
+        *,
+        redaction_profile: str,
+        retention_days: int | None,
+    ) -> dict[str, Any]:
+        created_at = now_iso()
+        days = self._normalize_export_retention_days(
+            redaction_profile=redaction_profile,
+            retention_days=retention_days,
+        )
+        return {
+            "version": EXPORT_RETENTION_VERSION,
+            "retention_days": days,
+            "expires_at_if_exported_now": self._iso_plus_days(created_at, days),
+            "default_days_by_profile": dict(EXPORT_RETENTION_DEFAULT_DAYS),
+            "policy": (
+                "Export artifacts should be deleted outside the kernel by expires_at; "
+                "the kernel records and expires export ledger entries."
+            ),
+        }
+
+    def _record_export_record(
+        self,
+        *,
+        actor: str,
+        scope: str | None,
+        project: str,
+        export_kind: str,
+        redaction_profile: str,
+        approval_id: str,
+        retention_days: int | None,
+        artifact_ref: str,
+        risk_flags: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        actor = (actor or "user").strip() or "user"
+        scope_value = scope or "all"
+        project = (project or "").strip()
+        export_kind = self._normalize_export_kind(export_kind)
+        redaction_profile = self._normalize_export_redaction_profile(redaction_profile)
+        days = self._normalize_export_retention_days(
+            redaction_profile=redaction_profile,
+            retention_days=retention_days,
+        )
+        ts = now_iso()
+        expires_at = self._iso_plus_days(ts, days)
+        export_id = new_id("xprt")
+        self.conn.execute(
+            """
+            INSERT INTO memory_export_records
+              (export_id, created_at, updated_at, actor, scope, project,
+               export_kind, redaction_profile, content_included, approval_id,
+               retention_days, expires_at, status, artifact_ref,
+               risk_flags_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '{}')
+            """,
+            (
+                export_id,
+                ts,
+                ts,
+                actor,
+                scope_value,
+                project,
+                export_kind,
+                redaction_profile,
+                1 if redaction_profile == "full" else 0,
+                approval_id,
+                days,
+                expires_at,
+                artifact_ref,
+                json.dumps(risk_flags, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "export_recorded",
+            "memory_export_record",
+            export_id,
+            actor=actor,
+            details={
+                "scope": scope_value,
+                "project": project,
+                "export_kind": export_kind,
+                "redaction_profile": redaction_profile,
+                "retention_days": days,
+                "expires_at": expires_at,
+                "artifact_ref": artifact_ref,
+            },
+        )
+        self.conn.commit()
+        return self._export_record_to_dict(
+            self.conn.execute(
+                "SELECT * FROM memory_export_records WHERE export_id = ?",
+                (export_id,),
+            ).fetchone()
+        )
+
+    def _export_record_to_dict(
+        self,
+        row: sqlite3.Row,
+        *,
+        status_override: str | None = None,
+        updated_at: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "version": EXPORT_RETENTION_VERSION,
+            "export_id": row["export_id"],
+            "created_at": row["created_at"],
+            "updated_at": updated_at or row["updated_at"],
+            "actor": row["actor"],
+            "scope": row["scope"],
+            "project": row["project"],
+            "export_kind": row["export_kind"],
+            "redaction_profile": row["redaction_profile"],
+            "content_included": bool(row["content_included"]),
+            "approval_id": row["approval_id"],
+            "retention_days": int(row["retention_days"]),
+            "expires_at": row["expires_at"],
+            "status": status_override or row["status"],
+            "artifact_ref": row["artifact_ref"],
+            "risk_flags": self._loads_json(row["risk_flags_json"], []),
+            "metadata": self._loads_json(row["metadata_json"], {}),
+            "purged_at": row["purged_at"] or "",
+            "purge_reason": row["purge_reason"],
+            "external_artifact_cleanup_required": bool(row["artifact_ref"]),
+        }
+
     def _export_scope_counts(self, scope: str, *, project: str = "") -> dict[str, Any]:
         def scalar(sql: str, params: tuple[Any, ...]) -> int:
             row = self.conn.execute(sql, params).fetchone()
@@ -7270,6 +7604,7 @@ class MemoryStore:
         scope: str | None,
         project: str,
         approval: dict[str, Any],
+        retention: dict[str, Any],
     ) -> dict[str, Any]:
         if redaction_profile == "full":
             return {
@@ -7280,6 +7615,7 @@ class MemoryStore:
                     "project": project,
                     "redaction": self._export_redaction_metadata(redaction_profile, 0, []),
                     "approval": approval,
+                    "retention": retention,
                 },
             }
         redacted_keys: set[str] = set()
@@ -7314,6 +7650,7 @@ class MemoryStore:
                     sorted(redacted_keys),
                 ),
                 "approval": approval,
+                "retention": retention,
             },
         }
 

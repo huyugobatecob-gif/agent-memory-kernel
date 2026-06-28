@@ -311,9 +311,18 @@ class ReviewInboxTests(unittest.TestCase):
                 actor="reviewer",
                 scope="professional",
                 redaction_profile="safe",
+                retention_days=30,
             )
             self.assertEqual(safe_export["export_metadata"]["redaction"]["profile"], "safe")
             self.assertNotIn("provider wrapper is corrected", str(safe_export))
+            retention_records = provider.export_retention_records(
+                status="active",
+                actor="reviewer",
+            )
+            self.assertEqual(
+                retention_records[0]["export_id"],
+                safe_export["export_metadata"]["retention"]["export_id"],
+            )
             deleted = provider.delete_memory(approved["memory_id"], actor="reviewer")
             self.assertEqual(deleted["status"], "deleted")
             provider.close()

@@ -36,6 +36,6 @@ Safety defaults:
 - restore validates the backup with SQLite `quick_check` before copying.
 
 This is a local recovery baseline, not a hosted backup product. Production
-deployments should add encrypted off-host backups, retention policies, restore
+deployments should add encrypted off-host backups, hosted retention policies, restore
 drills, migration changelogs, and alerting around failed backups or failed
 schema compatibility checks.

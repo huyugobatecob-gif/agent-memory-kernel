@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -416,6 +417,67 @@ class MemoryStoreTests(unittest.TestCase):
                 {"status": "used", "actor": "analyst"},
             )
             self.assertEqual(listed["approvals"][0]["approval_id"], approval_id)
+            store.close()
+
+    def test_export_retention_records_enforce_and_purge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            store.remember(
+                "Decision: retention-site exports need a ledger.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            control = store.export_control_report(
+                actor="analyst",
+                scope="professional",
+                retention_days=0,
+            )
+            self.assertEqual(control["retention"]["retention_days"], 0)
+            self.assertEqual(control["retention"]["version"], "export-retention-v0.1")
+
+            exported = store.export_profile(
+                actor="analyst",
+                scope="professional",
+                retention_days=0,
+                artifact_ref="memory://profile-export",
+            )
+            retention = exported["export_metadata"]["retention"]
+            export_id = retention["export_id"]
+            self.assertEqual(retention["status"], "active")
+            self.assertEqual(retention["retention_days"], 0)
+            self.assertEqual(retention["artifact_ref"], "memory://profile-export")
+
+            active_expired = store.list_export_records(expired_only=True)
+            self.assertEqual(active_expired[0]["export_id"], export_id)
+            enforced = store.enforce_export_retention(actor="janitor")
+            self.assertEqual(enforced["expired_count"], 1)
+            self.assertEqual(enforced["expired"][0]["export_id"], export_id)
+
+            purged = store.purge_export_record(
+                export_id,
+                actor="reviewer",
+                reason="external artifact deleted",
+            )
+            self.assertEqual(purged["status"], "purged")
+            self.assertTrue(purged["external_artifact_cleanup_required"])
+
+            api_records = handle_api_request(
+                store,
+                "/export/retention/list",
+                {"status": "purged", "actor": "analyst"},
+            )
+            self.assertEqual(api_records["exports"][0]["export_id"], export_id)
+
+            vault_dir = Path(tmp) / "vault"
+            store.export_markdown(vault_dir, redaction_profile="safe", retention_days=30)
+            manifest = json.loads(
+                (vault_dir / ".agent-memory-export-manifest.json").read_text()
+            )
+            self.assertEqual(manifest["version"], "export-retention-v0.1")
+            self.assertEqual(manifest["export"]["export_kind"], "markdown")
+            self.assertEqual(manifest["export"]["retention_days"], 30)
             store.close()
 
     def test_secret_like_content_is_quarantined(self) -> None:

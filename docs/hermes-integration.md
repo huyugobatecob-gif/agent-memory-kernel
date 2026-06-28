@@ -134,6 +134,7 @@ class HermesMemoryProvider:
         actor: str = "hermes",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
     ) -> dict:
         ...
 
@@ -144,6 +145,7 @@ class HermesMemoryProvider:
         project: str = "",
         redaction_profile: str = "full",
         approval_id: str = "",
+        retention_days: int | None = None,
     ) -> dict:
         ...
 
@@ -157,6 +159,15 @@ class HermesMemoryProvider:
         ...
 
     def reject_export_approval(self, approval_id: str, **kwargs) -> dict:
+        ...
+
+    def export_retention_records(self, **kwargs) -> list[dict]:
+        ...
+
+    def enforce_export_retention(self, **kwargs) -> dict:
+        ...
+
+    def purge_export_record(self, export_id: str, **kwargs) -> dict:
         ...
 
     def remember(self, text: str, scope: str = "professional", source_ref: str = "") -> dict:
@@ -230,7 +241,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_graph_edges`, `memory_export_control`, `memory_export_profile`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
-`memory_worker_run`.
+`memory_export_retention_list`, `memory_export_retention_enforce`,
+`memory_export_retention_purge`, and `memory_worker_run`.
 
 Useful endpoints:
 
@@ -281,6 +293,9 @@ Useful endpoints:
 - `POST /export/approval/list`
 - `POST /export/approval/approve`
 - `POST /export/approval/reject`
+- `POST /export/retention/list`
+- `POST /export/retention/enforce`
+- `POST /export/retention/purge`
 - `POST /search`
 - `POST /review/inbox`
 - `POST /review/batch`
@@ -674,6 +689,11 @@ For `full` exports that include personal or secret active memory, Hermes should
 call `export-approval request`, wait for operator approval, then pass
 `--approval-id` to `export-profile` or markdown export. Approvals are one-time:
 after a successful full export the approval status becomes `used`.
+Every real export creates a retention ledger record. `--retention-days`
+defaults by redaction profile, and markdown exports also write
+`.agent-memory-export-manifest.json`. Hermes should call
+`export-retention enforce` from maintenance to mark expired export records, then
+`export-retention purge` after external artifact cleanup.
 
 ## Loop Memory Extension
 
