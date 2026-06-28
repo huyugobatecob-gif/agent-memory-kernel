@@ -172,7 +172,9 @@ endpoints/tools.
 The stdlib HTTP service also exposes baseline browser operator pages at
 `/ui/review` and `/ui/graph` for local review and graph inspection. The review
 page supports individual and batch approve/reject, dry-run batch preview, and
-active-memory correction preview/apply through the lifecycle batch API.
+active-memory correction preview/apply through the lifecycle batch API. The
+graph page includes node type/focus links, source/target edge links, and source
+metadata for evidence previews.
 The baseline operator notification queue is implemented through `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 `memory_notifications_list` / `memory_notification_assign` /
@@ -284,7 +286,7 @@ Goal: make memory maintenance practical for non-technical users.
 
 Planned:
 
-- richer source preview and graph navigation;
+- deeper graph exploration views;
 - richer browser batch editing queues;
 - richer conflict-resolution UI over inline warnings;
 - push/email/web notification transports;

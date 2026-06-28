@@ -85,7 +85,7 @@ Included now:
   action handles.
 - Browser review UI at `/ui/review` with single and batch approve/reject,
   correction preview/apply for active memories, and graph browser UI at
-  `/ui/graph`.
+  `/ui/graph` with node/edge navigation and source metadata.
 - Batch review for approve/reject with dry-run and per-candidate results.
 - Batch lifecycle correction for active memories with dry-run and per-item
   results.

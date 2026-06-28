@@ -9,7 +9,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acceptance_fixture
 from .conformance import (
@@ -706,39 +706,44 @@ def _active_memory_html(memories: list[dict[str, Any]]) -> str:
 
 
 def _graph_node_html(node: dict[str, Any]) -> str:
-    previews = "".join(
-        f"<li>{_h(preview.get('quote', '') or preview.get('memory_text', ''))}</li>"
-        for preview in node.get("source_previews", [])
-    )
+    label = str(node.get("label", ""))
+    scope = str(node.get("scope", ""))
+    node_type = str(node.get("node_type", ""))
+    type_href = _ui_href("/ui/graph", scope=scope, node_type=node_type)
+    focus_href = _ui_href("/ui/graph", scope=scope, query=label)
     return f"""
     <article class="card">
       <header>
         <div>
-          <h2>{_h(node.get("label", ""))}</h2>
+          <h2>{_h(label)}</h2>
           <p class="muted"><code>{_h(node.get("graph_node_id", ""))}</code></p>
         </div>
         <div class="meta">
-          <span>{_h(node.get("node_type", ""))}</span>
-          <span>{_h(node.get("scope", ""))}</span>
+          <span>{_h(node_type)}</span>
+          <span>{_h(scope)}</span>
           <span>{_h(node.get("confidence", ""))}</span>
         </div>
       </header>
+      <div class="linkbar">
+        <a href="{_h(type_href)}">Type</a>
+        <a href="{_h(focus_href)}">Focus</a>
+      </div>
       <p class="text">{_h(node.get("summary", "") or node.get("blob", ""))}</p>
-      {_list_block("Sources", previews)}
+      {_graph_source_preview_html(node.get("source_previews", []))}
     </article>
     """
 
 
 def _graph_edge_html(edge: dict[str, Any]) -> str:
-    previews = "".join(
-        f"<li>{_h(preview.get('quote', '') or preview.get('memory_text', ''))}</li>"
-        for preview in edge.get("source_previews", [])
-    )
+    source_label = str(edge.get("source_label", ""))
+    target_label = str(edge.get("target_label", ""))
+    source_href = _ui_href("/ui/graph", query=source_label)
+    target_href = _ui_href("/ui/graph", query=target_label)
     return f"""
     <article class="card">
       <header>
         <div>
-          <h2>{_h(edge.get("source_label", ""))} -> {_h(edge.get("target_label", ""))}</h2>
+          <h2>{_h(source_label)} -> {_h(target_label)}</h2>
           <p class="muted"><code>{_h(edge.get("graph_edge_id", ""))}</code></p>
         </div>
         <div class="meta">
@@ -746,10 +751,42 @@ def _graph_edge_html(edge: dict[str, Any]) -> str:
           <span>weight {_h(edge.get("weight", ""))}</span>
         </div>
       </header>
+      <div class="linkbar">
+        <a href="{_h(source_href)}">Source</a>
+        <a href="{_h(target_href)}">Target</a>
+      </div>
       <p class="text">{_h(edge.get("label", ""))}</p>
-      {_list_block("Sources", previews)}
+      {_graph_source_preview_html(edge.get("source_previews", []))}
     </article>
     """
+
+
+def _graph_source_preview_html(previews: list[dict[str, Any]]) -> str:
+    if not previews:
+        return ""
+    items = []
+    for preview in previews:
+        source = " ".join(
+            part
+            for part in [
+                str(preview.get("source_type", "") or ""),
+                str(preview.get("source_ref", "") or ""),
+            ]
+            if part
+        )
+        items.append(
+            f"""
+            <li>
+              <p class="text">{_h(preview.get("quote", ""))}</p>
+              <p class="muted">
+                <code>{_h(preview.get("memory_id", ""))}</code>
+                <code>{_h(preview.get("event_id", ""))}</code>
+                {_h(source)}
+              </p>
+            </li>
+            """
+        )
+    return _list_block("Sources", "".join(items))
 
 
 def _flag_list(title: str, flags: list[dict[str, Any]]) -> str:
@@ -800,6 +837,16 @@ def _select(name: str, options: list[str], selected: str) -> str:
     return f"<select name=\"{_h(name)}\">{option_html}</select>"
 
 
+def _ui_href(path: str, **params: Any) -> str:
+    clean_params = {
+        key: str(value)
+        for key, value in params.items()
+        if value is not None and str(value).strip() and str(value) != "all"
+    }
+    query = urlencode(clean_params)
+    return f"{path}?{query}" if query else path
+
+
 def _html_shell(title: str, body: str, *, script: str = "") -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -840,6 +887,7 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
     nav strong {{ margin-right: auto; }}
     nav a {{ color: var(--ink); text-decoration: none; }}
     nav a:hover {{ color: var(--accent); }}
+    a {{ color: var(--accent); }}
     .page {{ max-width: 1280px; margin: 0 auto; padding: 24px; }}
     .toolbar {{
       display: grid;
@@ -877,6 +925,14 @@ def _html_shell(title: str, body: str, *, script: str = "") -> str:
     button:hover {{ background: var(--accent); border-color: var(--accent); }}
     button.danger {{ background: var(--danger); border-color: var(--danger); }}
     .summary, .meta, .actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .linkbar {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }}
+    .linkbar a {{
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      text-decoration: none;
+      background: #fff;
+    }}
     .pill, .meta span {{
       border: 1px solid var(--line);
       border-radius: 999px;

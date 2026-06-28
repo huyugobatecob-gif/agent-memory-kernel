@@ -332,7 +332,7 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Richer browser batch editing queues, richer graph navigation, and
+- Richer browser batch editing queues, deeper graph exploration views, and
   push/email/web notification transports beyond the baseline browser review
   and graph pages, machine-readable review inbox with inline conflict warnings,
   notification queue, approve/reject batch flow, and active-memory lifecycle

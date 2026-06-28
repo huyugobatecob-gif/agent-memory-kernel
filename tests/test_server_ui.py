@@ -78,13 +78,13 @@ class ServerUITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db", extractor=UIExtractor())
             store.init_db()
-            store.remember(
+            memory_id = store.remember(
                 "Decision: ui-site uses summary-first loop.",
                 scope="professional",
                 actor="seo-agent",
                 source_type="manual",
                 auto_approve=True,
-            )
+            )["candidates"][0]["memory_id"]
 
             html = render_graph_ui(store, scope="professional", query="ui-site", limit=10)
 
@@ -92,6 +92,9 @@ class ServerUITests(unittest.TestCase):
             self.assertIn("ui-site", html)
             self.assertIn("summary-first loop", html)
             self.assertIn("Sources", html)
+            self.assertIn(memory_id, html)
+            self.assertIn("/ui/graph?scope=professional&amp;node_type=project", html)
+            self.assertIn("/ui/graph?scope=professional&amp;query=ui-site", html)
             store.close()
 
 
