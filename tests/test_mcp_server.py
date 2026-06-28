@@ -47,6 +47,8 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_capability_check", names)
             self.assertIn("memory_export_control", names)
             self.assertIn("memory_export_profile", names)
+            self.assertIn("memory_export_encrypted_profile", names)
+            self.assertIn("memory_import_encrypted_profile", names)
             self.assertIn("memory_export_approval_request", names)
             self.assertIn("memory_export_approval_list", names)
             self.assertIn("memory_export_approval_approve", names)

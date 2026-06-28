@@ -1138,6 +1138,82 @@ class MemoryStoreTests(unittest.TestCase):
             imported.close()
             store.close()
 
+    def test_encrypted_profile_export_roundtrip_and_tamper_detection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            store.upsert_profile_note(
+                "Encrypted exports preserve this private profile note.",
+                scope="professional",
+                note_type="intro",
+                title="Encrypted intro",
+            )
+            envelope = store.export_encrypted_profile(
+                passphrase="correct horse battery staple",
+                scope="professional",
+                redaction_profile="full",
+                retention_days=30,
+                artifact_ref="memory://encrypted-profile",
+            )
+
+            envelope_text = json.dumps(envelope)
+            self.assertEqual(envelope["version"], "encrypted-export-v0.1")
+            self.assertNotIn("private profile note", envelope_text)
+            self.assertEqual(
+                envelope["header"]["metadata"]["redaction_profile"],
+                "full",
+            )
+
+            decrypted = store.decrypt_encrypted_export(
+                envelope,
+                passphrase="correct horse battery staple",
+            )
+            self.assertIn("private profile note", json.dumps(decrypted))
+            self.assertEqual(
+                decrypted["export_metadata"]["retention"]["artifact_ref"],
+                "memory://encrypted-profile",
+            )
+
+            tampered = json.loads(json.dumps(envelope))
+            tampered["header"]["metadata"]["scope"] = "personal"
+            with self.assertRaises(ValueError):
+                store.decrypt_encrypted_export(
+                    tampered,
+                    passphrase="correct horse battery staple",
+                )
+            with self.assertRaises(ValueError):
+                store.decrypt_encrypted_export(envelope, passphrase="wrong passphrase")
+
+            imported = MemoryStore(Path(tmp) / "imported.db")
+            imported.init_db()
+            counts = imported.import_encrypted_profile(
+                envelope,
+                passphrase="correct horse battery staple",
+            )
+            self.assertGreaterEqual(counts["profile_notes"], 1)
+            imported.close()
+
+            safe_envelope = store.export_encrypted_profile(
+                passphrase="correct horse battery staple",
+                scope="professional",
+                redaction_profile="safe",
+                retention_days=30,
+                artifact_ref="memory://encrypted-profile-safe",
+            )
+            safe_imported = MemoryStore(Path(tmp) / "safe-imported.db")
+            safe_imported.init_db()
+            safe_counts = safe_imported.import_encrypted_profile(
+                safe_envelope,
+                passphrase="correct horse battery staple",
+            )
+            self.assertGreaterEqual(safe_counts["skipped_redacted"], 1)
+            self.assertEqual(
+                safe_imported.list_profile_notes(scope="professional"),
+                [],
+            )
+            safe_imported.close()
+            store.close()
+
     def test_runtime_before_and_after_model_call_vertical_slice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

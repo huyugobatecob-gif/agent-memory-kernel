@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,17 @@ from .contract import assert_contract_shape, memory_contract
 from .orchestrator import MemoryOrchestrator
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
+
+
+def _payload_passphrase(payload: dict[str, Any]) -> str:
+    direct = str(payload.get("passphrase", "") or "")
+    if direct:
+        return direct
+    env_name = str(payload.get("passphrase_env", "") or "AGENT_MEMORY_EXPORT_PASSPHRASE")
+    value = os.environ.get(env_name, "")
+    if not value:
+        raise ValueError(f"passphrase not found in environment variable: {env_name}")
+    return value
 
 
 def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -315,6 +327,25 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             approval_id=str(payload.get("approval_id", "")),
             retention_days=payload.get("retention_days"),
             artifact_ref=str(payload.get("artifact_ref", "")),
+        )
+    if path == "/export/encrypted-profile":
+        return store.export_encrypted_profile(
+            passphrase=_payload_passphrase(payload),
+            scope=payload.get("scope"),
+            project=str(payload.get("project", "")),
+            actor=str(payload.get("actor", "user")),
+            redaction_profile=str(payload.get("redaction_profile", "full")),
+            approval_id=str(payload.get("approval_id", "")),
+            retention_days=payload.get("retention_days"),
+            artifact_ref=str(payload.get("artifact_ref", "")),
+        )
+    if path == "/import/encrypted-profile":
+        envelope = payload.get("envelope")
+        if not isinstance(envelope, dict):
+            raise ValueError("envelope must be provided as an object")
+        return store.import_encrypted_profile(
+            envelope,
+            passphrase=_payload_passphrase(payload),
         )
     if path == "/review/inbox":
         return store.review_inbox(

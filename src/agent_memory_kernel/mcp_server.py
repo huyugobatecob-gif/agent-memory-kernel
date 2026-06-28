@@ -480,6 +480,36 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_export_encrypted_profile": {
+        "endpoint": "/export/encrypted-profile",
+        "description": "Export an encrypted project profile envelope.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Exporting actor.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "project": _string("Optional project filter.", ""),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "full"),
+                "approval_id": _string("Optional approved sensitive export approval id.", ""),
+                "retention_days": _integer("Optional retention days for this export.", 0),
+                "artifact_ref": _string("Optional external artifact reference.", ""),
+                "passphrase_env": _string("Environment variable containing passphrase.", "AGENT_MEMORY_EXPORT_PASSPHRASE"),
+            }
+        ),
+    },
+    "memory_import_encrypted_profile": {
+        "endpoint": "/import/encrypted-profile",
+        "description": "Import an encrypted project profile envelope.",
+        "inputSchema": _schema(
+            {
+                "envelope": {
+                    "type": "object",
+                    "description": "Encrypted export envelope.",
+                },
+                "passphrase_env": _string("Environment variable containing passphrase.", "AGENT_MEMORY_EXPORT_PASSPHRASE"),
+            },
+            ["envelope"],
+        ),
+    },
     "memory_export_approval_request": {
         "endpoint": "/export/approval/request",
         "description": "Request one-time approval for a sensitive full export.",

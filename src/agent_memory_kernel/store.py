@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import json
 import re
+import secrets
 import sqlite3
+import struct
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -102,6 +106,7 @@ EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
 EXPORT_RETENTION_VERSION = "export-retention-v0.1"
+ENCRYPTED_EXPORT_VERSION = "encrypted-export-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
 EXPORT_APPROVAL_KINDS = {"profile", "markdown"}
@@ -110,6 +115,7 @@ EXPORT_RETENTION_DEFAULT_DAYS = {
     "safe": 30,
     "metadata": 90,
 }
+ENCRYPTED_EXPORT_KDF_ITERATIONS = 210_000
 EXPORT_SAFE_REDACT_KEYS = {
     "blob",
     "aliases_json",
@@ -3425,21 +3431,99 @@ class MemoryStore:
             ).fetchone()
         )
 
+    def export_encrypted_profile(
+        self,
+        *,
+        passphrase: str,
+        scope: str | None = None,
+        project: str = "",
+        actor: str = "user",
+        redaction_profile: str = "full",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+    ) -> dict[str, Any]:
+        """Return an encrypted project profile export envelope."""
+        if not passphrase:
+            raise ValueError("passphrase is required for encrypted export")
+        payload = self.export_profile(
+            scope=scope,
+            project=project,
+            actor=actor,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
+        )
+        metadata = {
+            "actor": actor,
+            "scope": payload.get("export_metadata", {}).get("scope", scope or "all"),
+            "project": project,
+            "redaction_profile": redaction_profile,
+            "content_included": payload.get("export_metadata", {})
+            .get("redaction", {})
+            .get("content_included", False),
+            "export_id": payload.get("export_metadata", {})
+            .get("retention", {})
+            .get("export_id", ""),
+            "expires_at": payload.get("export_metadata", {})
+            .get("retention", {})
+            .get("expires_at", ""),
+        }
+        return self._encrypt_export_payload(
+            payload,
+            passphrase=passphrase,
+            payload_type="agent-memory-profile-export",
+            metadata=metadata,
+        )
+
+    def decrypt_encrypted_export(
+        self,
+        envelope: dict[str, Any],
+        *,
+        passphrase: str,
+    ) -> dict[str, Any]:
+        """Decrypt and authenticate an encrypted export envelope."""
+        if not passphrase:
+            raise ValueError("passphrase is required for encrypted import")
+        return self._decrypt_export_payload(envelope, passphrase=passphrase)
+
+    def import_encrypted_profile(
+        self,
+        envelope: dict[str, Any],
+        *,
+        passphrase: str,
+    ) -> dict[str, int]:
+        payload = self.decrypt_encrypted_export(envelope, passphrase=passphrase)
+        return self.import_profile(payload)
+
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
         for note in payload.get("profile_notes", []):
+            if not isinstance(note, dict):
+                counts["skipped_redacted"] += 1
+                continue
+            content = str(note.get("content", ""))
+            if not content or self._is_redaction_marker(content):
+                counts["skipped_redacted"] += 1
+                continue
+            title = str(note.get("title", ""))
             self.upsert_profile_note(
-                str(note.get("content", "")),
+                content,
                 scope=str(note.get("scope", "professional")),
                 note_type=str(note.get("note_type", "rule")),
-                title=str(note.get("title", "")),
+                title="" if self._is_redaction_marker(title) else title,
             )
             counts["profile_notes"] += 1
 
         for profile in payload.get("project_profiles", []):
+            if not isinstance(profile, dict):
+                counts["skipped_redacted"] += 1
+                continue
+            project = str(profile.get("project", ""))
             self.upsert_project_profile(
                 scope=str(profile.get("scope", "professional")),
-                project=str(profile.get("project", "")),
+                project="" if self._is_redaction_marker(project) else project,
                 access=self._loads_json(profile.get("access_json"), {}),
                 env_snapshot=self._loads_json(profile.get("env_snapshot_json"), {}),
                 saved_model_choices=self._loads_json(profile.get("saved_model_choices_json"), {}),
@@ -3451,7 +3535,21 @@ class MemoryStore:
             counts["project_profiles"] += 1
 
         chat_history = payload.get("chat_history", {})
-        for turn in chat_history.get("turns", []):
+        if not isinstance(chat_history, dict):
+            chat_history = {}
+            counts["skipped_redacted"] += 1
+        turns = chat_history.get("turns", [])
+        if not isinstance(turns, list):
+            turns = []
+            counts["skipped_redacted"] += 1
+        for turn in turns:
+            if not isinstance(turn, dict):
+                counts["skipped_redacted"] += 1
+                continue
+            content = str(turn.get("content", ""))
+            if self._is_redaction_marker(content):
+                counts["skipped_redacted"] += 1
+                continue
             turn_id = str(turn.get("turn_id", "")) or new_id("turn")
             exists = self.conn.execute(
                 "SELECT turn_id FROM conversation_turns WHERE turn_id = ?",
@@ -3472,13 +3570,20 @@ class MemoryStore:
                     turn.get("role", "user"),
                     turn.get("actor", "user"),
                     normalize_scope(turn.get("scope", "professional")),
-                    turn.get("content", ""),
+                    content,
                     turn.get("metadata_json", "{}"),
                 ),
             )
             counts["conversation_turns"] += 1
 
-        for usage in payload.get("llm_usage_stats", []):
+        usage_rows = payload.get("llm_usage_stats", [])
+        if not isinstance(usage_rows, list):
+            usage_rows = []
+            counts["skipped_redacted"] += 1
+        for usage in usage_rows:
+            if not isinstance(usage, dict):
+                counts["skipped_redacted"] += 1
+                continue
             self.record_llm_usage(
                 provider=str(usage.get("provider", "")),
                 model=str(usage.get("model", "")),
@@ -7499,6 +7604,185 @@ class MemoryStore:
             "external_artifact_cleanup_required": bool(row["artifact_ref"]),
         }
 
+    @staticmethod
+    def _b64encode(value: bytes) -> str:
+        return base64.b64encode(value).decode("ascii")
+
+    @staticmethod
+    def _b64decode(value: str) -> bytes:
+        return base64.b64decode((value or "").encode("ascii"), validate=True)
+
+    @staticmethod
+    def _canonical_json_bytes(value: Any) -> bytes:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+    @staticmethod
+    def _derive_export_keys(
+        passphrase: str,
+        *,
+        salt: bytes,
+        iterations: int,
+    ) -> tuple[bytes, bytes]:
+        material = hashlib.pbkdf2_hmac(
+            "sha256",
+            passphrase.encode("utf-8"),
+            salt,
+            int(iterations),
+            dklen=64,
+        )
+        return material[:32], material[32:]
+
+    def _encrypt_export_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        passphrase: str,
+        payload_type: str,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        salt = secrets.token_bytes(16)
+        nonce = secrets.token_bytes(12)
+        enc_key, mac_key = self._derive_export_keys(
+            passphrase,
+            salt=salt,
+            iterations=ENCRYPTED_EXPORT_KDF_ITERATIONS,
+        )
+        plaintext = self._canonical_json_bytes(payload)
+        ciphertext = self._chacha20_xor(plaintext, key=enc_key, nonce=nonce)
+        header = {
+            "version": ENCRYPTED_EXPORT_VERSION,
+            "payload_type": payload_type,
+            "created_at": now_iso(),
+            "cipher": "chacha20-hmac-sha256",
+            "kdf": {
+                "name": "pbkdf2-hmac-sha256",
+                "iterations": ENCRYPTED_EXPORT_KDF_ITERATIONS,
+                "salt": self._b64encode(salt),
+            },
+            "metadata": metadata,
+        }
+        authenticated = (
+            self._canonical_json_bytes(header)
+            + nonce
+            + ciphertext
+        )
+        tag = hmac.new(mac_key, authenticated, hashlib.sha256).digest()
+        return {
+            "version": ENCRYPTED_EXPORT_VERSION,
+            "header": header,
+            "nonce": self._b64encode(nonce),
+            "ciphertext": self._b64encode(ciphertext),
+            "tag": self._b64encode(tag),
+        }
+
+    def _decrypt_export_payload(
+        self,
+        envelope: dict[str, Any],
+        *,
+        passphrase: str,
+    ) -> dict[str, Any]:
+        if envelope.get("version") != ENCRYPTED_EXPORT_VERSION:
+            raise ValueError("unsupported encrypted export version")
+        header = envelope.get("header")
+        if not isinstance(header, dict):
+            raise ValueError("encrypted export header is required")
+        if header.get("version") != ENCRYPTED_EXPORT_VERSION:
+            raise ValueError("encrypted export header version mismatch")
+        if header.get("cipher") != "chacha20-hmac-sha256":
+            raise ValueError("unsupported encrypted export cipher")
+        kdf = header.get("kdf") if isinstance(header.get("kdf"), dict) else {}
+        if kdf.get("name") != "pbkdf2-hmac-sha256":
+            raise ValueError("unsupported encrypted export kdf")
+        salt = self._b64decode(str(kdf.get("salt", "")))
+        nonce = self._b64decode(str(envelope.get("nonce", "")))
+        ciphertext = self._b64decode(str(envelope.get("ciphertext", "")))
+        tag = self._b64decode(str(envelope.get("tag", "")))
+        enc_key, mac_key = self._derive_export_keys(
+            passphrase,
+            salt=salt,
+            iterations=int(kdf.get("iterations", 0) or 0),
+        )
+        authenticated = (
+            self._canonical_json_bytes(header)
+            + nonce
+            + ciphertext
+        )
+        expected = hmac.new(mac_key, authenticated, hashlib.sha256).digest()
+        if not hmac.compare_digest(tag, expected):
+            raise ValueError("encrypted export authentication failed")
+        plaintext = self._chacha20_xor(ciphertext, key=enc_key, nonce=nonce)
+        payload = json.loads(plaintext.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("encrypted export payload must be a JSON object")
+        return payload
+
+    @staticmethod
+    def _rotate_left_32(value: int, count: int) -> int:
+        return ((value << count) & 0xFFFFFFFF) | (value >> (32 - count))
+
+    @classmethod
+    def _chacha20_quarter_round(
+        cls,
+        state: list[int],
+        a: int,
+        b: int,
+        c: int,
+        d: int,
+    ) -> None:
+        state[a] = (state[a] + state[b]) & 0xFFFFFFFF
+        state[d] ^= state[a]
+        state[d] = cls._rotate_left_32(state[d], 16)
+        state[c] = (state[c] + state[d]) & 0xFFFFFFFF
+        state[b] ^= state[c]
+        state[b] = cls._rotate_left_32(state[b], 12)
+        state[a] = (state[a] + state[b]) & 0xFFFFFFFF
+        state[d] ^= state[a]
+        state[d] = cls._rotate_left_32(state[d], 8)
+        state[c] = (state[c] + state[d]) & 0xFFFFFFFF
+        state[b] ^= state[c]
+        state[b] = cls._rotate_left_32(state[b], 7)
+
+    @classmethod
+    def _chacha20_block(cls, key: bytes, counter: int, nonce: bytes) -> bytes:
+        if len(key) != 32:
+            raise ValueError("chacha20 key must be 32 bytes")
+        if len(nonce) != 12:
+            raise ValueError("chacha20 nonce must be 12 bytes")
+        constants = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574]
+        key_words = list(struct.unpack("<8I", key))
+        nonce_words = list(struct.unpack("<3I", nonce))
+        state = constants + key_words + [counter & 0xFFFFFFFF] + nonce_words
+        working = state.copy()
+        for _ in range(10):
+            cls._chacha20_quarter_round(working, 0, 4, 8, 12)
+            cls._chacha20_quarter_round(working, 1, 5, 9, 13)
+            cls._chacha20_quarter_round(working, 2, 6, 10, 14)
+            cls._chacha20_quarter_round(working, 3, 7, 11, 15)
+            cls._chacha20_quarter_round(working, 0, 5, 10, 15)
+            cls._chacha20_quarter_round(working, 1, 6, 11, 12)
+            cls._chacha20_quarter_round(working, 2, 7, 8, 13)
+            cls._chacha20_quarter_round(working, 3, 4, 9, 14)
+        output = [(working[index] + state[index]) & 0xFFFFFFFF for index in range(16)]
+        return struct.pack("<16I", *output)
+
+    @classmethod
+    def _chacha20_xor(cls, data: bytes, *, key: bytes, nonce: bytes) -> bytes:
+        output = bytearray()
+        counter = 1
+        for offset in range(0, len(data), 64):
+            block = cls._chacha20_block(key, counter, nonce)
+            chunk = data[offset : offset + 64]
+            output.extend(value ^ block[index] for index, value in enumerate(chunk))
+            counter = (counter + 1) & 0xFFFFFFFF
+            if counter == 0:
+                raise ValueError("chacha20 counter exhausted")
+        return bytes(output)
+
     def _export_scope_counts(self, scope: str, *, project: str = "") -> dict[str, Any]:
         def scalar(sql: str, params: tuple[Any, ...]) -> int:
             row = self.conn.execute(sql, params).fetchone()
@@ -7659,9 +7943,13 @@ class MemoryStore:
         return f"[redacted:{profile}:{key}]"
 
     @staticmethod
+    def _is_redaction_marker(value: Any) -> bool:
+        return isinstance(value, str) and value.startswith("[redacted:")
+
+    @staticmethod
     def _count_redaction_markers(value: Any) -> int:
         if isinstance(value, str):
-            return 1 if value.startswith("[redacted:") else 0
+            return 1 if MemoryStore._is_redaction_marker(value) else 0
         if isinstance(value, dict):
             return sum(MemoryStore._count_redaction_markers(item) for item in value.values())
         if isinstance(value, list):

@@ -19,6 +19,7 @@ Status: implemented in this template.
 - Profile notes, project profile metadata, and profile export.
 - LLM usage stats.
 - Export control previews and export redaction profiles.
+- Encrypted profile export/import envelopes.
 - Graph groups, optimization runs, and Digital Brain calibration.
 - Guarded Digital Brain style append in prompt envelopes.
 - Context packs.
@@ -189,6 +190,13 @@ Baseline export retention is implemented through `agent-memory
 export-retention`, `/export/retention/*`, Hermes retention wrappers, and MCP
 `memory_export_retention_*`. Real exports are recorded with retention days,
 expiry, purge status, and markdown manifests.
+Baseline encrypted profile export is implemented through `agent-memory
+export-encrypted-profile`, `agent-memory import-encrypted-profile`,
+`/export/encrypted-profile`, `/import/encrypted-profile`, Hermes encrypted
+export wrappers, and MCP `memory_export_encrypted_profile` /
+`memory_import_encrypted_profile`. The local envelope is
+`encrypted-export-v0.1`; hosted key management and encrypted off-host backup
+recipes are still backlog.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -257,7 +265,7 @@ Planned:
 - richer source preview;
 - graph browser;
 - conflict warnings;
-- encrypted export.
+- hosted key-management and export custody controls.
 
 ## v1.0: Stable Memory Contract
 

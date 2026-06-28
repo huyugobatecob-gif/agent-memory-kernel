@@ -170,7 +170,9 @@ Local-first deployments can store SQLite plainly by default, but production and
 hosted modes should define:
 
 - encrypted database option;
-- encrypted export option;
+- local encrypted profile export envelopes are available through
+  `encrypted-export-v0.1`; hosted deployments still need managed key storage,
+  rotation, and export custody controls;
 - secret redaction before active memory;
 - one-time approval for full exports that include personal or secret active
   memory;

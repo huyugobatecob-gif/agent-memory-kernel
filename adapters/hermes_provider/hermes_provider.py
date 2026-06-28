@@ -773,6 +773,45 @@ class HermesMemoryProvider:
             artifact_ref=artifact_ref,
         )
 
+    def export_encrypted_profile(
+        self,
+        *,
+        passphrase: str,
+        scope: str | None = None,
+        project: str = "",
+        actor: str = "hermes",
+        redaction_profile: str = "full",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+    ) -> dict[str, Any]:
+        return self.store.export_encrypted_profile(
+            passphrase=passphrase,
+            scope=scope,
+            project=project,
+            actor=actor,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
+        )
+
+    def decrypt_encrypted_export(
+        self,
+        envelope: dict[str, Any],
+        *,
+        passphrase: str,
+    ) -> dict[str, Any]:
+        return self.store.decrypt_encrypted_export(envelope, passphrase=passphrase)
+
+    def import_encrypted_profile(
+        self,
+        envelope: dict[str, Any],
+        *,
+        passphrase: str,
+    ) -> dict[str, int]:
+        return self.store.import_encrypted_profile(envelope, passphrase=passphrase)
+
     def export_control_report(
         self,
         actor: str = "hermes",

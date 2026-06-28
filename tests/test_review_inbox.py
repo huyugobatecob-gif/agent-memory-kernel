@@ -323,6 +323,23 @@ class ReviewInboxTests(unittest.TestCase):
                 retention_records[0]["export_id"],
                 safe_export["export_metadata"]["retention"]["export_id"],
             )
+            encrypted = provider.export_encrypted_profile(
+                passphrase="provider export passphrase",
+                actor="reviewer",
+                scope="professional",
+                redaction_profile="safe",
+                retention_days=30,
+            )
+            self.assertEqual(encrypted["version"], "encrypted-export-v0.1")
+            self.assertNotIn("provider wrapper is corrected", str(encrypted))
+            decrypted = provider.decrypt_encrypted_export(
+                encrypted,
+                passphrase="provider export passphrase",
+            )
+            self.assertEqual(
+                decrypted["export_metadata"]["redaction"]["profile"],
+                "safe",
+            )
             deleted = provider.delete_memory(approved["memory_id"], actor="reviewer")
             self.assertEqual(deleted["status"], "deleted")
             provider.close()

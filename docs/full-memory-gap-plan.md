@@ -236,6 +236,13 @@ Already present:
   `/export/retention/*`, Hermes retention wrappers, MCP
   `memory_export_retention_*`, and Markdown export manifests; real exports are
   recorded with retention days, expiry, and purge status.
+- Baseline encrypted profile export through `agent-memory
+  export-encrypted-profile`, `agent-memory import-encrypted-profile`,
+  `/export/encrypted-profile`, `/import/encrypted-profile`, Hermes encrypted
+  export wrappers, and MCP `memory_export_encrypted_profile` /
+  `memory_import_encrypted_profile`; envelopes use `encrypted-export-v0.1`
+  with passphrase-derived keys, ChaCha20 stream encryption, and HMAC
+  authentication.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -694,11 +701,12 @@ review history, audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose
 correct/delete/distrust/expire lifecycle actions. `agent-memory review batch`,
 `/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch` provide
 approve/reject batches with dry-run and per-item results. Remaining work is a
-browser review UI, graph browser, batch correction, export controls, and reviewer
-notifications.
-Export-control, redaction-profile, sensitive-export approval, and export
-retention baselines are implemented, but encrypted export, browser UI, and
-reviewer notifications remain production backlog.
+browser review UI, graph browser, batch correction, hosted key-management
+controls, and reviewer notifications.
+Export-control, redaction-profile, sensitive-export approval, export retention,
+and encrypted profile export baselines are implemented, but browser UI, graph
+browser, reviewer notifications, and hosted key-management/off-host encryption
+remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

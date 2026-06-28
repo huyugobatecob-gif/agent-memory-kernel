@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,16 @@ def print_json(data: object) -> None:
 def parse_csv(value: str) -> list[str] | None:
     items = [item.strip() for item in (value or "").split(",") if item.strip()]
     return items or None
+
+
+def read_passphrase(args: argparse.Namespace) -> str:
+    if getattr(args, "passphrase_file", ""):
+        return Path(args.passphrase_file).read_text(encoding="utf-8").strip()
+    env_name = getattr(args, "passphrase_env", "") or "AGENT_MEMORY_EXPORT_PASSPHRASE"
+    value = os.environ.get(env_name, "")
+    if not value:
+        raise ValueError(f"passphrase not found in environment variable: {env_name}")
+    return value
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -948,6 +959,44 @@ def cmd_export_retention_purge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_encrypted_profile(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    envelope = store.export_encrypted_profile(
+        passphrase=read_passphrase(args),
+        scope=args.scope,
+        project=args.project,
+        actor=args.actor,
+        redaction_profile=args.redaction_profile,
+        approval_id=args.approval_id,
+        retention_days=args.retention_days,
+        artifact_ref=args.out,
+    )
+    store.close()
+    Path(args.out).write_text(
+        json.dumps(envelope, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print_json(
+        {
+            "status": "encrypted_export_written",
+            "out": args.out,
+            "version": envelope["version"],
+            "metadata": envelope["header"].get("metadata", {}),
+        }
+    )
+    return 0
+
+
+def cmd_import_encrypted_profile(args: argparse.Namespace) -> int:
+    envelope = json.loads(Path(args.path).read_text(encoding="utf-8"))
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.import_encrypted_profile(envelope, passphrase=read_passphrase(args)))
+    store.close()
+    return 0
+
+
 def cmd_import_profile(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1785,10 +1834,30 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--reason", default="")
     rp.set_defaults(func=cmd_export_retention_purge)
 
+    p = sub.add_parser("export-encrypted-profile", help="Write an encrypted project profile export")
+    add_common_db(p)
+    p.add_argument("--out", required=True)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
+    p.add_argument("--passphrase-env", default="AGENT_MEMORY_EXPORT_PASSPHRASE")
+    p.add_argument("--passphrase-file", default="")
+    p.set_defaults(func=cmd_export_encrypted_profile)
+
     p = sub.add_parser("import-profile", help="Import project profile JSON")
     add_common_db(p)
     p.add_argument("path")
     p.set_defaults(func=cmd_import_profile)
+
+    p = sub.add_parser("import-encrypted-profile", help="Import an encrypted project profile export")
+    add_common_db(p)
+    p.add_argument("path")
+    p.add_argument("--passphrase-env", default="AGENT_MEMORY_EXPORT_PASSPHRASE")
+    p.add_argument("--passphrase-file", default="")
+    p.set_defaults(func=cmd_import_encrypted_profile)
 
     p = sub.add_parser("correct", help="Correct active memory text")
     add_common_db(p)

@@ -138,6 +138,15 @@ class HermesMemoryProvider:
     ) -> dict:
         ...
 
+    def export_encrypted_profile(self, **kwargs) -> dict:
+        ...
+
+    def decrypt_encrypted_export(self, envelope: dict, **kwargs) -> dict:
+        ...
+
+    def import_encrypted_profile(self, envelope: dict, **kwargs) -> dict:
+        ...
+
     def export_control_report(
         self,
         actor: str = "hermes",
@@ -238,7 +247,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_derived_invalidations`, `memory_operational_status`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, `memory_export_control`, `memory_export_profile`, and
+`memory_graph_edges`, `memory_export_control`, `memory_export_profile`,
+`memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`, and
 `memory_export_retention_list`, `memory_export_retention_enforce`,
@@ -289,6 +299,8 @@ Useful endpoints:
 - `POST /capability/check`
 - `POST /export/control`
 - `POST /export/profile`
+- `POST /export/encrypted-profile`
+- `POST /import/encrypted-profile`
 - `POST /export/approval/request`
 - `POST /export/approval/list`
 - `POST /export/approval/approve`
@@ -677,6 +689,8 @@ Workspace profile export:
 ```bash
 agent-memory export-control --scope professional --project demo-site --actor writer --redaction-profile safe
 agent-memory export-profile --scope professional --project demo-site --redaction-profile safe
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --scope professional --project demo-site --redaction-profile safe --out exported-profile.encrypted.json
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile exported-profile.encrypted.json --db .memory/restored.db
 agent-memory import-profile exported-profile.json --db .memory/restored.db
 ```
 
@@ -694,6 +708,11 @@ defaults by redaction profile, and markdown exports also write
 `.agent-memory-export-manifest.json`. Hermes should call
 `export-retention enforce` from maintenance to mark expired export records, then
 `export-retention purge` after external artifact cleanup.
+Encrypted profile export returns an authenticated `encrypted-export-v0.1`
+envelope and hides the plaintext profile payload from the artifact. CLI use can
+read the passphrase from `AGENT_MEMORY_EXPORT_PASSPHRASE` or
+`--passphrase-file`; MCP should normally reference a passphrase environment
+variable instead of sending the passphrase through the tool payload.
 
 ## Loop Memory Extension
 

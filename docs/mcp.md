@@ -90,6 +90,12 @@ Operator and graph tools:
 - `memory_export_profile`: export the profile, memory tree, graph, evidence,
   outcomes, and related metadata. Accepts `redaction_profile` (`full`, `safe`,
   or `metadata`) to preserve structure while redacting content-bearing fields.
+- `memory_export_encrypted_profile`: export the governed profile payload as an
+  authenticated `encrypted-export-v0.1` envelope using a passphrase from a
+  configured environment variable.
+- `memory_import_encrypted_profile`: import an authenticated encrypted profile
+  envelope after decrypting it with the configured passphrase environment
+  variable.
 - `memory_export_approval_request`: request one-time approval for a sensitive
   full export.
 - `memory_export_approval_list`: list sensitive export approval requests.

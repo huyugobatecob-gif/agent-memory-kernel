@@ -45,6 +45,8 @@ The adapter should:
   aggregate scope counts, and risk flags before memory leaves the store;
 - expose `export_profile(..., redaction_profile="safe")` when Hermes needs to
   share memory structure without exporting content-bearing fields;
+- expose `export_encrypted_profile()`, `decrypt_encrypted_export()`, and
+  `import_encrypted_profile()` for portable encrypted profile handoff;
 - expose `request_export_approval()`, `export_approvals()`,
   `approve_export_approval()`, and `reject_export_approval()` for one-time full
   exports that include personal or secret active memory;
@@ -177,6 +179,12 @@ provider.export_control_report(
     redaction_profile="safe",
 )
 provider.export_profile(scope="professional", redaction_profile="safe")
+encrypted = provider.export_encrypted_profile(
+    passphrase="change-me",
+    scope="professional",
+    redaction_profile="safe",
+)
+restored = provider.decrypt_encrypted_export(encrypted, passphrase="change-me")
 ```
 
 Export redaction profiles are explicit:
@@ -193,6 +201,9 @@ role, then pass `approval_id` to `export_profile()`.
 Every export returns retention metadata. Use `export_retention_records()` to
 inspect active/expired/purged records and `enforce_export_retention()` from a
 maintenance worker.
+Encrypted profile export wraps the governed profile payload in an authenticated
+`encrypted-export-v0.1` envelope, preserving retention metadata without leaving
+the plaintext memory payload in the artifact.
 
 After review, preserve the expected behavior:
 

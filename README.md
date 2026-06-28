@@ -99,6 +99,8 @@ Included now:
 - Sensitive full-export approval requests for personal or secret active memory.
 - Export retention ledger with expiry, purge status, and Markdown export
   manifests.
+- Encrypted profile export/import envelopes with passphrase-derived keys:
+  `encrypted-export-v0.1`.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -334,6 +336,8 @@ agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory export-control --db .memory/demo.db --scope professional --actor writer --redaction-profile safe
 agent-memory export-profile --db .memory/demo.db --scope professional --redaction-profile safe
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --db .memory/demo.db --out exported-profile.encrypted.json --scope professional --redaction-profile safe
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile --db .memory/restored.db exported-profile.encrypted.json
 agent-memory import-profile --db .memory/restored.db exported-profile.json
 ```
 
@@ -425,9 +429,23 @@ agent-memory export-profile --db .memory/demo.db \
   --scope personal \
   --approval-id xapr_xxxxxxxxxxxxxxxx
 
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile \
+  --db .memory/demo.db \
+  --out exported-profile.encrypted.json \
+  --scope professional \
+  --redaction-profile safe
+
+AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile \
+  --db .memory/restored.db \
+  exported-profile.encrypted.json
+
 agent-memory export-retention --db .memory/demo.db list --status active
 agent-memory export-retention --db .memory/demo.db enforce --actor janitor
 ```
+
+Encrypted profile exports wrap the same governed/redacted profile payload in an
+authenticated `encrypted-export-v0.1` envelope. CLI commands can read the
+passphrase from `AGENT_MEMORY_EXPORT_PASSPHRASE` or `--passphrase-file`.
 
 Inspect derived-memory invalidation after corrections or lifecycle changes:
 
@@ -667,6 +685,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_correct`, `memory_delete`, `memory_distrust`, `memory_expire`,
 `memory_export_control`, `memory_export_profile`,
+`memory_export_encrypted_profile`, `memory_import_encrypted_profile`,
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`,
 `memory_export_retention_list`, `memory_export_retention_enforce`,
