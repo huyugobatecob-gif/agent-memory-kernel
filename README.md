@@ -235,6 +235,23 @@ agent-memory router-runs --db .memory/demo.db --thread-id seo-demo
 agent-memory router-explain --db .memory/demo.db router_xxxxxxxxxxxxxxxx
 ```
 
+Inspect what changed after a saved turn:
+
+```bash
+agent-memory after-saved-turn --db .memory/demo.db \
+  --thread-id seo-demo \
+  --scope professional \
+  --user-text "Plan the next SEO loop." \
+  --assistant-text "Reuse the prior successful refresh pattern."
+
+agent-memory memory-changes --db .memory/demo.db --keeper-job-id kjob_xxxxxxxxxxxxxxxx
+agent-memory memory-changes --db .memory/demo.db --thread-id seo-demo
+```
+
+`memory-changes` explains the saved turns, Keeper event, candidate memories,
+promoted active memories, affected graph/context surfaces, review or lifecycle
+handles, and audit trail for a post-turn memory update.
+
 Record whether selected memory helped and inspect quality signals:
 
 ```bash

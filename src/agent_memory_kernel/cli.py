@@ -301,6 +301,21 @@ def cmd_current_best(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_memory_changes(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.memory_changes(
+            keeper_job_id=args.keeper_job_id,
+            thread_id=args.thread_id,
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_after_saved_turn(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1109,6 +1124,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--limit", type=int, default=8)
     p.set_defaults(func=cmd_current_best)
+
+    p = sub.add_parser("memory-changes", help="Inspect Keeper changes after saved turns")
+    add_common_db(p)
+    p.add_argument("--keeper-job-id", default="", help="Show one Keeper job change report")
+    p.add_argument("--thread-id", default="", help="List recent Keeper changes for a thread")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_memory_changes)
 
     p = sub.add_parser("after-saved-turn", help="Run the conservative Keeper path after an exchange")
     add_common_db(p)

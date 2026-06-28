@@ -75,6 +75,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             scope=payload.get("scope"),
             limit=int(payload.get("limit", 8) or 8),
         )
+    if path == "/memory-changes":
+        return store.memory_changes(
+            keeper_job_id=str(payload.get("keeper_job_id", "")),
+            thread_id=payload.get("thread_id"),
+            scope=payload.get("scope"),
+            limit=int(payload.get("limit", 20) or 20),
+        )
     if path == "/after-saved-turn":
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":

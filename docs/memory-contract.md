@@ -148,10 +148,15 @@ The harness checks:
 - Keeper writes stay reviewable;
 - write policy blocks unauthorized approval.
 
+The public conformance suite additionally checks that post-turn Keeper changes
+are inspectable by Keeper job id and thread: saved turns, event, candidates,
+affected surfaces, and audit trail must be visible to adapters.
+
 The machine-readable contract also names the completion gates for governed
-read-time policy, derived-memory invalidation, capability and consent, and
-operational failure behavior. These gates are part of the full-memory bar even
-when the deterministic local fixture only checks a smaller starter scenario.
+read-time policy, inspection and operator control, derived-memory invalidation,
+capability and consent, and operational failure behavior. These gates are part
+of the full-memory bar even when the deterministic local fixture only checks a
+smaller starter scenario.
 
 This harness does not replace production evals. It is the first hard gate that
 prevents the project from drifting back into "tables plus CLI" without proving

@@ -61,6 +61,10 @@ Must-have before claiming full memory:
 6. **Inspection and explainability.** Provide CLI/HTTP flows for "what do you
    remember?", "why was this injected?", "what changed after the last turn?",
    source provenance, undo, distrust, and export.
+   Baseline implemented for post-turn changes through `agent-memory
+   memory-changes` and `/memory-changes`: a Keeper job can be inspected with
+   saved turns, event, candidates, promoted memories, affected graph/context
+   surfaces, operator handles, and audit trail.
 7. **Reference orchestration loop.** Provide one runnable Hermes-style demo
    where memory is saved, extracted, retrieved, injected, corrected, deleted,
    and then absent from the next prompt.
@@ -173,6 +177,9 @@ Already present:
   `router_runs`, `/router-explain`, and `agent-memory router-explain`.
 - Baseline Router usefulness feedback through `router_feedback`,
   `/router-feedback/record`, `/memory-quality`, and `agent-memory memory-quality`.
+- Baseline post-turn change inspection through `agent-memory memory-changes`
+  and `/memory-changes`, including saved turns, Keeper event, candidates,
+  promoted memories, affected surfaces, handles, and audit trail.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -209,8 +216,8 @@ Remaining for full memory:
   equal-trust claims beyond explicit resolved conflicts.
 - A capability and consent model for read/write/promote/inject/export/delete
   actions under multi-agent orchestration.
-- Broader inspection flows for post-turn changes, undo, distrust, and export
-  beyond the baseline Router explain endpoints.
+- Broader inspection flows for undo, distrust, export, and UI review beyond
+  the baseline Router explain and post-turn memory-change endpoints.
 - A runnable reference loop proving Router -> prompt envelope -> main agent ->
   Keeper -> graph update across correction, deletion, and outcome recall.
 - Graph consolidation/compaction behavior beyond the baseline idempotent

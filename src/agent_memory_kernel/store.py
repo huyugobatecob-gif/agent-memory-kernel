@@ -3104,6 +3104,70 @@ class MemoryStore:
             "conflicts": conflicts,
         }
 
+    def memory_changes(
+        self,
+        *,
+        keeper_job_id: str = "",
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Explain post-turn memory mutations from Keeper jobs.
+
+        A detailed report answers: what turn was saved, which event/candidate
+        was produced, whether anything became active memory, and which audit
+        entries prove the transition. List mode gives recent Keeper-job
+        summaries for a thread/scope.
+        """
+        keeper_job_id = (keeper_job_id or "").strip()
+        scope = normalize_scope(scope) if scope else None
+        if keeper_job_id:
+            row = self.conn.execute(
+                """
+                SELECT keeper_job_id, created_at, thread_id, scope, user_id,
+                       agent_id, model_id, turn_ids_json, event_id,
+                       candidate_ids_json, status, warnings_json,
+                       idempotency_key, metadata_json
+                FROM keeper_jobs
+                WHERE keeper_job_id = ?
+                """,
+                (keeper_job_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"keeper job not found: {keeper_job_id}")
+            return self._memory_change_detail(row)
+
+        clauses = []
+        params: list[Any] = []
+        if thread_id:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"""
+            SELECT keeper_job_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, turn_ids_json, event_id,
+                   candidate_ids_json, status, warnings_json,
+                   idempotency_key, metadata_json
+            FROM keeper_jobs
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 20), 200))),
+        ).fetchall()
+        changes = [self._memory_change_summary(row) for row in rows]
+        return {
+            "mode": "list",
+            "thread_id": thread_id or "",
+            "scope": scope or "all",
+            "count": len(changes),
+            "changes": changes,
+        }
+
     def list_shadow_traces(
         self,
         *,
@@ -5291,6 +5355,360 @@ class MemoryStore:
             "scope": row["scope"],
             "query": row["query"],
         }
+
+    def _memory_change_summary(self, row: sqlite3.Row) -> dict[str, Any]:
+        job = self._keeper_job_dict(row)
+        candidate_ids = list(job["candidate_ids"])
+        memories = self._memories_for_candidate_ids(candidate_ids)
+        status_counts: dict[str, int] = {}
+        if candidate_ids:
+            placeholders = ",".join("?" for _ in candidate_ids)
+            rows = self.conn.execute(
+                f"""
+                SELECT status, COUNT(*) AS count
+                FROM candidate_memories
+                WHERE candidate_id IN ({placeholders})
+                GROUP BY status
+                """,
+                candidate_ids,
+            ).fetchall()
+            status_counts = {str(item["status"]): int(item["count"] or 0) for item in rows}
+        return {
+            "keeper_job_id": job["keeper_job_id"],
+            "created_at": job["created_at"],
+            "thread_id": job["thread_id"],
+            "scope": job["scope"],
+            "agent_id": job["agent_id"],
+            "model_id": job["model_id"],
+            "status": job["status"],
+            "turn_ids": job["turn_ids"],
+            "event_id": job["event_id"],
+            "candidate_ids": candidate_ids,
+            "candidate_status_counts": status_counts,
+            "promoted_memory_ids": [item["memory_id"] for item in memories],
+            "warnings": job["warnings"],
+            "idempotency_key": job["idempotency_key"],
+        }
+
+    def _memory_change_detail(self, row: sqlite3.Row) -> dict[str, Any]:
+        job = self._keeper_job_dict(row)
+        turn_ids = list(job["turn_ids"])
+        candidate_ids = list(job["candidate_ids"])
+        turns = self._turn_details(turn_ids)
+        event = self._event_detail(job["event_id"])
+        candidates = self._candidate_details(candidate_ids)
+        memories = self._memories_for_candidate_ids(candidate_ids)
+        memory_ids = [item["memory_id"] for item in memories]
+        audit_targets = [
+            job["keeper_job_id"],
+            job["event_id"],
+            *candidate_ids,
+            *memory_ids,
+        ]
+        affected = self._memory_change_affected_surfaces(
+            candidate_ids=candidate_ids,
+            memory_ids=memory_ids,
+        )
+        policy_decisions = [
+            {
+                "candidate_id": item["candidate_id"],
+                "status": item["status"],
+                "reason": item["reason"],
+                "source_trust": item["source_trust"],
+                "sensitivity": item["sensitivity"],
+                "confidence": item["confidence"],
+            }
+            for item in candidates
+        ]
+        return {
+            "mode": "detail",
+            "keeper_job": job,
+            "saved_turns": turns,
+            "missing_turn_ids": [item for item in turn_ids if item not in {turn["turn_id"] for turn in turns}],
+            "event": event,
+            "candidates": candidates,
+            "promoted_memories": memories,
+            "policy_decisions": policy_decisions,
+            "affected": affected,
+            "audit_trail": self._audit_entries_for_targets(audit_targets),
+            "operator_handles": {
+                "review": [
+                    {
+                        "candidate_id": item["candidate_id"],
+                        "approve_command": f"agent-memory review approve {item['candidate_id']}",
+                        "reject_command": f"agent-memory review reject {item['candidate_id']}",
+                    }
+                    for item in candidates
+                    if item["status"] == "pending"
+                ],
+                "lifecycle": [
+                    {
+                        "memory_id": item["memory_id"],
+                        "revisions_command": f"agent-memory revisions {item['memory_id']}",
+                        "delete_command": f"agent-memory delete {item['memory_id']}",
+                        "distrust_command": f"agent-memory distrust {item['memory_id']}",
+                        "expire_command": f"agent-memory expire {item['memory_id']}",
+                    }
+                    for item in memories
+                ],
+            },
+            "summary": {
+                "turn_count": len(turns),
+                "candidate_count": len(candidates),
+                "promoted_memory_count": len(memories),
+                "audit_count": len(self._audit_entries_for_targets(audit_targets)),
+                "status": job["status"],
+                "warnings": job["warnings"],
+            },
+        }
+
+    def _keeper_job_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "keeper_job_id": row["keeper_job_id"],
+            "created_at": row["created_at"],
+            "thread_id": row["thread_id"],
+            "scope": row["scope"],
+            "user_id": row["user_id"],
+            "agent_id": row["agent_id"],
+            "model_id": row["model_id"],
+            "turn_ids": self._loads_json(row["turn_ids_json"], []),
+            "event_id": row["event_id"] or "",
+            "candidate_ids": self._loads_json(row["candidate_ids_json"], []),
+            "status": row["status"],
+            "warnings": self._loads_json(row["warnings_json"], []),
+            "idempotency_key": row["idempotency_key"] or "",
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _turn_details(self, turn_ids: list[str]) -> list[dict[str, Any]]:
+        turn_ids = [str(item) for item in turn_ids if item]
+        if not turn_ids:
+            return []
+        placeholders = ",".join("?" for _ in turn_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT turn_id, thread_id, created_at, role, actor, scope,
+                   content, metadata_json
+            FROM conversation_turns
+            WHERE turn_id IN ({placeholders})
+            """,
+            turn_ids,
+        ).fetchall()
+        by_id = {str(row["turn_id"]): row for row in rows}
+        return [
+            {
+                "turn_id": row["turn_id"],
+                "thread_id": row["thread_id"],
+                "created_at": row["created_at"],
+                "role": row["role"],
+                "actor": row["actor"],
+                "scope": row["scope"],
+                "content_excerpt": self._excerpt(row["content"], 500),
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+            for turn_id in turn_ids
+            if (row := by_id.get(turn_id)) is not None
+        ]
+
+    def _event_detail(self, event_id: str) -> dict[str, Any] | None:
+        event_id = (event_id or "").strip()
+        if not event_id:
+            return None
+        row = self.conn.execute(
+            """
+            SELECT event_id, created_at, actor, scope, source_type, source_ref,
+                   content, metadata_json
+            FROM events
+            WHERE event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "event_id": row["event_id"],
+            "created_at": row["created_at"],
+            "actor": row["actor"],
+            "scope": row["scope"],
+            "source_type": row["source_type"],
+            "source_ref": row["source_ref"],
+            "content_excerpt": self._excerpt(row["content"], 700),
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _candidate_details(self, candidate_ids: list[str]) -> list[dict[str, Any]]:
+        candidate_ids = [str(item) for item in candidate_ids if item]
+        if not candidate_ids:
+            return []
+        placeholders = ",".join("?" for _ in candidate_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT candidate_id, event_id, created_at, proposed_text, kind,
+                   scope, confidence, sensitivity, source_trust, status,
+                   reason, extraction_json
+            FROM candidate_memories
+            WHERE candidate_id IN ({placeholders})
+            """,
+            candidate_ids,
+        ).fetchall()
+        by_id = {str(row["candidate_id"]): row for row in rows}
+        return [
+            {
+                "candidate_id": row["candidate_id"],
+                "event_id": row["event_id"],
+                "created_at": row["created_at"],
+                "proposed_text": self._excerpt(row["proposed_text"], 700),
+                "kind": row["kind"],
+                "scope": row["scope"],
+                "confidence": row["confidence"],
+                "sensitivity": row["sensitivity"],
+                "source_trust": row["source_trust"],
+                "status": row["status"],
+                "reason": row["reason"],
+                "extraction": self._loads_json(row["extraction_json"], {}),
+            }
+            for candidate_id in candidate_ids
+            if (row := by_id.get(candidate_id)) is not None
+        ]
+
+    def _memories_for_candidate_ids(self, candidate_ids: list[str]) -> list[dict[str, Any]]:
+        candidate_ids = [str(item) for item in candidate_ids if item]
+        if not candidate_ids:
+            return []
+        placeholders = ",".join("?" for _ in candidate_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT memory_id, candidate_id, created_at, updated_at, text,
+                   kind, scope, confidence, sensitivity, source_trust,
+                   status, expires_at
+            FROM memories
+            WHERE candidate_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+            candidate_ids,
+        ).fetchall()
+        return [
+            {
+                "memory_id": row["memory_id"],
+                "candidate_id": row["candidate_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "text": self._excerpt(row["text"], 700),
+                "kind": row["kind"],
+                "scope": row["scope"],
+                "confidence": row["confidence"],
+                "sensitivity": row["sensitivity"],
+                "source_trust": row["source_trust"],
+                "status": row["status"],
+                "expires_at": row["expires_at"] or "",
+            }
+            for row in rows
+        ]
+
+    def _memory_change_affected_surfaces(
+        self,
+        *,
+        candidate_ids: list[str],
+        memory_ids: list[str],
+    ) -> dict[str, Any]:
+        memory_ids = [str(item) for item in memory_ids if item]
+        candidate_ids = [str(item) for item in candidate_ids if item]
+        memory_items: list[dict[str, Any]] = []
+        graph_nodes: list[dict[str, Any]] = []
+        graph_edges: list[dict[str, Any]] = []
+        if memory_ids:
+            placeholders = ",".join("?" for _ in memory_ids)
+            item_rows = self.conn.execute(
+                f"""
+                SELECT item_id, memory_id, item_type, status, confidence,
+                       source_trust, text
+                FROM memory_items
+                WHERE memory_id IN ({placeholders})
+                ORDER BY created_at ASC
+                """,
+                memory_ids,
+            ).fetchall()
+            memory_items = [
+                {
+                    "item_id": row["item_id"],
+                    "memory_id": row["memory_id"],
+                    "item_type": row["item_type"],
+                    "status": row["status"],
+                    "confidence": row["confidence"],
+                    "source_trust": row["source_trust"],
+                    "text": self._excerpt(row["text"], 300),
+                }
+                for row in item_rows
+            ]
+            node_rows = self.conn.execute(
+                f"""
+                SELECT DISTINCT gn.graph_node_id, gn.node_type, gn.label,
+                       gn.scope, gn.status, gn.confidence
+                FROM memory_graph_nodes gn
+                JOIN node_evidence ne ON ne.graph_node_id = gn.graph_node_id
+                WHERE ne.memory_id IN ({placeholders})
+                ORDER BY gn.updated_at ASC
+                """,
+                memory_ids,
+            ).fetchall()
+            graph_nodes = [dict(row) for row in node_rows]
+            edge_rows = self.conn.execute(
+                f"""
+                SELECT DISTINCT ge.graph_edge_id, ge.source_graph_node_id,
+                       ge.target_graph_node_id, ge.edge_type, ge.label,
+                       ge.status, ge.confidence, ge.weight
+                FROM memory_graph_edges ge
+                LEFT JOIN edge_evidence ee ON ee.graph_edge_id = ge.graph_edge_id
+                WHERE ge.source_memory_id IN ({placeholders})
+                   OR ee.memory_id IN ({placeholders})
+                ORDER BY ge.updated_at ASC
+                """,
+                (*memory_ids, *memory_ids),
+            ).fetchall()
+            graph_edges = [dict(row) for row in edge_rows]
+        prompt_surfaces = []
+        if memory_ids:
+            prompt_surfaces.extend(["active_memory_search", "context_pack", "memory_tree_pack"])
+        if graph_nodes or graph_edges:
+            prompt_surfaces.append("graph_tree")
+        if candidate_ids and not memory_ids:
+            prompt_surfaces.append("review_inbox")
+        return {
+            "candidate_ids": candidate_ids,
+            "memory_ids": memory_ids,
+            "memory_items": memory_items,
+            "graph_nodes": graph_nodes,
+            "graph_edges": graph_edges,
+            "prompt_surfaces": sorted(set(prompt_surfaces)),
+        }
+
+    def _audit_entries_for_targets(self, target_ids: list[str]) -> list[dict[str, Any]]:
+        target_ids = [str(item) for item in target_ids if item]
+        if not target_ids:
+            return []
+        placeholders = ",".join("?" for _ in target_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT audit_id, created_at, action, target_type, target_id,
+                   actor, details_json
+            FROM audit_log
+            WHERE target_id IN ({placeholders})
+            ORDER BY created_at ASC, audit_id ASC
+            """,
+            target_ids,
+        ).fetchall()
+        return [
+            {
+                "audit_id": row["audit_id"],
+                "created_at": row["created_at"],
+                "action": row["action"],
+                "target_type": row["target_type"],
+                "target_id": row["target_id"],
+                "actor": row["actor"],
+                "details": self._loads_json(row["details_json"], {}),
+            }
+            for row in rows
+        ]
 
     def _memory_feedback_rollup(
         self,

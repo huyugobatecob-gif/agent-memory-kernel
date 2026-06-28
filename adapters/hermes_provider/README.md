@@ -25,6 +25,8 @@ The adapter should:
   prompt-facing memory audit;
 - expose `current_best_report()` so Hermes can inspect resolved winners,
   suppressed loser memories, and unresolved conflicts before prompt injection;
+- expose `memory_changes()` so Hermes can inspect what Keeper changed after a
+  saved turn and why;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - record raw conversation turns;
 - record session summaries, decisions, attempts, successes, and failures;
@@ -141,6 +143,23 @@ provider.evaluate_shadow_trace(
 Production runtime should then use `before_model_call()` to get the prompt
 envelope and `after_saved_turn()` to save the exchange and create reviewable
 Keeper candidates.
+
+After `after_saved_turn()`, inspect the returned Keeper job:
+
+```python
+after = provider.after_saved_turn(
+    thread_id="seo-demo",
+    scope="professional",
+    user_text="Plan the next refresh loop.",
+    assistant_text="Reuse the prior successful refresh pattern.",
+)
+
+changes = provider.memory_changes(keeper_job_id=after["keeper_job_id"])
+```
+
+The change report is the operator-facing audit of saved turns, Keeper event,
+candidates, promoted memories, affected graph/context surfaces, review or
+lifecycle handles, and audit trail.
 
 When a later decision replaces an older memory, call `supersede_memory()` rather
 than leaving both facts active. If the winner is unclear, call

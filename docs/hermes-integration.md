@@ -102,6 +102,9 @@ class HermesMemoryProvider:
 
     def current_best_report(self, query: str = "", scope: str | None = None) -> dict:
         ...
+
+    def memory_changes(self, keeper_job_id: str = "", thread_id: str | None = None) -> dict:
+        ...
 ```
 
 The provider should call `MemoryStore`, not duplicate storage logic.
@@ -136,6 +139,7 @@ Useful endpoints:
 - `POST /router-feedback/list`
 - `POST /memory-quality`
 - `POST /current-best`
+- `POST /memory-changes`
 - `POST /remember`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
@@ -251,6 +255,19 @@ find stale or harmful branches.
 `current-best` is the truth-maintenance readout: with a query it shows selected
 branches plus resolved winners, suppressed losers, and unresolved conflicts; with
 no query it summarizes open and resolved conflict counts.
+
+To inspect post-turn memory writes, use the Keeper job id returned by
+`after-saved-turn`:
+
+```bash
+agent-memory memory-changes --keeper-job-id kjob_xxxxxxxxxxxxxxxx
+agent-memory memory-changes --thread-id seo-demo
+```
+
+The report shows saved turns, the Keeper event, candidate memories, promoted
+active memories, affected graph/context surfaces, review or lifecycle handles,
+and the audit trail. This is the operator-facing answer to "what changed after
+that turn and why?".
 
 Lower-level context builder call:
 

@@ -177,6 +177,21 @@ class HermesMemoryProvider:
     ) -> dict[str, Any]:
         return self.store.current_best_report(query, scope=scope, limit=limit)
 
+    def memory_changes(
+        self,
+        *,
+        keeper_job_id: str = "",
+        thread_id: str | None = None,
+        scope: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return self.store.memory_changes(
+            keeper_job_id=keeper_job_id,
+            thread_id=thread_id,
+            scope=scope,
+            limit=limit,
+        )
+
     def before_model_call(
         self,
         query: str,

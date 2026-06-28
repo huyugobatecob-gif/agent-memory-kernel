@@ -86,6 +86,14 @@ def conformance_spec() -> dict[str, Any]:
                     "runtime result marks the replay as idempotent",
                 ],
             },
+            {
+                "id": "keeper_change_is_inspectable",
+                "requires": [
+                    "post-turn Keeper job can be explained by keeper_job_id",
+                    "change report includes saved turns, event, candidates, affected surfaces, and audit trail",
+                    "thread-level change list includes the Keeper job",
+                ],
+            },
         ],
     }
 
@@ -339,6 +347,28 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "duplicate_jobs": duplicate_jobs,
         },
     )
+    changes = store.memory_changes(keeper_job_id=str(keeper.get("keeper_job_id", "")))
+    listed_changes = store.memory_changes(thread_id=CONFORMANCE_THREAD_ID)
+    _append_result(
+        results,
+        "keeper_change_is_inspectable",
+        changes.get("mode") == "detail"
+        and changes.get("event", {}).get("event_id") == keeper.get("event_id")
+        and bool(changes.get("saved_turns"))
+        and bool(changes.get("candidates"))
+        and bool(changes.get("audit_trail"))
+        and any(
+            item.get("keeper_job_id") == keeper.get("keeper_job_id")
+            for item in listed_changes.get("changes", [])
+        ),
+        {
+            "keeper_job_id": keeper.get("keeper_job_id", ""),
+            "turn_count": changes.get("summary", {}).get("turn_count", 0),
+            "candidate_count": changes.get("summary", {}).get("candidate_count", 0),
+            "audit_count": changes.get("summary", {}).get("audit_count", 0),
+            "prompt_surfaces": changes.get("affected", {}).get("prompt_surfaces", []),
+        },
+    )
 
     status = "pass" if all(item["passed"] for item in results) else "fail"
     return {
@@ -371,6 +401,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "unsafe_memory_absent",
         "keeper_write_is_reviewable",
         "keeper_retry_is_idempotent",
+        "keeper_change_is_inspectable",
     }
     checks = {
         "version_present": bool(data.get("version")),

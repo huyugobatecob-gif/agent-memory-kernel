@@ -117,6 +117,11 @@ supersession write paths.
 Agent read-policy enforcement is implemented for prompt-facing memory injection
 through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
 `prompt_envelope.metadata.read_policy`.
+Post-turn memory-change inspection is implemented through `agent-memory
+memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
+job report includes saved turns, the Keeper event, candidates, promoted
+memories, affected graph/context surfaces, review or lifecycle handles, and
+audit trail.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs and `agent-memory worker --once` are implemented for

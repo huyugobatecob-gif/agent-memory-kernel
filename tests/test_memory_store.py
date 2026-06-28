@@ -926,6 +926,31 @@ class MemoryStoreTests(unittest.TestCase):
                 "SELECT COUNT(*) AS count FROM keeper_jobs"
             ).fetchone()["count"]
             self.assertEqual(keeper_job_count, 1)
+
+            changes = store.memory_changes(keeper_job_id=after["keeper_job_id"])
+            self.assertEqual(changes["mode"], "detail")
+            self.assertEqual(changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
+            self.assertEqual(changes["summary"]["turn_count"], 2)
+            self.assertEqual(changes["summary"]["candidate_count"], len(after["candidate_ids"]))
+            self.assertEqual(changes["event"]["event_id"], after["event_id"])
+            self.assertEqual(
+                {item["candidate_id"] for item in changes["candidates"]},
+                set(after["candidate_ids"]),
+            )
+            self.assertTrue(changes["policy_decisions"])
+            self.assertTrue(changes["operator_handles"]["review"])
+            self.assertIn("review_inbox", changes["affected"]["prompt_surfaces"])
+            self.assertIn("after_saved_turn", {item["action"] for item in changes["audit_trail"]})
+
+            listed_changes = store.memory_changes(thread_id="thread-runtime")
+            self.assertEqual(listed_changes["mode"], "list")
+            self.assertEqual(listed_changes["changes"][0]["keeper_job_id"], after["keeper_job_id"])
+            api_changes = handle_api_request(
+                store,
+                "/memory-changes",
+                {"keeper_job_id": after["keeper_job_id"]},
+            )
+            self.assertEqual(api_changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             store.close()
 
     def test_before_model_call_adds_guarded_brain_style_when_allowed(self) -> None:

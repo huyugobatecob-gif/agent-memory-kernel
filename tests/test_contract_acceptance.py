@@ -63,6 +63,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("resolved_conflict_suppresses_loser", scenario_ids)
         self.assertIn("keeper_write_is_reviewable", scenario_ids)
         self.assertIn("keeper_retry_is_idempotent", scenario_ids)
+        self.assertIn("keeper_change_is_inspectable", scenario_ids)
 
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -83,6 +84,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("unsafe_memory_absent", passed)
             self.assertIn("keeper_write_is_reviewable", passed)
             self.assertIn("keeper_retry_is_idempotent", passed)
+            self.assertIn("keeper_change_is_inspectable", passed)
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")

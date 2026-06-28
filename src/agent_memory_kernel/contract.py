@@ -167,6 +167,14 @@ ACCEPTANCE_GATES = [
         ],
     },
     {
+        "gate": "inspection_and_operator_control",
+        "requires": [
+            "operators can inspect what changed after a saved turn by Keeper job or thread",
+            "post-turn reports include saved turns, event, candidates, promoted memories, affected surfaces, and audit trail",
+            "reports expose review, correction, rollback, distrust, expire, or delete handles without silently mutating memory",
+        ],
+    },
+    {
         "gate": "governed_read_time_policy",
         "requires": [
             "Router ranking accounts for relevance, recency, trust, scope, sensitivity, conflict status, and token budget",
@@ -241,6 +249,7 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "governed_read_time_policy_present": "governed_read_time_policy" in gate_names,
         "derived_memory_invalidation_present": "derived_memory_invalidation" in gate_names,
         "capability_and_consent_present": "capability_and_consent" in gate_names,
+        "inspection_and_operator_control_present": "inspection_and_operator_control" in gate_names,
         "operational_failure_model_present": "operational_failure_model" in gate_names,
         "closed_loop_present": len(data.get("closed_loop", [])) >= 6,
         "brain_style_surface_present": "brain_style" in data.get("derived_prompt_surfaces", {}),
