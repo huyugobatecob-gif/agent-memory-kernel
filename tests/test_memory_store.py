@@ -840,6 +840,56 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertNotIn("weekly", active_graph_text)
             store.close()
 
+    def test_detect_memory_conflicts_can_report_and_record_open_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            first = store.remember(
+                "Decision: project detect-site owner is Alice.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            second = store.remember(
+                "Decision: project detect-site owner is Bob.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            report = store.detect_memory_conflicts(scope="professional", kind="decision")
+
+            self.assertEqual(report["version"], "conflict-detection-v0.1")
+            self.assertEqual(report["count"], 1)
+            self.assertEqual(
+                {
+                    report["detections"][0]["memory_id"],
+                    report["detections"][0]["other_memory_id"],
+                },
+                {first, second},
+            )
+            self.assertIn("owner", report["detections"][0]["overlap_tokens"])
+            self.assertEqual(store.list_memory_conflicts(status="open"), [])
+
+            recorded = handle_api_request(
+                store,
+                "/conflict/detect",
+                {
+                    "scope": "professional",
+                    "kind": "decision",
+                    "record": True,
+                    "actor": "qa",
+                    "reason": "detected owner mismatch",
+                },
+            )
+
+            self.assertEqual(recorded["detections"][0]["status"], "recorded")
+            self.assertEqual(len(store.list_memory_conflicts(status="open")), 1)
+            self.assertEqual(
+                store.detect_memory_conflicts(scope="professional", kind="decision")["count"],
+                0,
+            )
+            store.close()
+
     def test_current_best_resolver_suppresses_resolved_conflict_loser(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

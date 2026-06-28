@@ -339,8 +339,8 @@ Remaining for full memory:
   batch correction flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
-- Automatic conflict detection heuristics and production current-best-answer
-  resolution beyond the baseline explicit-conflict resolver.
+- Production current-best-answer resolution beyond the baseline explicit
+  conflict resolver and active-memory conflict detector.
 - Broader provider adapters for the prompt envelope.
 - Broader prompt-injection, source trust, and secret red-team fixtures.
 - Production observability beyond the baseline report, including wall-clock
@@ -535,8 +535,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 tags or labels, and operators can inspect read-time policy and Router decisions
 with `router-runs`, `router-explain`, `/router-runs`, and `/router-explain`.
 Remaining work is production ranking, automated usefulness learning, automatic
-conflict detection/current-best heuristics beyond explicit resolved conflicts,
-and larger golden evals.
+conflict resolution/current-best heuristics beyond the baseline active-memory
+detector and explicit resolved conflicts, and larger golden evals.
 
 ### Step 7: Add Embeddings And Semantic Reranking
 

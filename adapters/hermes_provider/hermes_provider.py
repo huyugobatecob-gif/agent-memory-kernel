@@ -648,6 +648,29 @@ class HermesMemoryProvider:
             metadata=metadata,
         )
 
+    def detect_memory_conflicts(
+        self,
+        *,
+        scope: str | None = None,
+        kind: str | None = None,
+        limit: int = 50,
+        min_overlap: float = 0.5,
+        min_jaccard: float = 0.35,
+        record: bool = False,
+        actor: str = "hermes",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return self.store.detect_memory_conflicts(
+            scope=scope,
+            kind=kind,
+            limit=limit,
+            min_overlap=min_overlap,
+            min_jaccard=min_jaccard,
+            record=record,
+            actor=actor,
+            reason=reason,
+        )
+
     def memory_revisions(self, memory_id: str, limit: int = 50) -> list[dict[str, Any]]:
         return self.store.list_memory_revisions(memory_id, limit=limit)
 

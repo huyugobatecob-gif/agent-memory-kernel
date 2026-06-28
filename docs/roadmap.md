@@ -235,7 +235,10 @@ provider wrapper. They turn reviewed traces into stored pass/fail checks for
 branch selection, candidate text, source IDs, token budget, and access mode.
 Conflict and supersession records are implemented through `agent-memory
 conflict`, `agent-memory supersede`, `agent-memory current-best`,
-`/conflict/record`, `/conflict/list`, `/current-best`, and `/supersede`.
+`/conflict/record`, `/conflict/list`, `/conflict/detect`, `/current-best`, and
+`/supersede`. `agent-memory conflict detect`, the Hermes provider wrapper, and
+MCP `memory_conflict_detect` provide a baseline active-memory conflict detector
+with report-only and record-open-conflict modes.
 Superseded memory is suppressed from active retrieval and graph export while the
 resolved relationship remains auditable. Explicit resolved conflicts also affect
 prompt-facing tree retrieval: the winner is selected, the loser is suppressed,

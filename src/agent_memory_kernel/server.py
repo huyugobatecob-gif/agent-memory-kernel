@@ -477,6 +477,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 50) or 50),
             )
         }
+    if path == "/conflict/detect":
+        return store.detect_memory_conflicts(
+            scope=payload.get("scope"),
+            kind=payload.get("kind"),
+            limit=int(payload.get("limit", 50) or 50),
+            min_overlap=float(payload.get("min_overlap", 0.5) or 0.5),
+            min_jaccard=float(payload.get("min_jaccard", 0.35) or 0.35),
+            record=bool(payload.get("record", False)),
+            actor=str(payload.get("actor", "system")),
+            reason=str(payload.get("reason", "")),
+        )
     if path == "/slice/seed":
         return seed_vertical_slice(store)
     if path == "/slice/run":

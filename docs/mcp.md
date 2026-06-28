@@ -66,6 +66,8 @@ Retrieval tools:
 - `memory_context_pack`: return compact context text.
 - `memory_tree_pack`: return the expanded Memory Tree Supplement.
 - `memory_current_best`: explain current-best conflict resolution.
+- `memory_conflict_detect`: detect likely active-memory conflicts and
+  optionally record open conflict records.
 - `memory_router_explain`: explain a stored Router run.
 
 Operator and graph tools:

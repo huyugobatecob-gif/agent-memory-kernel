@@ -1199,6 +1199,25 @@ def cmd_conflict_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_conflict_detect(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.detect_memory_conflicts(
+            scope=args.scope,
+            kind=args.kind,
+            limit=args.limit,
+            min_overlap=args.min_overlap,
+            min_jaccard=args.min_jaccard,
+            record=args.record,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_delete(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2093,6 +2112,17 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     cp.add_argument("--limit", type=int, default=50)
     cp.set_defaults(func=cmd_conflict_list)
+
+    cp = conflict_sub.add_parser("detect", help="Detect likely active-memory conflicts")
+    cp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    cp.add_argument("--kind", default="")
+    cp.add_argument("--limit", type=int, default=50)
+    cp.add_argument("--min-overlap", type=float, default=0.5)
+    cp.add_argument("--min-jaccard", type=float, default=0.35)
+    cp.add_argument("--record", action="store_true", help="Record detected pairs as open conflicts")
+    cp.add_argument("--actor", default="system")
+    cp.add_argument("--reason", default="")
+    cp.set_defaults(func=cmd_conflict_detect)
 
     p = sub.add_parser("delete", help="Soft-delete active memory")
     add_common_db(p)

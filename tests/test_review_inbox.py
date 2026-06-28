@@ -543,6 +543,19 @@ class ReviewInboxTests(unittest.TestCase):
                 actor="reviewer",
             )
             self.assertEqual(corrected["status"], "corrected")
+            provider.store.remember(
+                "Decision: inbox-site provider wrapper is stale.",
+                scope="professional",
+                actor="seo-agent",
+                source_type="manual",
+                auto_approve=True,
+            )
+            conflict_report = provider.detect_memory_conflicts(
+                scope="professional",
+                kind="decision",
+            )
+            self.assertEqual(conflict_report["version"], "conflict-detection-v0.1")
+            self.assertGreaterEqual(conflict_report["count"], 1)
             export_control = provider.export_control_report(actor="reviewer", scope="professional")
             self.assertEqual(export_control["version"], "export-control-v0.1")
             self.assertTrue(export_control["allowed"])

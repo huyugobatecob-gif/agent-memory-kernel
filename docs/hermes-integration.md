@@ -358,6 +358,7 @@ Useful endpoints:
 - `POST /brain/style`
 - `POST /conflict/record`
 - `POST /conflict/list`
+- `POST /conflict/detect`
 - `POST /memory/revisions`
 - `POST /memory/rollback`
 - `POST /supersede`
@@ -686,15 +687,16 @@ When newer memory contradicts older memory, preserve the truth-maintenance
 trail instead of leaving both as equal active facts:
 
 ```bash
+agent-memory conflict detect --scope professional --kind decision
 agent-memory conflict record mem_old mem_new --reason "project rule changed"
 agent-memory supersede mem_old mem_new --reason "newer user-stated rule wins"
 agent-memory conflict list --status resolved
 agent-memory current-best "project rule changed" --scope professional
 ```
 
-Hermes should use `conflict record` when a contradiction needs review and
-`supersede` only when the winning memory is explicit enough to suppress the old
-memory from retrieval.
+Hermes should use `conflict detect` for periodic active-memory scans,
+`conflict record` when a contradiction needs review, and `supersede` only when
+the winning memory is explicit enough to suppress the old memory from retrieval.
 If a conflict is already resolved with a winner, prompt-facing tree retrieval
 uses that winner and suppresses the loser even when the query matches the stale
 loser text.

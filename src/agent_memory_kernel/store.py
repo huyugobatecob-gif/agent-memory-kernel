@@ -107,6 +107,7 @@ NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
 NOTIFICATION_ESCALATION_VERSION = "notification-escalation-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
+CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -6352,6 +6353,136 @@ class MemoryStore:
             "winner_memory_id": winner_memory_id,
         }
 
+    def detect_memory_conflicts(
+        self,
+        *,
+        scope: str | None = None,
+        kind: str | None = None,
+        limit: int = 50,
+        min_overlap: float = 0.5,
+        min_jaccard: float = 0.35,
+        record: bool = False,
+        actor: str = "system",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Find likely active-memory conflicts without requiring a new candidate."""
+        scope = normalize_scope(scope) if scope else None
+        kind = (kind or "").strip().lower() or None
+        max_detections = max(1, min(int(limit or 50), 200))
+        min_overlap = max(0.0, min(float(min_overlap), 1.0))
+        min_jaccard = max(0.0, min(float(min_jaccard), 1.0))
+        scan_limit = max(50, min(max_detections * 5, 500))
+        clauses = ["status = 'active'"]
+        params: list[Any] = []
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        if kind:
+            clauses.append("LOWER(kind) = ?")
+            params.append(kind)
+        rows = self.conn.execute(
+            f"""
+            SELECT memory_id, candidate_id, created_at, updated_at, text,
+                   kind, scope, confidence, sensitivity, source_trust,
+                   status, expires_at
+            FROM memories
+            WHERE {' AND '.join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, scan_limit),
+        ).fetchall()
+        existing_pairs = self._memory_conflict_pair_keys()
+        detections: list[dict[str, Any]] = []
+        token_cache: dict[str, set[str]] = {}
+
+        def tokens_for(row: sqlite3.Row) -> set[str]:
+            memory_id = str(row["memory_id"])
+            if memory_id not in token_cache:
+                token_cache[memory_id] = set(query_tokens(str(row["text"] or "")))
+            return token_cache[memory_id]
+
+        for left_index, left in enumerate(rows):
+            left_tokens = tokens_for(left)
+            if len(left_tokens) < 3:
+                continue
+            for right in rows[left_index + 1 :]:
+                if left["scope"] != right["scope"] or left["kind"] != right["kind"]:
+                    continue
+                left_id = str(left["memory_id"])
+                right_id = str(right["memory_id"])
+                pair_key = tuple(sorted((left_id, right_id)))
+                if pair_key in existing_pairs:
+                    continue
+                left_text = str(left["text"] or "")
+                right_text = str(right["text"] or "")
+                if left_text.strip().lower() == right_text.strip().lower():
+                    continue
+                right_tokens = tokens_for(right)
+                if len(right_tokens) < 3:
+                    continue
+                common_tokens = left_tokens & right_tokens
+                overlap_ratio = len(common_tokens) / max(
+                    1,
+                    min(len(left_tokens), len(right_tokens)),
+                )
+                jaccard = len(common_tokens) / max(1, len(left_tokens | right_tokens))
+                if len(common_tokens) < 3 or (
+                    overlap_ratio < min_overlap and jaccard < min_jaccard
+                ):
+                    continue
+                detection: dict[str, Any] = {
+                    "status": "detected",
+                    "memory_id": left_id,
+                    "other_memory_id": right_id,
+                    "kind": left["kind"],
+                    "scope": left["scope"],
+                    "memory_text_excerpt": self._excerpt(left_text, 360),
+                    "other_memory_text_excerpt": self._excerpt(right_text, 360),
+                    "overlap_tokens": sorted(common_tokens)[:12],
+                    "overlap_ratio": round(overlap_ratio, 4),
+                    "jaccard": round(jaccard, 4),
+                    "reason": (
+                        "active memories overlap in the same scope/kind but "
+                        "carry different text"
+                    ),
+                }
+                if record:
+                    conflict = self.record_memory_conflict(
+                        left_id,
+                        right_id,
+                        actor=actor,
+                        reason=reason or "detected possible active-memory conflict",
+                        metadata={
+                            "detected_by": CONFLICT_DETECTION_VERSION,
+                            "overlap_tokens": detection["overlap_tokens"],
+                            "overlap_ratio": detection["overlap_ratio"],
+                            "jaccard": detection["jaccard"],
+                        },
+                    )
+                    detection["status"] = "recorded"
+                    detection["recorded_conflict"] = conflict
+                    existing_pairs.add(pair_key)
+                detections.append(detection)
+                if len(detections) >= max_detections:
+                    break
+            if len(detections) >= max_detections:
+                break
+        return {
+            "version": CONFLICT_DETECTION_VERSION,
+            "scope": scope or "all",
+            "kind": kind or "all",
+            "record": record,
+            "thresholds": {
+                "min_overlap": min_overlap,
+                "min_jaccard": min_jaccard,
+                "min_common_tokens": 3,
+            },
+            "scanned_count": len(rows),
+            "count": len(detections),
+            "detections": detections,
+        }
+
     def supersede_memory(
         self,
         old_memory_id: str,
@@ -6503,6 +6634,15 @@ class MemoryStore:
             }
             for row in rows
         ]
+
+    def _memory_conflict_pair_keys(self) -> set[tuple[str, str]]:
+        rows = self.conn.execute(
+            "SELECT memory_id, other_memory_id FROM memory_conflicts"
+        ).fetchall()
+        return {
+            tuple(sorted((str(row["memory_id"]), str(row["other_memory_id"]))))
+            for row in rows
+        }
 
     def _deactivate_memory(
         self,

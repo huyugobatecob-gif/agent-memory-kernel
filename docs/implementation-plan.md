@@ -324,7 +324,7 @@ Tasks:
 3. Add source-type policies.
 4. Add import validation.
 5. Add audit export.
-6. Add conflict detection for rules.
+6. Add richer conflict detection for rules.
 7. Add deletion/correction tests around FTS and graph edges.
 
 Done when:

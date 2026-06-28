@@ -44,6 +44,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_after_saved_turn", names)
             self.assertIn("memory_graph_nodes", names)
             self.assertIn("memory_graph_browser", names)
+            self.assertIn("memory_conflict_detect", names)
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)
             self.assertIn("memory_export_control", names)
@@ -91,6 +92,23 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("structuredContent", result)
             self.assertIn("results", result["structuredContent"])
             self.assertIn("Hermes SEO agents", json.dumps(result["structuredContent"]))
+
+            conflict_detect = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 31,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_conflict_detect",
+                        "arguments": {"scope": "professional", "kind": "decision"},
+                    },
+                }
+            )
+            self.assertFalse(conflict_detect["result"]["isError"])
+            self.assertEqual(
+                conflict_detect["result"]["structuredContent"]["version"],
+                "conflict-detection-v0.1",
+            )
 
             capability = server.handle_message(
                 {

@@ -732,6 +732,30 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             ["query"],
         ),
     },
+    "memory_conflict_detect": {
+        "endpoint": "/conflict/detect",
+        "description": "Detect likely active-memory conflicts and optionally record open conflict records.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "kind": _string("Optional memory kind.", ""),
+                "limit": _integer("Maximum detections.", 50),
+                "min_overlap": {
+                    "type": "number",
+                    "description": "Minimum containment overlap.",
+                    "default": 0.5,
+                },
+                "min_jaccard": {
+                    "type": "number",
+                    "description": "Minimum Jaccard overlap.",
+                    "default": 0.35,
+                },
+                "record": _boolean("Record detections as open conflicts.", False),
+                "actor": _string("Actor for recorded conflicts.", "system"),
+                "reason": _string("Reason for recorded conflicts.", ""),
+            }
+        ),
+    },
     "memory_router_explain": {
         "endpoint": "/router-explain",
         "description": "Explain a recorded Router run.",

@@ -179,12 +179,15 @@ agent-memory search --db .memory/demo.db "SEO projects"
 Mark memory truth changes explicitly:
 
 ```bash
+agent-memory conflict --db .memory/demo.db detect --scope professional --kind decision
 agent-memory conflict --db .memory/demo.db record mem_old mem_new --reason "newer project rule conflicts"
 agent-memory supersede --db .memory/demo.db mem_old mem_new --reason "newer user-stated memory wins"
 agent-memory conflict --db .memory/demo.db list --status resolved
 agent-memory current-best --db .memory/demo.db --scope professional "project rule"
 ```
 
+`conflict detect` reports likely active-memory conflicts and can record open
+conflict records with `--record`.
 `supersede` suppresses the old memory from retrieval and graph export while
 recording a resolved conflict relationship for audit.
 `current-best` shows how prompt-facing retrieval resolves explicit conflicts:
