@@ -77,6 +77,8 @@ class MemoryStoreTests(unittest.TestCase):
                 auto_approve=True,
             )
             memory_id = result["candidates"][0]["memory_id"]
+            self.assertGreaterEqual(len(store.list_graph_nodes(scope="professional")), 1)
+            self.assertGreaterEqual(len(store.list_graph_edges(scope="professional")), 1)
 
             store.correct_memory(memory_id, "Decision: use SQLite for the local-first memory store.")
             self.assertIn("local-first", store.context_pack("SQLite"))
@@ -90,6 +92,13 @@ class MemoryStoreTests(unittest.TestCase):
             store.delete_memory(memory_id, reason="test cleanup")
             self.assertEqual(store.search("SQLite"), [])
             self.assertEqual(store.list_memory_items(), [])
+            self.assertEqual(store.list_graph_nodes(scope="professional"), [])
+            self.assertEqual(store.list_graph_edges(scope="professional"), [])
+            profile = store.export_profile(scope="professional")
+            self.assertEqual(profile["memory_tree"]["nodes"], [])
+            self.assertEqual(profile["memory_tree"]["edges"], [])
+            self.assertEqual(profile["memory_tree"]["node_evidence"], [])
+            self.assertEqual(profile["memory_tree"]["edge_evidence"], [])
             store.close()
 
     def test_approved_memory_creates_graph_nodes_and_edges(self) -> None:

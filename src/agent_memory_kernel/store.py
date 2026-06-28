@@ -212,6 +212,11 @@ class MemoryStore:
             ("visual_y", "REAL"),
         ]:
             self._ensure_column("memory_graph_nodes", column, declaration)
+        self._ensure_column(
+            "memory_graph_edges",
+            "status",
+            "TEXT NOT NULL DEFAULT 'active'",
+        )
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.commit()
 
@@ -869,7 +874,10 @@ class MemoryStore:
             FROM memory_graph_edges ge
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
             JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
-            WHERE (? IS NULL OR src.scope = ? OR dst.scope = ?)
+            WHERE ge.status = 'active'
+              AND src.status = 'active'
+              AND dst.status = 'active'
+              AND (? IS NULL OR src.scope = ? OR dst.scope = ?)
             ORDER BY ge.weight DESC, ge.updated_at DESC
             LIMIT ?
             """,
@@ -1749,6 +1757,7 @@ class MemoryStore:
             "UPDATE memory_items SET status = 'deleted', updated_at = ? WHERE memory_id = ?",
             (now_iso(), memory_id),
         )
+        self._propagate_deleted_memory(memory_id)
         self._audit("delete", "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
@@ -2319,8 +2328,104 @@ class MemoryStore:
         )
         return analysis_id
 
+    def _propagate_deleted_memory(self, memory_id: str) -> None:
+        affected_scopes = {
+            str(row["scope"])
+            for row in self.conn.execute(
+                """
+                SELECT DISTINCT gn.scope
+                FROM node_evidence ne
+                JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+                WHERE ne.memory_id = ?
+                UNION
+                SELECT DISTINCT src.scope
+                FROM edge_evidence ee
+                JOIN memory_graph_edges ge ON ge.graph_edge_id = ee.graph_edge_id
+                JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+                WHERE ee.memory_id = ?
+                """,
+                (memory_id, memory_id),
+            ).fetchall()
+        }
+        ts = now_iso()
+        edge_rows = self.conn.execute(
+            """
+            SELECT DISTINCT graph_edge_id
+            FROM edge_evidence
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchall()
+        for row in edge_rows:
+            graph_edge_id = str(row["graph_edge_id"])
+            active_evidence = self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM edge_evidence ee
+                JOIN memories m ON m.memory_id = ee.memory_id
+                JOIN memory_items mi ON mi.memory_id = m.memory_id
+                WHERE ee.graph_edge_id = ?
+                  AND m.status = 'active'
+                  AND mi.status = 'active'
+                """,
+                (graph_edge_id,),
+            ).fetchone()["count"]
+            if int(active_evidence or 0) == 0:
+                self.conn.execute(
+                    """
+                    UPDATE memory_graph_edges
+                    SET status = 'inactive', updated_at = ?
+                    WHERE graph_edge_id = ?
+                    """,
+                    (ts, graph_edge_id),
+                )
+
+        node_rows = self.conn.execute(
+            """
+            SELECT DISTINCT graph_node_id
+            FROM node_evidence
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchall()
+        for row in node_rows:
+            graph_node_id = str(row["graph_node_id"])
+            active_evidence = self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM node_evidence ne
+                JOIN memories m ON m.memory_id = ne.memory_id
+                JOIN memory_items mi ON mi.memory_id = m.memory_id
+                WHERE ne.graph_node_id = ?
+                  AND m.status = 'active'
+                  AND mi.status = 'active'
+                """,
+                (graph_node_id,),
+            ).fetchone()["count"]
+            if int(active_evidence or 0) == 0:
+                self.conn.execute(
+                    """
+                    UPDATE memory_graph_nodes
+                    SET status = 'inactive', updated_at = ?
+                    WHERE graph_node_id = ?
+                    """,
+                    (ts, graph_node_id),
+                )
+
+        for scope in sorted(affected_scopes):
+            self._refresh_graph_groups(scope)
+            self._refresh_digital_brain_state(scope)
+
     def _refresh_graph_groups(self, scope: str) -> None:
         ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE memory_graph_groups
+            SET updated_at = ?, node_count = 0, edge_count = 0
+            WHERE scope = ?
+            """,
+            (ts, scope),
+        )
         rows = self.conn.execute(
             """
             SELECT group_label, node_type, COUNT(*) AS node_count
@@ -2337,7 +2442,10 @@ class MemoryStore:
                 FROM memory_graph_edges ge
                 JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
                 JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
-                WHERE src.scope = ?
+                WHERE ge.status = 'active'
+                  AND src.status = 'active'
+                  AND dst.status = 'active'
+                  AND src.scope = ?
                   AND (src.node_type = ? OR dst.node_type = ?)
                 """,
                 (scope, row["node_type"], row["node_type"]),
@@ -2451,7 +2559,11 @@ class MemoryStore:
             SELECT COUNT(*) AS count
             FROM memory_graph_edges ge
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
-            WHERE src.scope = ?
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            WHERE ge.status = 'active'
+              AND src.status = 'active'
+              AND dst.status = 'active'
+              AND src.scope = ?
             """,
             (scope,),
         ).fetchone()["count"]
@@ -2556,7 +2668,8 @@ class MemoryStore:
                    ne.confidence
             FROM node_evidence ne
             JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
-            WHERE (? IS NULL OR gn.scope = ?)
+            WHERE gn.status = 'active'
+              AND (? IS NULL OR gn.scope = ?)
             ORDER BY ne.created_at ASC
             """,
             (scope, scope),
@@ -2572,7 +2685,11 @@ class MemoryStore:
             FROM edge_evidence ee
             JOIN memory_graph_edges ge ON ge.graph_edge_id = ee.graph_edge_id
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
-            WHERE (? IS NULL OR src.scope = ?)
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            WHERE ge.status = 'active'
+              AND src.status = 'active'
+              AND dst.status = 'active'
+              AND (? IS NULL OR src.scope = ?)
             ORDER BY ee.created_at ASC
             """,
             (scope, scope),
@@ -2774,7 +2891,8 @@ class MemoryStore:
             self.conn.execute(
                 """
                 UPDATE memory_graph_edges
-                SET updated_at = ?, weight = ?, evidence_count = evidence_count + 1
+                SET updated_at = ?, weight = ?, evidence_count = evidence_count + 1,
+                    status = 'active'
                 WHERE graph_edge_id = ?
                 """,
                 (ts, min(10.0, float(existing["weight"] or 1.0) + 0.25), edge_id),
@@ -3112,7 +3230,8 @@ class MemoryStore:
             FROM memory_graph_edges ge
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
             JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
-            WHERE ge.source_memory_id IN ({placeholders})
+            WHERE ge.status = 'active'
+              AND ge.source_memory_id IN ({placeholders})
             ORDER BY ge.source_memory_id, ge.edge_type, dst.label
             """,
             memory_ids,

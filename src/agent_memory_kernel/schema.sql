@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS memory_graph_edges (
     label                  TEXT NOT NULL DEFAULT '',
     weight                 REAL NOT NULL DEFAULT 1.0,
     confidence             TEXT NOT NULL DEFAULT 'medium',
+    status                 TEXT NOT NULL DEFAULT 'active',
     source_memory_id       TEXT REFERENCES memories(memory_id),
     source_event_id        TEXT REFERENCES events(event_id),
     evidence_count         INTEGER NOT NULL DEFAULT 0,
