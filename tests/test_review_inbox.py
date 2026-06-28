@@ -471,6 +471,9 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(acknowledged["status"], "acknowledged")
             approved = provider.approve_candidate(candidate_id, actor="reviewer")
             self.assertEqual(provider.notifications(status="open")["count"], 0)
+            graph_browser = provider.graph_browser(scope="professional", limit=5)
+            self.assertEqual(graph_browser["version"], "graph-browser-v0.1")
+            self.assertTrue(graph_browser["nodes"])
             lifecycle_preview = provider.batch_memory_lifecycle(
                 [
                     {

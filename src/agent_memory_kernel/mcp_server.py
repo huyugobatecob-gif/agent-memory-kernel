@@ -695,6 +695,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_graph_browser": {
+        "endpoint": "/graph/browser",
+        "description": "Build graph browser data with nodes, edges, and source previews.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "node_type": _string("Optional graph node type.", ""),
+                "query": _string("Optional node label/summary search.", ""),
+                "limit": _integer("Maximum nodes.", 50),
+                "evidence_limit": _integer("Maximum source previews per node or edge.", 3),
+            }
+        ),
+    },
     "memory_current_best": {
         "endpoint": "/current-best",
         "description": "Explain current-best retrieval and conflict suppression for a query.",

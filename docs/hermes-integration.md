@@ -142,6 +142,9 @@ class HermesMemoryProvider:
     def graph_nodes(self, scope: str | None = None, node_type: str | None = None) -> list[dict]:
         ...
 
+    def graph_browser(self, scope: str | None = None, node_type: str | None = None, query: str = "", limit: int = 50) -> dict:
+        ...
+
     def export_profile(
         self,
         scope: str | None = None,
@@ -262,7 +265,7 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_derived_invalidations`, `memory_operational_status`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, `memory_export_control`, `memory_export_profile`,
+`memory_graph_edges`, `memory_graph_browser`, `memory_export_control`, `memory_export_profile`,
 `memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,
 `memory_notification_ack`, `memory_notification_resolve`,
@@ -306,6 +309,7 @@ Useful endpoints:
 - `POST /current-best`
 - `POST /memory-changes`
 - `POST /memory/lifecycle-batch`
+- `POST /graph/browser`
 - `POST /notifications/list`
 - `POST /notifications/assign`
 - `POST /notifications/ack`
@@ -489,6 +493,8 @@ batch after the operator confirms the item-level results.
 For active memories, Hermes can call `batch_memory_lifecycle()` or MCP
 `memory_lifecycle_batch` with `dry_run=true` before correcting, deleting,
 distrusting, or expiring several records.
+For graph navigation, Hermes can call `graph_browser()` or MCP
+`memory_graph_browser` to get nodes, edges, and source previews in one payload.
 
 Lower-level context builder call:
 

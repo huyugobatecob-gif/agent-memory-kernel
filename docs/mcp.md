@@ -116,6 +116,8 @@ Operator and graph tools:
   artifact cleanup.
 - `memory_graph_nodes`: list active graph nodes.
 - `memory_graph_edges`: list active graph edges.
+- `memory_graph_browser`: return graph nodes, edges, and source previews in one
+  browser-ready payload.
 
 ## Agent Pattern
 

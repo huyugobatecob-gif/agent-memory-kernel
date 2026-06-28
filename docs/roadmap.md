@@ -183,6 +183,9 @@ Baseline active-memory lifecycle batch is implemented through `agent-memory
 lifecycle-batch`, `/memory/lifecycle-batch`, Hermes
 `batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch`.
 Correct/delete/distrust/expire batches support dry-run and per-item results.
+Baseline graph browser data is implemented through `agent-memory graph browser`,
+`/graph/browser`, Hermes `graph_browser()`, and MCP `memory_graph_browser`.
+Nodes and edges include source previews for future UI navigation.
 Baseline export governance is implemented through `agent-memory export-control`,
 `/export/control`, Hermes `export_control_report()`, and MCP
 `memory_export_control`. Export previews return matched policy, aggregate
@@ -275,7 +278,7 @@ Planned:
 - browser UI over the existing review inbox API;
 - browser-assisted batch correction flows;
 - richer source preview;
-- graph browser;
+- browser UI over graph browser data;
 - conflict warnings;
 - push/email/web notification transports and escalation policies;
 - hosted key-management and export custody controls.

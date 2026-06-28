@@ -223,6 +223,9 @@ Already present:
   `/memory/lifecycle-batch`, Hermes `batch_memory_lifecycle()`, and MCP
   `memory_lifecycle_batch`; correct/delete/distrust/expire operations support
   dry-run and per-item results.
+- Baseline graph browser data through `agent-memory graph browser`,
+  `/graph/browser`, Hermes `graph_browser()`, and MCP `memory_graph_browser`;
+  graph nodes and edges include source previews.
 - Baseline operator notification queue through `agent-memory notifications`,
   `/notifications/*`, Hermes notification wrappers, and MCP
   `memory_notifications_list` / `memory_notification_assign` /
@@ -326,9 +329,8 @@ Remaining for full memory:
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
-- Human review web UI, graph browser, browser-assisted batch correction,
-  push/email/web
-  notification transports, and escalation policies beyond the baseline
+- Human review web UI, graph browser UI, browser-assisted batch correction,
+  push/email/web notification transports, and escalation policies beyond the baseline
   machine-readable review inbox, notification queue, approve/reject batch flow,
   and active-memory lifecycle batch flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
@@ -717,12 +719,14 @@ approve/reject batches with dry-run and per-item results. `agent-memory
 lifecycle-batch`, `/memory/lifecycle-batch`, Hermes
 `batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch` provide active
 memory correct/delete/distrust/expire batches with dry-run and per-item
-results. `agent-memory
+results. `agent-memory graph browser`, `/graph/browser`, Hermes
+`graph_browser()`, and MCP `memory_graph_browser` provide graph browser data
+with nodes, edges, and source previews. `agent-memory
 notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, and SLA
 status filtering.
-Remaining work is a browser review UI, graph browser, browser-assisted batch
+Remaining work is a browser review UI, graph browser UI, browser-assisted batch
 correction, notification transports/escalations, and hosted key-management
 controls.
 Export-control, redaction-profile, sensitive-export approval, export retention,

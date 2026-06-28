@@ -250,6 +250,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 limit=int(payload.get("limit", 50) or 50),
             )
         }
+    if path == "/graph/browser":
+        return store.graph_browser(
+            scope=payload.get("scope"),
+            node_type=payload.get("node_type") or payload.get("type"),
+            query=str(payload.get("query", "")),
+            limit=int(payload.get("limit", 50) or 50),
+            evidence_limit=int(payload.get("evidence_limit", 3) or 3),
+        )
     if path == "/write-policy/set":
         return store.set_write_policy(**payload)
     if path == "/write-policy/list":

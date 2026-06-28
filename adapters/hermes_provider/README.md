@@ -44,6 +44,8 @@ The adapter should:
   with dry-run and per-item results;
 - expose `batch_memory_lifecycle()` so Hermes can dry-run and apply batch
   correct/delete/distrust/expire operations for active memories;
+- expose `graph_browser()` so Hermes can render or inspect graph nodes, edges,
+  and source previews without multiple round trips;
 - expose `capability_report()` so Hermes can inspect read/write/export/delete
   permissions before delegating work to an agent;
 - expose `export_control_report()` so Hermes can preview export policy,
@@ -223,6 +225,7 @@ provider.batch_memory_lifecycle(
     actor="reviewer",
     dry_run=True,
 )
+provider.graph_browser(scope="professional", limit=25)
 provider.approve_candidate("cand_xxxxxxxxxxxxxxxx", actor="reviewer")
 provider.correct_memory("mem_xxxxxxxxxxxxxxxx", "Corrected memory text", actor="reviewer")
 

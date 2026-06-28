@@ -105,6 +105,7 @@ REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
+GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -2853,6 +2854,189 @@ class MemoryStore:
             (scope, scope, scope, max(1, min(int(limit or 50), 500))),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def graph_browser(
+        self,
+        *,
+        scope: str | None = None,
+        node_type: str | None = None,
+        query: str = "",
+        limit: int = 50,
+        evidence_limit: int = 3,
+    ) -> dict[str, Any]:
+        """Return graph nodes, edges, and source previews for browser-style UIs."""
+        scope = normalize_scope(scope) if scope else None
+        node_type = self._normalize_graph_node_type(node_type) if node_type else None
+        query = (query or "").strip()
+        node_limit = max(1, min(int(limit or 50), 200))
+        per_item_evidence_limit = max(0, min(int(evidence_limit or 3), 10))
+        clauses = ["status = 'active'"]
+        params: list[Any] = []
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        if node_type:
+            clauses.append("node_type = ?")
+            params.append(node_type)
+        if query:
+            like = f"%{query.lower()}%"
+            clauses.append(
+                """
+                (
+                    LOWER(label) LIKE ?
+                    OR LOWER(summary) LIKE ?
+                    OR LOWER(blob) LIKE ?
+                    OR LOWER(group_label) LIKE ?
+                )
+                """
+            )
+            params.extend([like, like, like, like])
+        where = " AND ".join(clauses)
+        node_rows = self.conn.execute(
+            f"""
+            SELECT graph_node_id, created_at, updated_at, node_type, label,
+                   canonical_key, scope, group_label, blob, summary, importance,
+                   confidence, status, aliases_json, topics_json, chronology_json,
+                   verified_status, verified_at, verifier, hemisphere, visual_x,
+                   visual_y, metadata_json
+            FROM memory_graph_nodes
+            WHERE {where}
+            ORDER BY importance DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (*params, node_limit),
+        ).fetchall()
+        nodes = [self._graph_browser_node(row) for row in node_rows]
+        node_ids = [str(node["graph_node_id"]) for node in nodes]
+        node_previews = self._graph_browser_node_previews(
+            node_ids,
+            per_item_limit=per_item_evidence_limit,
+        )
+        for node in nodes:
+            node["source_previews"] = node_previews.get(str(node["graph_node_id"]), [])
+        edges: list[dict[str, Any]] = []
+        if node_ids:
+            placeholders = ",".join("?" for _ in node_ids)
+            edge_rows = self.conn.execute(
+                f"""
+                SELECT ge.graph_edge_id, ge.created_at, ge.updated_at,
+                       ge.source_graph_node_id, ge.target_graph_node_id,
+                       ge.edge_type, ge.label, ge.weight, ge.confidence,
+                       ge.source_memory_id, ge.source_event_id, ge.evidence_count,
+                       src.node_type AS source_type, src.label AS source_label,
+                       dst.node_type AS target_type, dst.label AS target_label
+                FROM memory_graph_edges ge
+                JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+                JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+                WHERE ge.status = 'active'
+                  AND src.status = 'active'
+                  AND dst.status = 'active'
+                  AND ge.source_graph_node_id IN ({placeholders})
+                  AND ge.target_graph_node_id IN ({placeholders})
+                ORDER BY ge.weight DESC, ge.updated_at DESC
+                LIMIT ?
+                """,
+                (*node_ids, *node_ids, max(node_limit * 3, node_limit)),
+            ).fetchall()
+            edges = [dict(row) for row in edge_rows]
+            edge_previews = self._graph_browser_edge_previews(
+                [str(edge["graph_edge_id"]) for edge in edges],
+                per_item_limit=per_item_evidence_limit,
+            )
+            for edge in edges:
+                edge["source_previews"] = edge_previews.get(str(edge["graph_edge_id"]), [])
+        return {
+            "version": GRAPH_BROWSER_VERSION,
+            "scope": scope or "all",
+            "node_type": node_type or "all",
+            "query": query,
+            "limit": node_limit,
+            "evidence_limit": per_item_evidence_limit,
+            "counts": {"nodes": len(nodes), "edges": len(edges)},
+            "nodes": nodes,
+            "edges": edges,
+        }
+
+    def _graph_browser_node(self, row: sqlite3.Row) -> dict[str, Any]:
+        node = dict(row)
+        node["aliases"] = self._loads_json(node.pop("aliases_json"), [])
+        node["topics"] = self._loads_json(node.pop("topics_json"), [])
+        node["chronology"] = self._loads_json(node.pop("chronology_json"), [])
+        node["metadata"] = self._loads_json(node.pop("metadata_json"), {})
+        return node
+
+    def _graph_browser_node_previews(
+        self,
+        node_ids: list[str],
+        *,
+        per_item_limit: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        if not node_ids or per_item_limit <= 0:
+            return {}
+        placeholders = ",".join("?" for _ in node_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT ne.evidence_id, ne.graph_node_id, ne.item_id, ne.memory_id,
+                   ne.event_id, ne.created_at, ne.source_ref, ne.quote,
+                   ne.confidence, e.actor, e.source_type
+            FROM node_evidence ne
+            LEFT JOIN events e ON e.event_id = ne.event_id
+            WHERE ne.graph_node_id IN ({placeholders})
+            ORDER BY ne.graph_node_id, ne.created_at DESC
+            """,
+            node_ids,
+        ).fetchall()
+        previews: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            graph_node_id = str(row["graph_node_id"])
+            if len(previews[graph_node_id]) >= per_item_limit:
+                continue
+            previews[graph_node_id].append(self._graph_browser_evidence_preview(row))
+        return previews
+
+    def _graph_browser_edge_previews(
+        self,
+        edge_ids: list[str],
+        *,
+        per_item_limit: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        if not edge_ids or per_item_limit <= 0:
+            return {}
+        placeholders = ",".join("?" for _ in edge_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT ee.evidence_id, ee.graph_edge_id, ee.item_id, ee.memory_id,
+                   ee.event_id, ee.created_at, ee.source_ref, ee.quote,
+                   ee.confidence, e.actor, e.source_type
+            FROM edge_evidence ee
+            LEFT JOIN events e ON e.event_id = ee.event_id
+            WHERE ee.graph_edge_id IN ({placeholders})
+            ORDER BY ee.graph_edge_id, ee.created_at DESC
+            """,
+            edge_ids,
+        ).fetchall()
+        previews: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            graph_edge_id = str(row["graph_edge_id"])
+            if len(previews[graph_edge_id]) >= per_item_limit:
+                continue
+            previews[graph_edge_id].append(self._graph_browser_evidence_preview(row))
+        return previews
+
+    @staticmethod
+    def _graph_browser_evidence_preview(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "evidence_id": row["evidence_id"],
+            "item_id": row["item_id"],
+            "memory_id": row["memory_id"],
+            "event_id": row["event_id"],
+            "created_at": row["created_at"],
+            "source_ref": row["source_ref"] or "",
+            "source_type": row["source_type"] or "",
+            "actor": row["actor"] or "",
+            "confidence": row["confidence"],
+            "quote": excerpt(row["quote"] or "", 260),
+        }
 
     def list_keeper_runs(self, *, limit: int = 50) -> list[dict[str, Any]]:
         rows = self.conn.execute(

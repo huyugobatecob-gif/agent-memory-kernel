@@ -728,6 +728,22 @@ def cmd_graph_edges(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph_browser(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.graph_browser(
+            scope=args.scope,
+            node_type=args.type,
+            query=args.query,
+            limit=args.limit,
+            evidence_limit=args.evidence_limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_graph_keeper(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1779,6 +1795,14 @@ def build_parser() -> argparse.ArgumentParser:
     gp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     gp.add_argument("--limit", type=int, default=50)
     gp.set_defaults(func=cmd_graph_edges)
+
+    gp = graph_sub.add_parser("browser", help="Build graph browser data with source previews")
+    gp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    gp.add_argument("--type")
+    gp.add_argument("--query", default="")
+    gp.add_argument("--limit", type=int, default=50)
+    gp.add_argument("--evidence-limit", type=int, default=3)
+    gp.set_defaults(func=cmd_graph_browser)
 
     gp = graph_sub.add_parser("keeper-runs", help="List Keeper extraction runs")
     gp.add_argument("--limit", type=int, default=50)

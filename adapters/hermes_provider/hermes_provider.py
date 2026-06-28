@@ -827,6 +827,23 @@ class HermesMemoryProvider:
     ) -> list[dict[str, Any]]:
         return self.store.list_graph_nodes(scope=scope, node_type=node_type, limit=limit)
 
+    def graph_browser(
+        self,
+        *,
+        scope: str | None = None,
+        node_type: str | None = None,
+        query: str = "",
+        limit: int = 50,
+        evidence_limit: int = 3,
+    ) -> dict[str, Any]:
+        return self.store.graph_browser(
+            scope=scope,
+            node_type=node_type,
+            query=query,
+            limit=limit,
+            evidence_limit=evidence_limit,
+        )
+
     def optimize_graph(self, mode: str, scope: str = "professional") -> dict[str, Any]:
         return self.store.optimize_graph(mode, scope=scope)
 

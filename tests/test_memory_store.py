@@ -2161,6 +2161,11 @@ class MemoryStoreTests(unittest.TestCase):
                 "/graph/edges",
                 {"scope": "professional", "limit": 10},
             )
+            graph_browser = handle_api_request(
+                store,
+                "/graph/browser",
+                {"scope": "professional", "limit": 10},
+            )
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -2194,6 +2199,10 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(graph_items["items"])
             self.assertTrue(graph_nodes["nodes"])
             self.assertTrue(graph_edges["edges"])
+            self.assertEqual(graph_browser["version"], "graph-browser-v0.1")
+            self.assertTrue(graph_browser["nodes"])
+            self.assertTrue(graph_browser["edges"])
+            self.assertTrue(graph_browser["nodes"][0]["source_previews"])
             store.close()
 
 
