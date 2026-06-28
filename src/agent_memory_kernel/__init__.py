@@ -12,9 +12,11 @@ from .conformance import (
     seed_conformance_fixture,
 )
 from .contract import assert_contract_shape, memory_contract
+from .orchestrator import MemoryOrchestrator
 from .store import MemoryStore
 
 __all__ = [
+    "MemoryOrchestrator",
     "MemoryStore",
     "assert_acceptance_suite",
     "assert_conformance_spec_shape",

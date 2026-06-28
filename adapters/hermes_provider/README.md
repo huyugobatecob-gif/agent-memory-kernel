@@ -15,8 +15,13 @@ The adapter should:
   gate;
 - run `shadow_turn()` during rollout to collect reviewable Router/Keeper traces;
 - run `evaluate_shadow_trace()` after review to keep regression fixtures;
+- expose `before_agent_turn()` and `after_agent_turn()` as the high-level
+  `MemoryOrchestrator` lifecycle hooks;
 - call `before_model_call()` before a main agent/model answers;
 - call `after_saved_turn()` after the exchange is persisted;
+- expose `retrieve_context()`, `build_prompt_context()`,
+  `keeper_analyze_turn()`, and `ingest_graph()` for service-style
+  orchestration;
 - build Memory Tree Packs before an agent plans work;
 - build full context builder packs for tasks that need profile, summaries,
   recent messages, and graph branches together;

@@ -37,6 +37,10 @@ class MCPServerTests(unittest.TestCase):
             )
             names = {tool["name"] for tool in listed["result"]["tools"]}
             self.assertIn("memory_before_model_call", names)
+            self.assertIn("memory_before_turn", names)
+            self.assertIn("memory_after_turn", names)
+            self.assertIn("memory_retrieve_context", names)
+            self.assertIn("memory_ingest_graph", names)
             self.assertIn("memory_after_saved_turn", names)
             self.assertIn("memory_graph_nodes", names)
             self.assertIn("memory_changes", names)
@@ -76,6 +80,26 @@ class MCPServerTests(unittest.TestCase):
                 capability["result"]["structuredContent"]["version"],
                 "capability-consent-v0.1",
             )
+
+            saved_turn = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_after_saved_turn",
+                        "arguments": {
+                            "thread_id": "seo-demo",
+                            "scope": "professional",
+                            "user_message": "Decision: use memory before SEO planning.",
+                            "assistant_message": "I will call the memory hook first.",
+                            "agent_id": "planner",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(saved_turn["result"]["isError"])
+            self.assertIn("keeper_job_id", saved_turn["result"]["structuredContent"])
 
     def test_mcp_tool_error_is_tool_result_not_protocol_crash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -189,6 +189,10 @@ Already present:
 - Baseline post-turn change inspection through `agent-memory memory-changes`
   and `/memory-changes`, including saved turns, Keeper event, candidates,
   promoted memories, affected surfaces, handles, and audit trail.
+- High-level `MemoryOrchestrator` facade with `before_turn`,
+  `build_prompt_context`, `retrieve_context`, `record_turn`,
+  `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
+  Hermes provider plus HTTP/MCP aliases.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -216,8 +220,8 @@ Already present:
 
 Remaining for full memory:
 
-- Automatic pre-turn context retrieval inside each external orchestrator.
-- Automatic post-turn Keeper analysis inside each external orchestrator.
+- Production rollout that wires `before_turn` and `after_turn` into each live
+  external Hermes agent path by default.
 - Production-grade read-time ranking beyond the baseline deterministic policy.
 - Production memory quality contract with broader behavioral metrics and golden
   fixtures.
@@ -362,7 +366,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 **Verification:** Tests cover `before_turn(query, thread_id, scope)`, `build_prompt_context(...)`, `record_turn(...)`, `keeper_analyze_turn(...)`, `retrieve_context(...)`, `ingest_graph(...)`, and `after_turn(user_text, assistant_text, thread_id, scope)`.
 
-**Result:** There is one stable entrypoint for live agent memory instead of many low-level calls, and Hermes can treat memory as a service rather than as logic inside every agent.
+**Result:** Baseline implemented. `MemoryOrchestrator` now provides one stable
+entrypoint for live agent memory instead of many low-level calls, and Hermes can
+treat memory as a service rather than as logic inside every agent. Remaining
+work is production rollout inside every live Hermes agent path, richer raw graph
+command normalization, and adapter certification on real traffic.
 
 ### Step 4: Add The LLM-Backed Keeper
 

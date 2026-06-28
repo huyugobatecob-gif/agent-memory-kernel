@@ -73,6 +73,59 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             ["query"],
         ),
     },
+    "memory_before_turn": {
+        "endpoint": "/before-turn",
+        "description": "Orchestrator hook: retrieve memory and build prompt context before an agent turn.",
+        "inputSchema": _schema(
+            {
+                "query": _string("Current user request or task."),
+                "thread_id": _string("Conversation thread id.", "default"),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "user_id": _string("User id.", "user"),
+                "agent_id": _string("Calling agent id.", "agent"),
+                "model_id": _string("Main model id.", ""),
+                "mode": _string("Runtime mode such as chat or shadow.", "chat"),
+                "token_budget": _integer("Prompt memory token budget.", 12000),
+                "limit": _integer("Maximum selected memory branches.", 8),
+                "recent_messages": _integer("Recent thread messages to include.", 6),
+                "enable_brain_style": _boolean("Include guarded graph-derived style hint.", True),
+            },
+            ["query"],
+        ),
+    },
+    "memory_build_prompt_context": {
+        "endpoint": "/build-prompt-context",
+        "description": "Orchestrator hook: return the final agent-ready prompt envelope.",
+        "inputSchema": _schema(
+            {
+                "query": _string("Current user request or task."),
+                "thread_id": _string("Conversation thread id.", "default"),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "user_id": _string("User id.", "user"),
+                "agent_id": _string("Calling agent id.", "agent"),
+                "model_id": _string("Main model id.", ""),
+                "token_budget": _integer("Prompt memory token budget.", 12000),
+                "limit": _integer("Maximum selected memory branches.", 8),
+            },
+            ["query"],
+        ),
+    },
+    "memory_retrieve_context": {
+        "endpoint": "/retrieve-context",
+        "description": "Orchestrator hook: retrieve expanded graph branches and tree supplement.",
+        "inputSchema": _schema(
+            {
+                "query": _string("Task or search query."),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "limit": _integer("Maximum branches.", 8),
+                "depth": _integer("Graph neighbor expansion depth.", 1),
+                "include_raw": _boolean("Include raw memory excerpts.", True),
+                "raw_chars": _integer("Maximum raw chars per branch.", 700),
+                "actor": _string("Calling agent id for inject policy enforcement.", "agent"),
+            },
+            ["query"],
+        ),
+    },
     "memory_after_saved_turn": {
         "endpoint": "/after-saved-turn",
         "description": "Save a completed turn and run or queue Keeper extraction.",
@@ -90,6 +143,42 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "source_ref": _string("External source reference.", ""),
             },
             ["user_message", "assistant_message"],
+        ),
+    },
+    "memory_after_turn": {
+        "endpoint": "/after-turn",
+        "description": "Orchestrator hook: save the exchange and run or queue Keeper extraction after an agent turn.",
+        "inputSchema": _schema(
+            {
+                "thread_id": _string("Conversation thread id.", "default"),
+                "user_text": _string("User message text."),
+                "assistant_text": _string("Assistant response text."),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "user_id": _string("User id.", "user"),
+                "agent_id": _string("Calling agent id.", "agent"),
+                "model_id": _string("Main model id.", ""),
+                "keeper_mode": _string("sync or queue.", "sync"),
+                "auto_approve": _boolean("Attempt policy-controlled auto-approval.", False),
+            },
+            ["user_text", "assistant_text"],
+        ),
+    },
+    "memory_ingest_graph": {
+        "endpoint": "/ingest-graph",
+        "description": "Orchestrator hook: ingest Keeper-style graph updates as reviewable memory.",
+        "inputSchema": _schema(
+            {
+                "updates": {
+                    "type": "array",
+                    "description": "Graph update objects with text, label, summary, relation, target, or evidence.",
+                    "items": {"type": "object"},
+                },
+                "scope": _string("Memory scope/lane.", "professional"),
+                "actor": _string("Calling agent id.", "agent"),
+                "source_ref": _string("Source reference.", ""),
+                "auto_approve": _boolean("Attempt policy-controlled auto-approval.", False),
+            },
+            ["updates"],
         ),
     },
     "memory_changes": {

@@ -17,6 +17,7 @@ from .conformance import (
     seed_conformance_fixture,
 )
 from .contract import assert_contract_shape, memory_contract
+from .orchestrator import MemoryOrchestrator
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
 
@@ -34,6 +35,28 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return conformance_spec()
     if path == "/conformance/spec/assert":
         return assert_conformance_spec_shape()
+    orchestrator = MemoryOrchestrator(store)
+    if path in {"/before-turn", "/orchestrator/before-turn"}:
+        query = str(payload.pop("query", ""))
+        return orchestrator.before_turn(query, **payload)
+    if path in {"/build-prompt-context", "/orchestrator/build-prompt-context"}:
+        query = str(payload.pop("query", ""))
+        return orchestrator.build_prompt_context(query, **payload)
+    if path in {"/retrieve-context", "/orchestrator/retrieve-context"}:
+        query = str(payload.pop("query", ""))
+        return orchestrator.retrieve_context(query, **payload)
+    if path in {"/record-turn", "/orchestrator/record-turn"}:
+        content = str(payload.pop("content", ""))
+        return orchestrator.record_turn(content, **payload)
+    if path in {"/keeper-analyze-turn", "/orchestrator/keeper-analyze-turn"}:
+        payload = _normalize_after_turn_payload(payload)
+        return orchestrator.keeper_analyze_turn(**payload)
+    if path in {"/after-turn", "/orchestrator/after-turn"}:
+        payload = _normalize_after_turn_payload(payload)
+        return orchestrator.after_turn(**payload)
+    if path in {"/ingest-graph", "/orchestrator/ingest-graph"}:
+        updates = payload.pop("updates", [])
+        return orchestrator.ingest_graph(updates, **payload)
     if path == "/before-model-call":
         return store.before_model_call(**payload)
     if path == "/read-time-policy":
@@ -90,6 +113,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             limit=int(payload.get("limit", 50) or 50),
         )
     if path == "/after-saved-turn":
+        payload = _normalize_after_turn_payload(payload)
         return store.after_saved_turn(**payload)
     if path == "/shadow-turn":
         query = str(payload.pop("query", ""))
@@ -255,6 +279,22 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "worker")),
         )
     raise KeyError(f"unknown endpoint: {path}")
+
+
+def _normalize_after_turn_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    if "user_message" in normalized and "user_text" not in normalized:
+        normalized["user_text"] = normalized.pop("user_message")
+    if "assistant_message" in normalized and "assistant_text" not in normalized:
+        normalized["assistant_text"] = normalized.pop("assistant_message")
+
+    metadata = dict(normalized.get("metadata") or {})
+    for key in ("write_policy", "source_ref"):
+        if key in normalized:
+            metadata[key] = normalized.pop(key)
+    if metadata:
+        normalized["metadata"] = metadata
+    return normalized
 
 
 def run_server(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765) -> None:

@@ -32,7 +32,12 @@ content and `structuredContent` for successful tool calls.
 
 Runtime tools:
 
+- `memory_before_turn`: orchestrator hook that retrieves memory and builds
+  prompt context before an agent turn.
+- `memory_build_prompt_context`: return the final agent-ready prompt envelope.
 - `memory_before_model_call`: build the prompt envelope before the main model.
+- `memory_after_turn`: orchestrator hook that saves the exchange and runs or
+  queues Keeper after an agent turn.
 - `memory_after_saved_turn`: save the exchange and run or queue Keeper.
 - `memory_worker_run`: process queued Keeper jobs.
 - `memory_changes`: inspect what Keeper changed after a saved turn.
@@ -44,6 +49,8 @@ Runtime tools:
 
 Retrieval tools:
 
+- `memory_retrieve_context`: return expanded graph branches plus the tree
+  supplement.
 - `memory_search`: search active memory with provenance.
 - `memory_context_pack`: return compact context text.
 - `memory_tree_pack`: return the expanded Memory Tree Supplement.
@@ -52,6 +59,7 @@ Retrieval tools:
 
 Operator and graph tools:
 
+- `memory_ingest_graph`: ingest Keeper-style graph updates as reviewable memory.
 - `memory_remember`: record a candidate or policy-approved memory.
 - `memory_review_list`: list review candidates.
 - `memory_review_approve`: approve a candidate.
@@ -65,10 +73,10 @@ For a normal agent loop:
 
 1. Call `memory_capability_check` when the orchestrator needs to verify a
    delegated agent's memory rights.
-2. Call `memory_before_model_call` with the current user request.
+2. Call `memory_before_turn` with the current user request.
 3. Inject the returned prompt envelope or `MEMORY_TREE_SUPPLEMENT` into the
    main model prompt.
-4. After the model answers, call `memory_after_saved_turn`.
+4. After the model answers, call `memory_after_turn`.
 5. If Keeper was queued, call `memory_worker_run` out of band.
 6. Use `memory_changes` to audit what was saved or proposed.
 

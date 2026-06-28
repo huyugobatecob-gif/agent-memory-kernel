@@ -64,6 +64,12 @@ Suggested interface:
 
 ```python
 class HermesMemoryProvider:
+    def before_agent_turn(self, query: str, thread_id: str = "default", scope: str = "professional") -> dict:
+        ...
+
+    def after_agent_turn(self, thread_id: str = "default", user_text: str = "", assistant_text: str = "") -> dict:
+        ...
+
     def before_model_call(self, query: str, thread_id: str = "default", scope: str = "professional") -> dict:
         ...
 
@@ -79,7 +85,19 @@ class HermesMemoryProvider:
     def context_builder_pack(self, query: str, scope: str | None = None, thread_id: str = "default") -> str:
         ...
 
+    def retrieve_context(self, query: str, scope: str | None = None, limit: int = 8) -> dict:
+        ...
+
+    def build_prompt_context(self, query: str, thread_id: str = "default", scope: str = "professional") -> dict:
+        ...
+
     def record_turn(self, content: str, thread_id: str = "default", remember: bool = False) -> dict:
+        ...
+
+    def keeper_analyze_turn(self, **kwargs) -> dict:
+        ...
+
+    def ingest_graph(self, updates: list[dict], **kwargs) -> dict:
         ...
 
     def graph_nodes(self, scope: str | None = None, node_type: str | None = None) -> list[dict]:
@@ -113,7 +131,8 @@ class HermesMemoryProvider:
         ...
 ```
 
-The provider should call `MemoryStore`, not duplicate storage logic.
+The provider should call `MemoryOrchestrator`/`MemoryStore`, not duplicate
+storage logic.
 
 The runtime hook pair is the preferred full-memory path. The older
 `context_pack`, `tree_pack`, and `record_turn` methods remain useful as smaller
@@ -134,10 +153,11 @@ agent-memory-mcp --db .memory/hermes-memory.db
 ```
 
 The MCP tools mirror the runtime API: `memory_before_model_call`,
-`memory_after_saved_turn`, `memory_changes`, `memory_tree_pack`,
-`memory_capability_check`, `memory_derived_invalidations`,
-`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_before_turn`, `memory_build_prompt_context`, `memory_after_saved_turn`,
+`memory_after_turn`, `memory_retrieve_context`, `memory_ingest_graph`,
+`memory_changes`, `memory_tree_pack`, `memory_capability_check`,
+`memory_derived_invalidations`, `memory_review_list`, `memory_graph_nodes`,
+`memory_graph_edges`, and `memory_worker_run`.
 
 Useful endpoints:
 
@@ -146,6 +166,13 @@ Useful endpoints:
 - `POST /contract/assert`
 - `POST /conformance/spec`
 - `POST /conformance/spec/assert`
+- `POST /before-turn`
+- `POST /build-prompt-context`
+- `POST /retrieve-context`
+- `POST /record-turn`
+- `POST /keeper-analyze-turn`
+- `POST /after-turn`
+- `POST /ingest-graph`
 - `POST /before-model-call`
 - `POST /after-saved-turn`
 - `POST /shadow-turn`

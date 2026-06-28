@@ -96,13 +96,16 @@ tested:
 
 Current status: the first local runtime hook slice exists through
 `before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
-`MemoryStore.after_saved_turn()`, and the Hermes provider wrapper. It proves the
-Router/envelope/Keeper candidate loop. The richer `slice seed/run/assert`
-fixture now checks corrected memory, deleted memory, professional/personal lane
-separation, success/failure loop retrieval, and poisoning quarantine. Full v0.2
-now has a local stdlib HTTP API service through `agent-memory serve`; hosted
-auth and MCP are still backlog. Runtime scope allow/deny enforcement is
-implemented for Router retrieval.
+`MemoryStore.after_saved_turn()`, `MemoryOrchestrator`, and the Hermes provider
+wrapper. It proves the Router/envelope/Keeper candidate loop and exposes a
+single service facade for `before_turn`, `build_prompt_context`,
+`retrieve_context`, `record_turn`, `keeper_analyze_turn`, `ingest_graph`, and
+`after_turn`. The richer `slice seed/run/assert` fixture now checks corrected
+memory, deleted memory, professional/personal lane separation, success/failure
+loop retrieval, and poisoning quarantine. Full v0.2 now has a local stdlib HTTP
+API service through `agent-memory serve` and a local stdio MCP server; hosted
+auth and remote MCP deployment are still backlog. Runtime scope allow/deny
+enforcement is implemented for Router retrieval.
 Baseline read-time policy and Router explainability are implemented through
 `prompt_envelope.metadata.read_time_policy`, `selection_decisions`,
 `agent-memory read-time-policy`, `agent-memory router-runs`,

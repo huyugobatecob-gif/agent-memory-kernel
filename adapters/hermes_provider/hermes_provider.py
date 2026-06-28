@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_memory_kernel import (
+    MemoryOrchestrator,
     MemoryStore,
     assert_acceptance_suite,
     assert_conformance_spec_shape,
@@ -30,6 +31,7 @@ class HermesMemoryProvider:
     def __init__(self, db_path: str | Path = ".memory/hermes-memory.db", *, extractor: Any = None):
         self.store = MemoryStore(db_path, extractor=extractor)
         self.store.init_db()
+        self.orchestrator = MemoryOrchestrator(self.store)
 
     def memory_contract(self) -> dict[str, Any]:
         return memory_contract()
@@ -219,7 +221,40 @@ class HermesMemoryProvider:
         limit: int = 8,
         enable_brain_style: bool = True,
     ) -> dict[str, Any]:
-        return self.store.before_model_call(
+        return self.orchestrator.before_turn(
+            query,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode,
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+            limit=limit,
+            enable_brain_style=enable_brain_style,
+        )
+
+    def before_agent_turn(
+        self,
+        query: str,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "chat",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
+        limit: int = 8,
+        enable_brain_style: bool = True,
+    ) -> dict[str, Any]:
+        return self.orchestrator.before_turn(
             query,
             thread_id=thread_id,
             scope=scope,
@@ -250,7 +285,7 @@ class HermesMemoryProvider:
         keeper_mode: str = "sync",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self.store.after_saved_turn(
+        return self.orchestrator.after_turn(
             thread_id=thread_id,
             scope=scope,
             user_id=user_id,
@@ -263,6 +298,83 @@ class HermesMemoryProvider:
             keeper_mode=keeper_mode,
             metadata=metadata,
         )
+
+    def after_agent_turn(
+        self,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        user_text: str = "",
+        assistant_text: str = "",
+        turn_id: str = "",
+        auto_approve: bool = False,
+        keeper_mode: str = "sync",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.orchestrator.after_turn(
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            turn_id=turn_id,
+            auto_approve=auto_approve,
+            keeper_mode=keeper_mode,
+            metadata=metadata,
+        )
+
+    def retrieve_context(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        limit: int = 8,
+        depth: int = 1,
+        include_raw: bool = True,
+        actor: str = "hermes",
+    ) -> dict[str, Any]:
+        return self.orchestrator.retrieve_context(
+            query,
+            scope=scope,
+            limit=limit,
+            depth=depth,
+            include_raw=include_raw,
+            actor=actor,
+        )
+
+    def build_prompt_context(
+        self,
+        query: str,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        token_budget: int = 12000,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        return self.orchestrator.build_prompt_context(
+            query,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            token_budget=token_budget,
+            limit=limit,
+        )
+
+    def keeper_analyze_turn(self, **kwargs: Any) -> dict[str, Any]:
+        return self.orchestrator.keeper_analyze_turn(**kwargs)
+
+    def ingest_graph(self, updates: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        return self.orchestrator.ingest_graph(updates, **kwargs)
 
     def shadow_turn(
         self,

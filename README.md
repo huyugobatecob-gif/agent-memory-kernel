@@ -44,6 +44,9 @@ Included now:
 - Active memory search.
 - Agent context packs with provenance.
 - Runtime hooks: `before-model-call` and `after-saved-turn`.
+- High-level `MemoryOrchestrator` service facade for `before_turn`,
+  `build_prompt_context`, `retrieve_context`, `record_turn`,
+  `keeper_analyze_turn`, `ingest_graph`, and `after_turn`.
 - Formal machine-readable Memory Contract and acceptance harness.
 - Versioned public conformance scenarios for adapter compatibility.
 - Scope access enforcement for runtime memory retrieval.
@@ -572,10 +575,12 @@ agent-memory-mcp --db .memory/demo.db
 ```
 
 The MCP server exposes the same orchestrator surface as the HTTP API, including
-`memory_before_model_call`, `memory_after_saved_turn`, `memory_changes`,
+`memory_before_model_call`, `memory_before_turn`,
+`memory_build_prompt_context`, `memory_after_saved_turn`, `memory_after_turn`,
+`memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
 `memory_search`, `memory_tree_pack`, `memory_review_list`,
-`memory_capability_check`, `memory_derived_invalidations`,
-`memory_graph_nodes`, `memory_graph_edges`, and `memory_worker_run`.
+`memory_capability_check`, `memory_derived_invalidations`, `memory_graph_nodes`,
+`memory_graph_edges`, and `memory_worker_run`.
 
 ## Implementation Plan
 
@@ -638,6 +643,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-demo.db
 ```text
 src/agent_memory_kernel/
   cli.py                 CLI commands
+  orchestrator.py        high-level memory lifecycle facade
   store.py               SQLite-backed memory store
   policy.py              safety and admission policy
   server.py              stdlib HTTP API service
