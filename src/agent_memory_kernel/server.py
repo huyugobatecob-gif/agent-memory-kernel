@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 from html import escape
 import json
 import os
@@ -1281,11 +1282,20 @@ def _h(value: Any) -> str:
     return escape(str(value if value is not None else ""), quote=True)
 
 
-def run_server(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765) -> None:
+def run_server(
+    db_path: str | Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    auth_token: str = "",
+    auth_token_env: str = "AGENT_MEMORY_API_TOKEN",
+) -> None:
     """Run the blocking HTTP service."""
-    handler = make_handler(db_path)
+    token = (auth_token or os.environ.get(auth_token_env, "") or "").strip()
+    handler = make_handler(db_path, auth_token=token)
     server = ThreadingHTTPServer((host, int(port)), handler)
-    print(f"agent-memory api listening on http://{host}:{int(port)}")
+    auth_note = " auth=required" if token else " auth=disabled"
+    print(f"agent-memory api listening on http://{host}:{int(port)}{auth_note}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -1294,8 +1304,9 @@ def run_server(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765
         server.server_close()
 
 
-def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
+def make_handler(db_path: str | Path, *, auth_token: str = "") -> type[BaseHTTPRequestHandler]:
     db_path = str(db_path)
+    auth_token = (auth_token or "").strip()
 
     class MemoryAPIHandler(BaseHTTPRequestHandler):
         server_version = "AgentMemoryKernel/0.1"
@@ -1305,7 +1316,9 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
             path = _normalize_path(parsed.path)
             params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
             if path == "/health":
-                self._send_json(200, {"status": "ok"})
+                self._send_json(200, {"status": "ok", "auth_required": bool(auth_token)})
+                return
+            if not self._require_auth():
                 return
             if path in {"/", "/ui", "/ui/review"}:
                 try:
@@ -1365,6 +1378,8 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib handler name
             try:
+                if _normalize_path(urlparse(self.path).path) != "/health" and not self._require_auth():
+                    return
                 payload = self._read_json()
                 store = MemoryStore(db_path)
                 store.init_db()
@@ -1381,6 +1396,18 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format: str, *args: Any) -> None:
             return
 
+        def _require_auth(self) -> bool:
+            if not auth_token:
+                return True
+            if _request_is_authorized(self.headers, auth_token):
+                return True
+            self._send_json(
+                401,
+                {"error": "unauthorized", "detail": "bearer token required"},
+                headers={"www-authenticate": "Bearer"},
+            )
+            return False
+
         def _read_json(self) -> dict[str, Any]:
             length = int(self.headers.get("content-length", "0") or "0")
             if length <= 0:
@@ -1388,10 +1415,18 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
             data = self.rfile.read(length)
             return json.loads(data.decode("utf-8"))
 
-        def _send_json(self, status: int, payload: dict[str, Any]) -> None:
+        def _send_json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            *,
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
             self.send_response(status)
             self.send_header("content-type", "application/json; charset=utf-8")
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.send_header("content-length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -1407,13 +1442,34 @@ def make_handler(db_path: str | Path) -> type[BaseHTTPRequestHandler]:
     return MemoryAPIHandler
 
 
+def _request_is_authorized(headers: Any, auth_token: str) -> bool:
+    expected = (auth_token or "").strip()
+    if not expected:
+        return True
+    authorization = str(headers.get("authorization", "") or "").strip()
+    prefix = "bearer "
+    if authorization.lower().startswith(prefix):
+        supplied = authorization[len(prefix) :].strip()
+        return hmac.compare_digest(supplied, expected)
+    supplied = str(headers.get("x-agent-memory-token", "") or "").strip()
+    return bool(supplied) and hmac.compare_digest(supplied, expected)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="agent-memory-api")
     parser.add_argument("--db", default=".memory/memory.db")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--auth-token", default="")
+    parser.add_argument("--auth-token-env", default="AGENT_MEMORY_API_TOKEN")
     args = parser.parse_args(argv)
-    run_server(args.db, host=args.host, port=args.port)
+    run_server(
+        args.db,
+        host=args.host,
+        port=args.port,
+        auth_token=args.auth_token,
+        auth_token_env=args.auth_token_env,
+    )
     return 0
 
 

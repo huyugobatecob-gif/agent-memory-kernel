@@ -639,18 +639,22 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m agent_memory_kernel.server --db /tmp/amk-full-memory.db --host 127.0.0.1 --port 8765
+AGENT_MEMORY_API_TOKEN=change-me PYTHONPATH=src python3 -m agent_memory_kernel.server --db /tmp/amk-full-memory.db --host 127.0.0.1 --port 8765
 ```
 
 **Verification:** `/before-model-call`, `/after-saved-turn`, `/review/list`,
 `/review/inbox`, `/memory/correct`, `/memory/delete`, `/memory/distrust`,
 `/memory/expire`, `/export/control`, `/export/profile`, `/graph/nodes`,
-`/graph/edges`, and MCP equivalents return stable JSON.
+`/graph/edges`, and MCP equivalents return stable JSON. When
+`AGENT_MEMORY_API_TOKEN` is configured, `/health` remains public and reports
+`auth_required`, while UI/API routes require `Authorization: Bearer ...` or
+`X-Agent-Memory-Token`.
 
 **Result:** Baseline implemented. The repository now has `agent-memory serve`,
 `agent-memory mcp`, `agent-memory-mcp`, `src/agent_memory_kernel/mcp_server.py`,
-and tests for MCP `initialize`, `tools/list`, and `tools/call`. Remaining work
-is hosted auth, remote MCP deployment guidance, and broader production adapter
-certification.
+optional bearer-token protection for HTTP, and tests for MCP `initialize`,
+`tools/list`, and `tools/call`. Remaining work is hosted multi-user auth/RBAC,
+remote MCP deployment guidance, and broader production adapter certification.
 Hermes, Codex, Claude, browser agents, and local tools can share the same
 memory kernel.
 

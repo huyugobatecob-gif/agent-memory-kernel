@@ -64,7 +64,8 @@ Included now:
 - Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
-- Local stdlib HTTP API service with browser review/graph pages: `serve`.
+- Local stdlib HTTP API service with browser review/graph pages and optional
+  bearer-token guard: `serve`.
 - Dependency-free stdio MCP server: `mcp` / `agent-memory-mcp`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
@@ -128,7 +129,7 @@ Not included yet:
 - hosted embedding provider adapters and approximate-nearest-neighbor indexes;
 - production LLM Keeper eval suite and managed model configuration;
 - production Hermes integration;
-- multi-user auth.
+- hosted multi-user auth/RBAC beyond the local bearer-token guard.
 
 ## Install
 

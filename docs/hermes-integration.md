@@ -267,6 +267,20 @@ Hermes can call the same hooks through the local HTTP service:
 agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
 ```
 
+For non-local or shared environments, require a token without sending it in
+memory payloads:
+
+```bash
+AGENT_MEMORY_API_TOKEN="change-me" agent-memory serve \
+  --db .memory/hermes-memory.db \
+  --host 127.0.0.1 \
+  --port 8765
+```
+
+Hermes should then send `Authorization: Bearer $AGENT_MEMORY_API_TOKEN` or
+`X-Agent-Memory-Token`. `/health` remains public and reports whether auth is
+required; UI and API routes require the token when configured.
+
 The same stdlib server exposes browser operator pages at
 `http://127.0.0.1:8765/ui/review`, `http://127.0.0.1:8765/ui/graph`, and
 `http://127.0.0.1:8765/ui/conflicts`.

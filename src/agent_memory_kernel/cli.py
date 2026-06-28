@@ -1409,7 +1409,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    run_server(args.db, host=args.host, port=args.port)
+    run_server(
+        args.db,
+        host=args.host,
+        port=args.port,
+        auth_token=args.auth_token,
+        auth_token_env=args.auth_token_env,
+    )
     return 0
 
 
@@ -2285,6 +2291,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--auth-token", default="")
+    p.add_argument("--auth-token-env", default="AGENT_MEMORY_API_TOKEN")
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("mcp", help="Run the stdio MCP server")
