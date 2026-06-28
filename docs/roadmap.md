@@ -166,12 +166,13 @@ Implemented now:
 
 - Hermes provider adapter;
 - simple HTTP API;
+- dependency-free stdio MCP server;
 - OpenAI-compatible lightweight extractor adapter;
 - local deterministic semantic reranker.
 
 Planned:
 
-- MCP server;
+- hosted or remote MCP deployment patterns;
 - file-based vault adapter;
 - optional provider embeddings;
 - provider-backed semantic reranker for larger corpora.

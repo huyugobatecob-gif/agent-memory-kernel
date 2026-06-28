@@ -124,6 +124,29 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)
+    if path == "/graph/items":
+        return {
+            "items": store.list_memory_items(
+                scope=payload.get("scope"),
+                item_type=payload.get("item_type") or payload.get("type"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/graph/nodes":
+        return {
+            "nodes": store.list_graph_nodes(
+                scope=payload.get("scope"),
+                node_type=payload.get("node_type") or payload.get("type"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
+    if path == "/graph/edges":
+        return {
+            "edges": store.list_graph_edges(
+                scope=payload.get("scope"),
+                limit=int(payload.get("limit", 50) or 50),
+            )
+        }
     if path == "/write-policy/set":
         return store.set_write_policy(**payload)
     if path == "/write-policy/list":

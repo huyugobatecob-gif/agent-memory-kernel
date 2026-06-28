@@ -55,6 +55,7 @@ Included now:
 - First-class outcome records for success/failure loop memory.
 - Queued Keeper jobs and `worker` processing.
 - Local stdlib HTTP API service: `serve`.
+- Dependency-free stdio MCP server: `mcp` / `agent-memory-mcp`.
 - Conversation turns, thread messages, and rolling summaries.
 - Compact `memory_items`.
 - Persistent memory graph nodes and edges.
@@ -533,6 +534,19 @@ eval fixtures. `shadow-eval` stores repeatable quality checks for a trace:
 expected or forbidden branch labels, candidate text, source IDs, token budget,
 and whether Keeper candidates were expected.
 
+Run the stdio MCP server when an external agent supports MCP tools:
+
+```bash
+agent-memory mcp --db .memory/demo.db
+# or
+agent-memory-mcp --db .memory/demo.db
+```
+
+The MCP server exposes the same orchestrator surface as the HTTP API, including
+`memory_before_model_call`, `memory_after_saved_turn`, `memory_changes`,
+`memory_search`, `memory_tree_pack`, `memory_review_list`,
+`memory_graph_nodes`, `memory_graph_edges`, and `memory_worker_run`.
+
 ## Implementation Plan
 
 The detailed build plan is in
@@ -597,6 +611,7 @@ src/agent_memory_kernel/
   store.py               SQLite-backed memory store
   policy.py              safety and admission policy
   server.py              stdlib HTTP API service
+  mcp_server.py          stdio MCP server
   schema.sql             database schema
   slice.py               deterministic full-memory vertical slice fixture
   extractors/            deterministic v0 extractor and extension seams

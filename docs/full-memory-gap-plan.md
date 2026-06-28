@@ -195,6 +195,8 @@ Already present:
 - Basic prompt-injection-like quarantine.
 - Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
 - Local stdlib HTTP API service for runtime hooks and review/list operations.
+- Dependency-free stdio MCP server for agents that should call the same memory
+  orchestrator through MCP tools instead of CLI, imports, or HTTP.
 - CLI and tests.
 - Formal machine-readable Memory Contract with lane, trust, sensitivity, write
   action, closed-loop, and acceptance gate definitions.
@@ -232,7 +234,8 @@ Remaining for full memory:
 - Broader conformance traces for migration, adapter compatibility, and
   real-world memory behavior beyond the baseline public suite.
 - Production daemon mode for long-running Keeper workers.
-- MCP server for agents that should not use CLI or HTTP directly.
+- Broader hosted/remote MCP deployment patterns for agents that should not use
+  local stdio.
 - Provider embeddings and production semantic reranking beyond the local
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
@@ -513,9 +516,16 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m agent_memory_kernel.server --db /tmp/amk-full-memory.db --host 127.0.0.1 --port 8765
 ```
 
-**Verification:** `/before-turn`, `/after-turn`, `/review/pending`, `/graph/nodes`, and MCP equivalents return stable JSON.
+**Verification:** `/before-model-call`, `/after-saved-turn`, `/review/list`,
+`/graph/nodes`, `/graph/edges`, and MCP equivalents return stable JSON.
 
-**Result:** Hermes, Codex, Claude, browser agents, and local tools can share the same memory kernel.
+**Result:** Baseline implemented. The repository now has `agent-memory serve`,
+`agent-memory mcp`, `agent-memory-mcp`, `src/agent_memory_kernel/mcp_server.py`,
+and tests for MCP `initialize`, `tools/list`, and `tools/call`. Remaining work
+is hosted auth, remote MCP deployment guidance, and broader production adapter
+certification.
+Hermes, Codex, Claude, browser agents, and local tools can share the same
+memory kernel.
 
 ### Step 11: Add Background Keeper Worker
 

@@ -29,6 +29,7 @@ dev = ["pytest>=8"]
 
 [project.scripts]
 agent-memory = "agent_memory_kernel.cli:main"
+agent-memory-mcp = "agent_memory_kernel.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

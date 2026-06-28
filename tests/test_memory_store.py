@@ -1686,6 +1686,21 @@ class MemoryStoreTests(unittest.TestCase):
                 "/outcome/pack",
                 {"project": "api-outcome"},
             )
+            graph_items = handle_api_request(
+                store,
+                "/graph/items",
+                {"scope": "professional", "limit": 10},
+            )
+            graph_nodes = handle_api_request(
+                store,
+                "/graph/nodes",
+                {"scope": "professional", "limit": 10},
+            )
+            graph_edges = handle_api_request(
+                store,
+                "/graph/edges",
+                {"scope": "professional", "limit": 10},
+            )
 
             self.assertEqual(health["status"], "ok")
             self.assertEqual(seeded["status"], "seeded")
@@ -1716,6 +1731,9 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(outcome["status"], "active")
             self.assertEqual(len(outcomes["outcomes"]), 1)
             self.assertIn("Internal links helped", outcome_pack["pack"])
+            self.assertTrue(graph_items["items"])
+            self.assertTrue(graph_nodes["nodes"])
+            self.assertTrue(graph_edges["edges"])
             store.close()
 
 

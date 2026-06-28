@@ -119,6 +119,19 @@ Hermes can call the same hooks through the local HTTP service:
 agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
 ```
 
+For agents that speak MCP, run the stdio server instead of HTTP:
+
+```bash
+agent-memory mcp --db .memory/hermes-memory.db
+# or
+agent-memory-mcp --db .memory/hermes-memory.db
+```
+
+The MCP tools mirror the runtime API: `memory_before_model_call`,
+`memory_after_saved_turn`, `memory_changes`, `memory_tree_pack`,
+`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_worker_run`.
+
 Useful endpoints:
 
 - `GET /health`
@@ -141,6 +154,9 @@ Useful endpoints:
 - `POST /current-best`
 - `POST /memory-changes`
 - `POST /remember`
+- `POST /graph/items`
+- `POST /graph/nodes`
+- `POST /graph/edges`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
 - `POST /read-policy/set`

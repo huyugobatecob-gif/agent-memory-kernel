@@ -16,6 +16,7 @@ from .conformance import (
     seed_conformance_fixture,
 )
 from .contract import assert_contract_shape, memory_contract
+from .mcp_server import run_mcp_stdio
 from .server import run_server
 from .slice import assert_vertical_slice, run_vertical_slice, seed_vertical_slice
 from .store import MemoryStore
@@ -933,6 +934,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    run_mcp_stdio(args.db)
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1535,6 +1541,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("mcp", help="Run the stdio MCP server")
+    add_common_db(p)
+    p.set_defaults(func=cmd_mcp)
 
     p = sub.add_parser("export", help="Export active memories to a markdown vault")
     add_common_db(p)
