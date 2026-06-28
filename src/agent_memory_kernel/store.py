@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import re
 import sqlite3
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +22,156 @@ def now_iso() -> str:
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:16]}"
+
+
+TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9_.-]{2,}")
+URL_RE = re.compile(r"https?://[^\s)]+")
+DOMAIN_RE = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b")
+DATE_HINT_RE = re.compile(r"\b(?:20\d{2}-\d{2}-\d{2}|20\d{6}|today|yesterday|tomorrow|сегодня|вчера|завтра)\b", re.I)
+PROJECT_HINT_RE = re.compile(
+    r"(?i)\b(?:project|repo|client|workspace|site|domain|проект|сайт|домен|клиент)\s+([A-Za-zА-Яа-яЁё0-9_.-]+)"
+)
+DOCUMENT_HINT_RE = re.compile(
+    r"(?i)\b(?:document|doc|file|page|post|article|url|документ|файл|страница|пост|статья)\s+([A-Za-zА-Яа-яЁё0-9_./:-]+)"
+)
+PERSON_HINT_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b")
+KNOWN_TOOLS = {
+    "codex",
+    "gemini",
+    "gpt",
+    "hermes",
+    "mcp",
+    "openai",
+    "paper",
+    "sqlite",
+    "telegram",
+    "vk",
+    "wordpress",
+}
+GRAPH_GROUPS = {
+    "data": "Data",
+    "decision": "Decisions",
+    "document": "Documents",
+    "event": "Events",
+    "fact": "Facts",
+    "gotcha": "Gotchas",
+    "interest": "Interests",
+    "outcome": "Outcomes",
+    "pattern": "Patterns",
+    "person": "People",
+    "preference": "Preferences",
+    "project": "Projects",
+    "rule": "Rules",
+    "attempt": "Attempts",
+    "tool": "Tools",
+}
+PRIMARY_GRAPH_TYPES = [
+    "project",
+    "person",
+    "document",
+    "tool",
+    "interest",
+    "data",
+    "rule",
+    "decision",
+    "attempt",
+    "outcome",
+    "gotcha",
+    "pattern",
+    "preference",
+    "fact",
+]
+STOPWORDS = {
+    "and",
+    "are",
+    "для",
+    "for",
+    "from",
+    "how",
+    "как",
+    "или",
+    "это",
+    "что",
+    "the",
+    "this",
+    "that",
+    "what",
+    "when",
+    "where",
+    "with",
+    "you",
+    "your",
+    "вот",
+    "при",
+    "про",
+    "чтобы",
+}
+
+
+def query_tokens(text: str) -> list[str]:
+    """Return small lexical tokens for deterministic graph retrieval."""
+    tokens = []
+    for token in TOKEN_RE.findall((text or "").lower()):
+        if token not in STOPWORDS and token not in tokens:
+            tokens.append(token)
+    return tokens[:40]
+
+
+def canonical_key(label: str) -> str:
+    """Normalize a graph label for deterministic dedupe."""
+    tokens = query_tokens(label)
+    if tokens:
+        return "-".join(tokens)
+    return re.sub(r"[^a-z0-9]+", "-", (label or "").lower()).strip("-")
+
+
+def group_label(node_type: str) -> str:
+    return GRAPH_GROUPS.get(node_type, node_type.replace("_", " ").title())
+
+
+def excerpt(text: str, limit: int = 240) -> str:
+    text = " ".join((text or "").strip().split())
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def lexical_embedding(text: str, *, dims: int = 32) -> list[float]:
+    """Small local embedding placeholder compatible with future vector search.
+
+    It is intentionally deterministic and dependency-free. Production installs
+    can replace this field with provider embeddings without changing the schema.
+    """
+    vector = [0.0] * dims
+    tokens = query_tokens(text)
+    if not tokens:
+        return vector
+    for token in tokens:
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        index = digest[0] % dims
+        sign = 1.0 if digest[1] % 2 == 0 else -1.0
+        vector[index] += sign
+    magnitude = sum(value * value for value in vector) ** 0.5
+    if not magnitude:
+        return vector
+    return [round(value / magnitude, 6) for value in vector]
+
+
+def deterministic_position(key: str) -> tuple[float, float]:
+    digest = hashlib.sha256((key or "").encode("utf-8")).digest()
+    x_raw = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
+    y_raw = int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF
+    return (round((x_raw * 2) - 1, 6), round((y_raw * 2) - 1, 6))
+
+
+def hemisphere_for_node(node_type: str) -> str:
+    if node_type in {"person", "preference", "interest", "pattern"}:
+        return "right"
+    if node_type in {"project", "document", "data", "tool", "rule", "decision", "attempt", "outcome", "gotcha"}:
+        return "left"
+    return ""
 
 
 class MemoryStore:
@@ -47,6 +200,18 @@ class MemoryStore:
             "extraction_json",
             "TEXT NOT NULL DEFAULT '{}'",
         )
+        for column, declaration in [
+            ("aliases_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("topics_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("chronology_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("verified_status", "TEXT NOT NULL DEFAULT 'unverified'"),
+            ("verified_at", "TEXT"),
+            ("verifier", "TEXT NOT NULL DEFAULT ''"),
+            ("hemisphere", "TEXT NOT NULL DEFAULT ''"),
+            ("visual_x", "REAL"),
+            ("visual_y", "REAL"),
+        ]:
+            self._ensure_column("memory_graph_nodes", column, declaration)
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.commit()
 
@@ -268,6 +433,1011 @@ class MemoryStore:
             )
         return "\n".join(lines)
 
+    def retrieve_tree(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        limit: int = 8,
+        depth: int = 1,
+        include_raw: bool = True,
+        raw_chars: int = 1600,
+    ) -> dict[str, Any]:
+        """Retrieve an agent-facing memory tree.
+
+        Tags and graph nodes are internal routing hints. This method returns the
+        actual memory branches, related nodes, and raw provenance excerpts that
+        an agent needs in order to understand the prior conversation or work.
+        """
+        query = (query or "").strip()
+        if not query:
+            return self._empty_tree_pack(query, scope)
+
+        scope = normalize_scope(scope) if scope else None
+        limit_value = 8 if limit is None else int(limit)
+        depth_value = 1 if depth is None else int(depth)
+        raw_chars_value = 1600 if raw_chars is None else int(raw_chars)
+        limit = max(1, min(limit_value, 32))
+        depth = max(0, min(depth_value, 3))
+        raw_chars = max(0, min(raw_chars_value, 8000))
+
+        seed_scores: dict[str, float] = {}
+        reasons: dict[str, set[str]] = defaultdict(set)
+
+        for index, item in enumerate(self.search(query, scope=scope, limit=limit * 3)):
+            memory_id = str(item["memory_id"])
+            seed_scores[memory_id] = max(seed_scores.get(memory_id, 0), 100 - index)
+            reasons[memory_id].add("active memory text match")
+
+        node_hits = self._node_hits(query, scope=scope, limit=limit * 6)
+        for item in node_hits:
+            memory_id = str(item["memory_id"])
+            seed_scores[memory_id] = max(seed_scores.get(memory_id, 0), 70 + item["score"])
+            reasons[memory_id].add(
+                f"node match: {item['node_type']} / {item['label']}"
+            )
+
+        graph_hits = self._graph_node_hits(query, scope=scope, limit=limit * 8)
+        for item in graph_hits:
+            memory_id = str(item["memory_id"])
+            seed_scores[memory_id] = max(seed_scores.get(memory_id, 0), 90 + item["score"])
+            reasons[memory_id].add(
+                f"memory graph node: {item['group_label']} / {item['label']}"
+            )
+
+        expanded = self._expand_by_graph(seed_scores.keys(), depth=depth, scope=scope)
+        for memory_id, reason in expanded.items():
+            if memory_id not in seed_scores:
+                seed_scores[memory_id] = 20
+            reasons[memory_id].add(reason)
+
+        selected_ids = [
+            memory_id
+            for memory_id, _score in sorted(
+                seed_scores.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:limit]
+        ]
+        if not selected_ids:
+            return self._empty_tree_pack(query, scope)
+
+        memory_rows = self._memories_by_id(selected_ids)
+        node_rows = self._nodes_for_memories(selected_ids)
+        graph_node_rows = self._graph_nodes_for_memories(selected_ids)
+        graph_edge_rows = self._graph_edges_for_memories(selected_ids)
+        source_rows = self._sources_for_memories(selected_ids) if include_raw else {}
+
+        branches_by_key: dict[str, dict[str, Any]] = {}
+        order: list[str] = []
+        for memory_id in selected_ids:
+            memory = memory_rows.get(memory_id)
+            if not memory:
+                continue
+            nodes = node_rows.get(memory_id, [])
+            graph_nodes = graph_node_rows.get(memory_id, [])
+            primary = self._primary_graph_node(memory, graph_nodes, nodes)
+            key = f"{primary['node_type']}::{primary['label']}".lower()
+            if key not in branches_by_key:
+                branches_by_key[key] = {
+                    "category": primary["node_type"],
+                    "label": primary["label"],
+                    "why_selected": sorted(reasons.get(memory_id, [])),
+                    "memories": [],
+                    "related_nodes": [],
+                    "memory_graph_nodes": [],
+                    "relationships": [],
+                    "raw_events": [],
+                }
+                order.append(key)
+            branch = branches_by_key[key]
+            branch["why_selected"] = sorted(
+                set(branch["why_selected"]) | reasons.get(memory_id, set())
+            )
+            branch["memories"].append(
+                {
+                    "memory_id": memory_id,
+                    "kind": memory["kind"],
+                    "scope": memory["scope"],
+                    "confidence": memory["confidence"],
+                    "source_trust": memory["source_trust"],
+                    "text": memory["text"],
+                }
+            )
+            for node in nodes:
+                related = {
+                    "node_id": node["node_id"],
+                    "node_type": node["node_type"],
+                    "label": node["label"],
+                }
+                if related not in branch["related_nodes"]:
+                    branch["related_nodes"].append(related)
+            for graph_node in graph_nodes:
+                related = {
+                    "graph_node_id": graph_node["graph_node_id"],
+                    "node_type": graph_node["node_type"],
+                    "label": graph_node["label"],
+                    "group_label": graph_node["group_label"],
+                    "summary": graph_node["summary"],
+                    "blob": graph_node["blob"],
+                    "importance": graph_node["importance"],
+                }
+                if related not in branch["memory_graph_nodes"]:
+                    branch["memory_graph_nodes"].append(related)
+            for relationship in graph_edge_rows.get(memory_id, []):
+                rel = dict(relationship)
+                if rel not in branch["relationships"]:
+                    branch["relationships"].append(rel)
+            for source in source_rows.get(memory_id, []):
+                raw = {
+                    "event_id": source["event_id"],
+                    "source_type": source["source_type"],
+                    "source_ref": source["source_ref"],
+                    "actor": source["actor"],
+                    "created_at": source["created_at"],
+                    "content": self._excerpt(source["content"], raw_chars),
+                }
+                if raw not in branch["raw_events"]:
+                    branch["raw_events"].append(raw)
+
+        branches = [branches_by_key[key] for key in order]
+        return {
+            "query": query,
+            "scope": scope or "all",
+            "retrieval": {
+                "mode": "deterministic hybrid tree retrieval",
+                "seed_count": len(seed_scores),
+                "branch_count": len(branches),
+                "depth": depth,
+                "include_raw": include_raw,
+            },
+            "branches": branches,
+        }
+
+    def memory_tree_pack(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        limit: int = 8,
+        depth: int = 1,
+        include_raw: bool = True,
+        raw_chars: int = 1600,
+    ) -> str:
+        """Build the markdown tree pack passed to an agent before planning."""
+        tree = self.retrieve_tree(
+            query,
+            scope=scope,
+            limit=limit,
+            depth=depth,
+            include_raw=include_raw,
+            raw_chars=raw_chars,
+        )
+        if not tree["branches"]:
+            return (
+                "## Memory Tree Pack\n"
+                f"Root: {tree['query'] or '(empty query)'}\n\n"
+                "No active memory branches matched this request."
+            )
+
+        lines = [
+            "## Memory Tree Pack",
+            "",
+            "Root:",
+            f"- query: {tree['query']}",
+            f"- scope: {tree['scope']}",
+            f"- retrieval: {tree['retrieval']['mode']}",
+            f"- branches: {tree['retrieval']['branch_count']}",
+            "",
+            (
+                "Use this as structured prior context. Tags and node labels are "
+                "routing hints; branch memories and raw provenance are the "
+                "grounding material."
+            ),
+        ]
+        for idx, branch in enumerate(tree["branches"], start=1):
+            lines.extend(
+                [
+                    "",
+                    f"### Branch {idx}: {branch['category']} / {branch['label']}",
+                    "",
+                    "Why selected:",
+                ]
+            )
+            for reason in branch["why_selected"][:6]:
+                lines.append(f"- {reason}")
+
+            lines.extend(["", "Active memories:"])
+            for memory in branch["memories"]:
+                lines.append(
+                    "- "
+                    f"[{memory['scope']}:{memory['kind']}:{memory['confidence']}; "
+                    f"trust={memory['source_trust']}; id={memory['memory_id']}] "
+                    f"{memory['text']}"
+                )
+
+            related = branch["related_nodes"][:16]
+            if related:
+                lines.extend(["", "Related nodes:"])
+                for node in related:
+                    lines.append(f"- {node['node_type']} / {node['label']}")
+
+            graph_nodes = branch.get("memory_graph_nodes", [])[:16]
+            if graph_nodes:
+                lines.extend(["", "Memory graph nodes:"])
+                for node in graph_nodes:
+                    lines.append(
+                        "- "
+                        f"{node['group_label']} / {node['label']} "
+                        f"(type={node['node_type']}; id={node['graph_node_id']}; "
+                        f"importance={node['importance']})"
+                    )
+                    if node.get("summary"):
+                        lines.append(f"  summary: {node['summary']}")
+
+            relationships = branch.get("relationships", [])[:16]
+            if relationships:
+                lines.extend(["", "Relationships:"])
+                for rel in relationships:
+                    lines.append(
+                        "- "
+                        f"{rel['source_type']} / {rel['source_label']} "
+                        f"-[{rel['edge_type']}]-> "
+                        f"{rel['target_type']} / {rel['target_label']} "
+                        f"(weight={rel['weight']}; evidence={rel['evidence_count']})"
+                    )
+
+            if include_raw and branch["raw_events"]:
+                lines.extend(["", "Raw provenance:"])
+                for event in branch["raw_events"][:4]:
+                    source = event["source_ref"] or event["event_id"]
+                    lines.extend(
+                        [
+                            (
+                                f"- source={source}; actor={event['actor']}; "
+                                f"type={event['source_type']}; at={event['created_at']}"
+                            ),
+                            "```text",
+                            event["content"],
+                            "```",
+                        ]
+                    )
+        return "\n".join(lines)
+
+    def record_turn(
+        self,
+        content: str,
+        *,
+        thread_id: str = "default",
+        role: str = "user",
+        actor: str = "user",
+        scope: str = "professional",
+        metadata: dict[str, Any] | None = None,
+        remember: bool = False,
+        auto_approve: bool = False,
+    ) -> dict[str, Any]:
+        """Record conversation history and optionally pass it through memory ingest."""
+        scope = normalize_scope(scope)
+        content = (content or "").strip()
+        if not content:
+            raise ValueError("content must not be empty")
+        ts = now_iso()
+        turn_id = new_id("turn")
+        message_id = new_id("msg")
+        metadata_json = json.dumps(metadata or {}, sort_keys=True)
+        self.conn.execute(
+            """
+            INSERT INTO conversation_turns
+              (turn_id, thread_id, created_at, role, actor, scope, content, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (turn_id, thread_id, ts, role, actor, scope, content, metadata_json),
+        )
+        self.conn.execute(
+            """
+            INSERT INTO thread_messages
+              (message_id, thread_id, turn_id, created_at, role, actor, content, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (message_id, thread_id, turn_id, ts, role, actor, content, metadata_json),
+        )
+        self._audit(
+            "record",
+            "conversation_turn",
+            turn_id,
+            actor=actor,
+            details={"thread_id": thread_id, "scope": scope},
+        )
+        memory_result = None
+        if remember:
+            memory_source_type = "user" if role == "user" and actor == "user" else "system"
+            memory_result = self.remember(
+                content,
+                scope=scope,
+                actor=actor,
+                source_type=memory_source_type,
+                source_ref=turn_id,
+                auto_approve=auto_approve,
+                metadata={
+                    "thread_id": thread_id,
+                    "message_id": message_id,
+                    "source_kind": "conversation_turn",
+                },
+            )
+        else:
+            self.conn.commit()
+        return {
+            "turn_id": turn_id,
+            "message_id": message_id,
+            "memory": memory_result,
+        }
+
+    def add_thread_summary(
+        self,
+        summary: str,
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        summary_type: str = "rolling",
+    ) -> str:
+        summary = (summary or "").strip()
+        if not summary:
+            raise ValueError("summary must not be empty")
+        scope = normalize_scope(scope)
+        summary_id = new_id("sum")
+        self.conn.execute(
+            """
+            INSERT INTO thread_summaries
+              (summary_id, thread_id, created_at, scope, summary, summary_type, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, '{}')
+            """,
+            (summary_id, thread_id, now_iso(), scope, summary, summary_type),
+        )
+        self._audit(
+            "record",
+            "thread_summary",
+            summary_id,
+            details={"thread_id": thread_id, "scope": scope, "summary_type": summary_type},
+        )
+        self.conn.commit()
+        return summary_id
+
+    def list_memory_items(
+        self,
+        *,
+        scope: str | None = None,
+        item_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT item_id, memory_id, event_id, created_at, updated_at,
+                   item_type, scope, text, status, confidence, sensitivity,
+                   source_trust, owner, project, expires_at, metadata_json
+            FROM memory_items
+            WHERE status = 'active'
+              AND (? IS NULL OR scope = ?)
+              AND (? IS NULL OR item_type = ?)
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, item_type, item_type, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_graph_nodes(
+        self,
+        *,
+        scope: str | None = None,
+        node_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        node_type = self._normalize_graph_node_type(node_type) if node_type else None
+        rows = self.conn.execute(
+            """
+            SELECT graph_node_id, created_at, updated_at, node_type, label,
+                   canonical_key, scope, group_label, blob, summary, importance,
+                   confidence, status, aliases_json, topics_json, chronology_json,
+                   verified_status, verified_at, verifier, hemisphere, visual_x,
+                   visual_y, embedding_json, metadata_json
+            FROM memory_graph_nodes
+            WHERE status = 'active'
+              AND (? IS NULL OR scope = ?)
+              AND (? IS NULL OR node_type = ?)
+            ORDER BY importance DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, node_type, node_type, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_graph_edges(
+        self,
+        *,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT ge.graph_edge_id, ge.created_at, ge.updated_at,
+                   ge.edge_type, ge.label, ge.weight, ge.confidence,
+                   ge.source_memory_id, ge.source_event_id, ge.evidence_count,
+                   src.node_type AS source_type, src.label AS source_label,
+                   dst.node_type AS target_type, dst.label AS target_label
+            FROM memory_graph_edges ge
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            WHERE (? IS NULL OR src.scope = ? OR dst.scope = ?)
+            ORDER BY ge.weight DESC, ge.updated_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, scope, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_keeper_runs(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT run_id, event_id, memory_id, created_at, model, status,
+                   extracted_json, notes_json
+            FROM keeper_runs
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit or 50), 500)),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_graph_groups(self, *, scope: str | None = None) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT group_id, created_at, updated_at, scope, group_label,
+                   node_type, node_count, edge_count, metadata_json
+            FROM memory_graph_groups
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY node_count DESC, group_label ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_semantic_analyses(
+        self,
+        *,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT analysis_id, run_id, event_id, memory_id, created_at,
+                   analyzer, scope, facts_json, chronology_json, key_topics_json,
+                   people_json, events_json, verified_entities_json, metadata_json
+            FROM semantic_analyses
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_profile_note(
+        self,
+        content: str,
+        *,
+        scope: str = "professional",
+        note_type: str = "rule",
+        title: str = "",
+    ) -> str:
+        scope = normalize_scope(scope)
+        note_type = (note_type or "rule").strip().lower()
+        content = (content or "").strip()
+        if not content:
+            raise ValueError("content must not be empty")
+        ts = now_iso()
+        if note_type == "intro":
+            existing = self.conn.execute(
+                """
+                SELECT profile_note_id
+                FROM profile_notes
+                WHERE scope = ? AND note_type = 'intro' AND status = 'active'
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (scope,),
+            ).fetchone()
+            if existing:
+                self.conn.execute(
+                    """
+                    UPDATE profile_notes
+                    SET updated_at = ?, title = ?, content = ?
+                    WHERE profile_note_id = ?
+                    """,
+                    (ts, title, content, existing["profile_note_id"]),
+                )
+                self.conn.commit()
+                return str(existing["profile_note_id"])
+        note_id = new_id("pnote")
+        self.conn.execute(
+            """
+            INSERT INTO profile_notes
+              (profile_note_id, created_at, updated_at, scope, note_type,
+               title, content, status, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', '{}')
+            """,
+            (note_id, ts, ts, scope, note_type, title, content),
+        )
+        self.conn.commit()
+        return note_id
+
+    def list_profile_notes(
+        self,
+        *,
+        scope: str | None = None,
+        note_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT profile_note_id, created_at, updated_at, scope, note_type,
+                   title, content, status, metadata_json
+            FROM profile_notes
+            WHERE status = 'active'
+              AND (? IS NULL OR scope = ?)
+              AND (? IS NULL OR note_type = ?)
+            ORDER BY note_type ASC, updated_at DESC
+            """,
+            (scope, scope, note_type, note_type),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_project_profile(
+        self,
+        *,
+        scope: str = "professional",
+        project: str = "",
+        access: dict[str, Any] | None = None,
+        env_snapshot: dict[str, Any] | None = None,
+        saved_model_choices: dict[str, Any] | None = None,
+        data_enrichment_snapshot: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        scope = normalize_scope(scope)
+        project = (project or "").strip()
+        ts = now_iso()
+        existing = self.conn.execute(
+            "SELECT profile_id FROM project_profiles WHERE scope = ? AND project = ?",
+            (scope, project),
+        ).fetchone()
+        payload = (
+            ts,
+            json.dumps(access or {}, sort_keys=True),
+            json.dumps(env_snapshot or {}, sort_keys=True),
+            json.dumps(saved_model_choices or {}, sort_keys=True),
+            json.dumps(data_enrichment_snapshot or {}, sort_keys=True),
+            json.dumps(metadata or {}, sort_keys=True),
+        )
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE project_profiles
+                SET updated_at = ?, access_json = ?, env_snapshot_json = ?,
+                    saved_model_choices_json = ?,
+                    data_enrichment_snapshot_json = ?, metadata_json = ?
+                WHERE profile_id = ?
+                """,
+                (*payload, existing["profile_id"]),
+            )
+            self.conn.commit()
+            return str(existing["profile_id"])
+        profile_id = new_id("profile")
+        self.conn.execute(
+            """
+            INSERT INTO project_profiles
+              (profile_id, created_at, updated_at, scope, project, access_json,
+               env_snapshot_json, saved_model_choices_json,
+               data_enrichment_snapshot_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (profile_id, ts, ts, scope, project, *payload[1:]),
+        )
+        self.conn.commit()
+        return profile_id
+
+    def record_llm_usage(
+        self,
+        *,
+        provider: str,
+        model: str,
+        scope: str = "professional",
+        thread_id: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost: float = 0.0,
+        currency: str = "USD",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        scope = normalize_scope(scope)
+        total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+        usage_id = new_id("usage")
+        self.conn.execute(
+            """
+            INSERT INTO llm_usage_stats
+              (usage_id, created_at, provider, model, scope, thread_id,
+               prompt_tokens, completion_tokens, total_tokens, cost, currency,
+               metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                usage_id,
+                now_iso(),
+                provider,
+                model,
+                scope,
+                thread_id,
+                int(prompt_tokens or 0),
+                int(completion_tokens or 0),
+                total_tokens,
+                float(cost or 0),
+                currency,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self.conn.commit()
+        return usage_id
+
+    def list_llm_usage(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT usage_id, created_at, provider, model, scope, thread_id,
+                   prompt_tokens, completion_tokens, total_tokens, cost,
+                   currency, metadata_json
+            FROM llm_usage_stats
+            WHERE (? IS NULL OR scope = ?)
+              AND (? IS NULL OR thread_id = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, thread_id, thread_id, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def optimize_graph(
+        self,
+        optimization_type: str,
+        *,
+        scope: str = "professional",
+    ) -> dict[str, Any]:
+        scope = normalize_scope(scope)
+        optimization_type = (optimization_type or "record_linkage").strip().lower()
+        before = self._graph_counts(scope)
+        findings: list[dict[str, Any]] = []
+        if optimization_type == "record_linkage":
+            findings = self._find_duplicate_graph_nodes(scope)
+        elif optimization_type == "knowledge_consistency":
+            findings = self._find_graph_conflicts(scope)
+        elif optimization_type == "llm_check":
+            findings = [{"status": "queued_for_model_review", "model": "external-gpt"}]
+        elif optimization_type == "interests_reconnect":
+            findings = self._reconnect_interests(scope)
+        elif optimization_type in {"hemisphere_markup", "brain_calibration"}:
+            self._refresh_digital_brain_state(scope)
+            findings = [{"status": "digital_brain_state_refreshed"}]
+        self._refresh_graph_groups(scope)
+        self._refresh_digital_brain_state(scope)
+        after = self._graph_counts(scope)
+        optimization_id = new_id("opt")
+        self.conn.execute(
+            """
+            INSERT INTO graph_optimization_runs
+              (optimization_id, created_at, optimization_type, scope, status,
+               before_json, after_json, findings_json, metadata_json)
+            VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, '{}')
+            """,
+            (
+                optimization_id,
+                now_iso(),
+                optimization_type,
+                scope,
+                json.dumps(before, sort_keys=True),
+                json.dumps(after, sort_keys=True),
+                json.dumps(findings, sort_keys=True),
+            ),
+        )
+        self.conn.commit()
+        return {
+            "optimization_id": optimization_id,
+            "optimization_type": optimization_type,
+            "scope": scope,
+            "before": before,
+            "after": after,
+            "findings": findings,
+        }
+
+    def export_profile(self, *, scope: str | None = None, project: str = "") -> dict[str, Any]:
+        scope = normalize_scope(scope) if scope else None
+        project = (project or "").strip()
+        profiles = self.conn.execute(
+            """
+            SELECT *
+            FROM project_profiles
+            WHERE (? IS NULL OR scope = ?)
+              AND (? = '' OR project = ?)
+            ORDER BY updated_at DESC
+            """,
+            (scope, scope, project, project),
+        ).fetchall()
+        return {
+            "profile_notes": self.list_profile_notes(scope=scope),
+            "project_profiles": [dict(row) for row in profiles],
+            "memory_tree": {
+                "groups": self.list_graph_groups(scope=scope),
+                "nodes": self.list_graph_nodes(scope=scope, limit=500),
+                "edges": self.list_graph_edges(scope=scope, limit=500),
+                "node_evidence": self._export_node_evidence(scope=scope),
+                "edge_evidence": self._export_edge_evidence(scope=scope),
+            },
+            "chat_history": self._export_chat_history(scope=scope),
+            "llm_usage_stats": self.list_llm_usage(scope=scope, limit=500),
+            "semantic_analyses": self.list_semantic_analyses(scope=scope, limit=500),
+            "keeper_runs": self.list_keeper_runs(limit=500),
+            "optimization_runs": self.list_graph_optimization_runs(scope=scope, limit=500),
+            "digital_brain": self.digital_brain_state(scope=scope),
+        }
+
+    def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
+        counts = defaultdict(int)
+        for note in payload.get("profile_notes", []):
+            self.upsert_profile_note(
+                str(note.get("content", "")),
+                scope=str(note.get("scope", "professional")),
+                note_type=str(note.get("note_type", "rule")),
+                title=str(note.get("title", "")),
+            )
+            counts["profile_notes"] += 1
+
+        for profile in payload.get("project_profiles", []):
+            self.upsert_project_profile(
+                scope=str(profile.get("scope", "professional")),
+                project=str(profile.get("project", "")),
+                access=self._loads_json(profile.get("access_json"), {}),
+                env_snapshot=self._loads_json(profile.get("env_snapshot_json"), {}),
+                saved_model_choices=self._loads_json(profile.get("saved_model_choices_json"), {}),
+                data_enrichment_snapshot=self._loads_json(
+                    profile.get("data_enrichment_snapshot_json"), {}
+                ),
+                metadata=self._loads_json(profile.get("metadata_json"), {}),
+            )
+            counts["project_profiles"] += 1
+
+        chat_history = payload.get("chat_history", {})
+        for turn in chat_history.get("turns", []):
+            turn_id = str(turn.get("turn_id", "")) or new_id("turn")
+            exists = self.conn.execute(
+                "SELECT turn_id FROM conversation_turns WHERE turn_id = ?",
+                (turn_id,),
+            ).fetchone()
+            if exists:
+                continue
+            self.conn.execute(
+                """
+                INSERT INTO conversation_turns
+                  (turn_id, thread_id, created_at, role, actor, scope, content, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    turn_id,
+                    turn.get("thread_id", "default"),
+                    turn.get("created_at", now_iso()),
+                    turn.get("role", "user"),
+                    turn.get("actor", "user"),
+                    normalize_scope(turn.get("scope", "professional")),
+                    turn.get("content", ""),
+                    turn.get("metadata_json", "{}"),
+                ),
+            )
+            counts["conversation_turns"] += 1
+
+        for usage in payload.get("llm_usage_stats", []):
+            self.record_llm_usage(
+                provider=str(usage.get("provider", "")),
+                model=str(usage.get("model", "")),
+                scope=str(usage.get("scope", "professional")),
+                thread_id=str(usage.get("thread_id", "")),
+                prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+                completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+                cost=float(usage.get("cost", 0) or 0),
+                currency=str(usage.get("currency", "USD")),
+                metadata=self._loads_json(usage.get("metadata_json"), {}),
+            )
+            counts["llm_usage_stats"] += 1
+
+        self.conn.commit()
+        return dict(counts)
+
+    def digital_brain_state(self, *, scope: str | None = None) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT state_id, created_at, updated_at, scope, left_count,
+                   right_count, calibration_json, metadata_json
+            FROM digital_brain_state
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY updated_at DESC
+            """,
+            (scope, scope),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_graph_optimization_runs(
+        self,
+        *,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        scope = normalize_scope(scope) if scope else None
+        rows = self.conn.execute(
+            """
+            SELECT optimization_id, created_at, optimization_type, scope, status,
+                   before_json, after_json, findings_json, metadata_json
+            FROM graph_optimization_runs
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def context_builder_pack(
+        self,
+        query: str,
+        *,
+        scope: str | None = None,
+        thread_id: str = "default",
+        limit: int = 8,
+        recent_messages: int = 6,
+    ) -> str:
+        """Build a richer context pack like a sidecar context builder."""
+        scope = normalize_scope(scope) if scope else None
+        saved_rules = self.list_memory_items(scope=scope, item_type="rule", limit=8)
+        profile_intro = self.list_profile_notes(scope=scope, note_type="intro")
+        profile_rules = self.list_profile_notes(scope=scope, note_type="rule")
+        compact_memory = self.search(query, scope=scope, limit=limit)
+        if not compact_memory:
+            tree_data = self.retrieve_tree(
+                query,
+                scope=scope,
+                limit=limit,
+                include_raw=False,
+            )
+            compact_memory = [
+                {
+                    "scope": memory["scope"],
+                    "kind": memory["kind"],
+                    "source_trust": memory["source_trust"],
+                    "text": memory["text"],
+                }
+                for branch in tree_data["branches"]
+                for memory in branch["memories"]
+            ][:limit]
+        profile_nodes = self.list_graph_nodes(scope=scope, node_type="person", limit=8)
+        summaries = self.conn.execute(
+            """
+            SELECT summary, created_at, summary_type
+            FROM thread_summaries
+            WHERE thread_id = ?
+              AND (? IS NULL OR scope = ?)
+            ORDER BY created_at DESC
+            LIMIT 3
+            """,
+            (thread_id, scope, scope),
+        ).fetchall()
+        messages = self.conn.execute(
+            """
+            SELECT role, actor, content, created_at
+            FROM thread_messages
+            WHERE thread_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (thread_id, max(1, min(int(recent_messages or 6), 20))),
+        ).fetchall()
+
+        lines = [
+            "## Agent Context Builder",
+            "",
+            "Core rules:",
+            "- Use memory as prior context, not unquestioned truth.",
+            "- Prefer evidence-backed memories over labels and tags.",
+            "- Do not promote untrusted external content without review.",
+            "",
+            "Profile intro:",
+        ]
+        if profile_intro:
+            for note in profile_intro[:3]:
+                lines.append(f"- {note['content']}")
+        else:
+            lines.append("- No profile intro available.")
+
+        lines.extend(
+            [
+                "",
+                "Profile rules:",
+            ]
+        )
+        if profile_rules:
+            for note in profile_rules[:12]:
+                lines.append(f"- {note['content']}")
+        else:
+            lines.append("- No profile rules available.")
+
+        lines.extend(
+            [
+                "",
+                "Saved rules:",
+            ]
+        )
+        if saved_rules:
+            for item in saved_rules:
+                lines.append(f"- [{item['scope']}; trust={item['source_trust']}] {item['text']}")
+        else:
+            lines.append("- No saved rules matched this scope.")
+
+        lines.extend(["", "Profile / People:"])
+        if profile_nodes:
+            for node in profile_nodes:
+                lines.append(f"- {node['label']}: {node['summary'] or excerpt(node['blob'], 180)}")
+        else:
+            lines.append("- No profile nodes available.")
+
+        lines.extend(["", "Thread summaries:"])
+        if summaries:
+            for row in summaries:
+                lines.append(f"- [{row['summary_type']}; {row['created_at']}] {row['summary']}")
+        else:
+            lines.append("- No thread summaries available.")
+
+        lines.extend(["", "Compact memory:"])
+        if compact_memory:
+            for item in compact_memory:
+                lines.append(
+                    f"- [{item['scope']}:{item['kind']}; trust={item['source_trust']}] "
+                    f"{item['text']}"
+                )
+        else:
+            lines.append("- No compact memories matched this query.")
+
+        lines.extend(["", "Recent messages:"])
+        if messages:
+            for row in reversed(messages):
+                lines.append(
+                    f"- [{row['role']}; actor={row['actor']}; at={row['created_at']}] "
+                    f"{excerpt(row['content'], 300)}"
+                )
+        else:
+            lines.append("- No recent messages available.")
+
+        lines.extend(
+            [
+                "",
+                "MEMORY_TREE_SUPPLEMENT",
+                self.memory_tree_pack(query, scope=scope, limit=limit),
+            ]
+        )
+        return "\n".join(lines)
+
     def correct_memory(self, memory_id: str, text: str, *, actor: str = "user") -> None:
         text = (text or "").strip()
         if not text:
@@ -281,6 +1451,10 @@ class MemoryStore:
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
             (text, now_iso(), memory_id),
         )
+        self.conn.execute(
+            "UPDATE memory_items SET text = ?, updated_at = ? WHERE memory_id = ?",
+            (text, now_iso(), memory_id),
+        )
         self._audit("correct", "memory", memory_id, actor=actor)
         self.conn.commit()
 
@@ -292,6 +1466,10 @@ class MemoryStore:
             raise KeyError(f"memory not found: {memory_id}")
         self.conn.execute(
             "UPDATE memories SET status = 'deleted', updated_at = ? WHERE memory_id = ?",
+            (now_iso(), memory_id),
+        )
+        self.conn.execute(
+            "UPDATE memory_items SET status = 'deleted', updated_at = ? WHERE memory_id = ?",
             (now_iso(), memory_id),
         )
         self._audit("delete", "memory", memory_id, actor=actor, details={"reason": reason})
@@ -386,7 +1564,12 @@ class MemoryStore:
         )
 
         event = self.conn.execute(
-            "SELECT event_id, source_type, source_ref FROM events WHERE event_id = ?",
+            """
+            SELECT event_id, created_at, actor, scope, source_type, source_ref,
+                   content, metadata_json
+            FROM events
+            WHERE event_id = ?
+            """,
             (candidate["event_id"],),
         ).fetchone()
         if event:
@@ -405,6 +1588,8 @@ class MemoryStore:
             )
 
         self._create_graph_nodes(memory_id, candidate)
+        if event:
+            self._create_memory_graph(memory_id, candidate, event)
         self._audit("approve", "candidate", candidate_id, actor=actor, details={"memory_id": memory_id})
         return memory_id
 
@@ -455,10 +1640,1292 @@ class MemoryStore:
                 (new_id("edge"), anchor_node_id, node_id, "relates_to", memory_id),
             )
 
+    def _create_memory_graph(
+        self,
+        memory_id: str,
+        candidate: sqlite3.Row,
+        event: sqlite3.Row,
+    ) -> str:
+        existing = self.conn.execute(
+            "SELECT item_id FROM memory_items WHERE memory_id = ?",
+            (memory_id,),
+        ).fetchone()
+        if existing:
+            return str(existing["item_id"])
+
+        try:
+            extraction = json.loads(candidate["extraction_json"] or "{}")
+        except json.JSONDecodeError:
+            extraction = {}
+
+        entities = self._extract_keeper_entities(candidate, event, extraction)
+        project = next(
+            (entity["label"] for entity in entities if entity["node_type"] == "project"),
+            "",
+        )
+        ts = now_iso()
+        item_id = new_id("item")
+        item_type = self._normalize_graph_node_type(candidate["kind"])
+        self.conn.execute(
+            """
+            INSERT INTO memory_items
+              (item_id, memory_id, event_id, created_at, updated_at, item_type,
+               scope, text, status, confidence, sensitivity, source_trust,
+               owner, project, expires_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item_id,
+                memory_id,
+                event["event_id"],
+                ts,
+                ts,
+                item_type,
+                candidate["scope"],
+                candidate["proposed_text"],
+                candidate["confidence"],
+                candidate["sensitivity"],
+                candidate["source_trust"],
+                event["actor"],
+                project,
+                None,
+                json.dumps(
+                    {
+                        "source_type": event["source_type"],
+                        "source_ref": event["source_ref"],
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+
+        item_label = self._item_label(item_type, candidate["proposed_text"])
+        item_node_id = self._upsert_memory_graph_node(
+            node_type=item_type,
+            label=item_label,
+            scope=candidate["scope"],
+            blob=candidate["proposed_text"],
+            summary=excerpt(candidate["proposed_text"], 180),
+            confidence=candidate["confidence"],
+            metadata={"item_id": item_id, "memory_id": memory_id},
+        )
+        self._add_node_evidence(
+            graph_node_id=item_node_id,
+            item_id=item_id,
+            memory_id=memory_id,
+            event=event,
+            quote=candidate["proposed_text"],
+            confidence=candidate["confidence"],
+        )
+
+        links = []
+        commands = [
+            {
+                "type": "upsert_item",
+                "item_id": item_id,
+                "item_type": item_type,
+                "memory_id": memory_id,
+            },
+            {
+                "type": "upsert_node",
+                "graph_node_id": item_node_id,
+                "node_type": item_type,
+                "label": item_label,
+            },
+        ]
+        for entity in entities:
+            entity_node_id = self._upsert_memory_graph_node(
+                node_type=entity["node_type"],
+                label=entity["label"],
+                scope=candidate["scope"],
+                blob=candidate["proposed_text"],
+                summary=entity.get("summary", ""),
+                confidence=candidate["confidence"],
+                metadata={"source": entity.get("source", "keeper")},
+            )
+            self._add_node_evidence(
+                graph_node_id=entity_node_id,
+                item_id=item_id,
+                memory_id=memory_id,
+                event=event,
+                quote=candidate["proposed_text"],
+                confidence=candidate["confidence"],
+            )
+            edge_type = self._edge_type_for_entity(entity["node_type"])
+            edge_id = self._upsert_memory_graph_edge(
+                source_graph_node_id=item_node_id,
+                target_graph_node_id=entity_node_id,
+                edge_type=edge_type,
+                label=edge_type.replace("_", " "),
+                confidence=candidate["confidence"],
+                source_memory_id=memory_id,
+                source_event_id=event["event_id"],
+                metadata={"item_id": item_id},
+            )
+            self._add_edge_evidence(
+                graph_edge_id=edge_id,
+                item_id=item_id,
+                memory_id=memory_id,
+                event=event,
+                quote=candidate["proposed_text"],
+                confidence=candidate["confidence"],
+            )
+            links.append(
+                {
+                    "source": item_node_id,
+                    "target": entity_node_id,
+                    "edge_type": edge_type,
+                    "label": entity["label"],
+                }
+            )
+            commands.extend(
+                [
+                    {
+                        "type": "upsert_node",
+                        "graph_node_id": entity_node_id,
+                        "node_type": entity["node_type"],
+                        "label": entity["label"],
+                    },
+                    {
+                        "type": "upsert_edge",
+                        "graph_edge_id": edge_id,
+                        "edge_type": edge_type,
+                    },
+                ]
+            )
+
+        run_id = new_id("run")
+        self.conn.execute(
+            """
+            INSERT INTO keeper_runs
+              (run_id, event_id, memory_id, created_at, model, status,
+               extracted_json, notes_json)
+            VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)
+            """,
+            (
+                run_id,
+                event["event_id"],
+                memory_id,
+                ts,
+                "rule-based-keeper-v0",
+                json.dumps(
+                    {
+                        "item": {
+                            "item_id": item_id,
+                            "item_type": item_type,
+                            "text": candidate["proposed_text"],
+                        },
+                        "entities": entities,
+                        "links": links,
+                        "commands": commands,
+                    },
+                    sort_keys=True,
+                ),
+                json.dumps({"dedupe": "scope + node_type + canonical_key"}, sort_keys=True),
+            ),
+        )
+        for command in commands:
+            self.conn.execute(
+                """
+                INSERT INTO graph_commands
+                  (command_id, run_id, created_at, command_type, payload_json, status)
+                VALUES (?, ?, ?, ?, ?, 'applied')
+                """,
+                (
+                    new_id("cmd"),
+                    run_id,
+                    ts,
+                    command["type"],
+                    json.dumps(command, sort_keys=True),
+                ),
+            )
+        self._record_semantic_analysis(
+            run_id=run_id,
+            event=event,
+            memory_id=memory_id,
+            candidate=candidate,
+            entities=entities,
+        )
+        self._refresh_graph_groups(candidate["scope"])
+        self._refresh_digital_brain_state(candidate["scope"])
+        return item_id
+
+    def _extract_keeper_entities(
+        self,
+        candidate: sqlite3.Row,
+        event: sqlite3.Row,
+        extraction: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        text = " ".join([str(candidate["proposed_text"] or ""), str(event["content"] or "")])
+        entities: list[dict[str, str]] = []
+
+        for item in extraction.get("nodes", []):
+            label = str(item.get("label", "")).strip()
+            if not label:
+                continue
+            node_type = self._normalize_graph_node_type(str(item.get("type", "fact")))
+            entities.append(
+                {
+                    "node_type": node_type,
+                    "label": label,
+                    "source": "extractor",
+                    "summary": f"{group_label(node_type)} node from extractor.",
+                }
+            )
+
+        for match in PROJECT_HINT_RE.findall(text):
+            entities.append(
+                {
+                    "node_type": "project",
+                    "label": match,
+                    "source": "keeper:project_hint",
+                    "summary": "Project context mentioned in memory.",
+                }
+            )
+
+        for match in DOCUMENT_HINT_RE.findall(text):
+            entities.append(
+                {
+                    "node_type": "document",
+                    "label": match,
+                    "source": "keeper:document_hint",
+                    "summary": "Document or page mentioned in memory.",
+                }
+            )
+
+        for url in URL_RE.findall(text):
+            entities.append(
+                {
+                    "node_type": "document",
+                    "label": url.rstrip(".,"),
+                    "source": "keeper:url",
+                    "summary": "URL mentioned in memory.",
+                }
+            )
+
+        for domain in DOMAIN_RE.findall(text):
+            entities.append(
+                {
+                    "node_type": "data",
+                    "label": domain.rstrip(".,"),
+                    "source": "keeper:domain",
+                    "summary": "Domain or data identifier mentioned in memory.",
+                }
+            )
+
+        lower_tokens = set(query_tokens(text))
+        for tool in sorted(KNOWN_TOOLS):
+            if tool in lower_tokens:
+                entities.append(
+                    {
+                        "node_type": "tool",
+                        "label": tool.upper() if tool in {"gpt", "mcp", "vk"} else tool.title(),
+                        "source": "keeper:tool",
+                        "summary": "Tool or platform mentioned in memory.",
+                    }
+                )
+
+        if "seo" in lower_tokens:
+            entities.append(
+                {
+                    "node_type": "interest",
+                    "label": "SEO",
+                    "source": "keeper:interest",
+                    "summary": "SEO topic mentioned in memory.",
+                }
+            )
+        if "content" in lower_tokens or "контент" in lower_tokens:
+            entities.append(
+                {
+                    "node_type": "interest",
+                    "label": "Content",
+                    "source": "keeper:interest",
+                    "summary": "Content topic mentioned in memory.",
+                }
+            )
+
+        if candidate["scope"] == "personal":
+            for name in PERSON_HINT_RE.findall(text)[:5]:
+                if name.lower() not in {"i", "the", "this", "that", "rule", "decision"}:
+                    entities.append(
+                        {
+                            "node_type": "person",
+                            "label": name,
+                            "source": "keeper:person",
+                            "summary": "Person mentioned in personal memory.",
+                        }
+                    )
+
+        if event["actor"]:
+            actor_label = "User" if event["actor"] == "user" else str(event["actor"])
+            entities.append(
+                {
+                    "node_type": "person",
+                    "label": actor_label,
+                    "source": "keeper:actor",
+                    "summary": "Actor who supplied the source event.",
+                }
+            )
+
+        return self._dedupe_entities(entities)
+
+    def _record_semantic_analysis(
+        self,
+        *,
+        run_id: str,
+        event: sqlite3.Row,
+        memory_id: str,
+        candidate: sqlite3.Row,
+        entities: list[dict[str, str]],
+    ) -> str:
+        text = str(candidate["proposed_text"] or "")
+        tokens = query_tokens(text)
+        topics = [
+            token
+            for token in tokens
+            if token not in {canonical_key(entity["label"]) for entity in entities}
+        ][:12]
+        people = [
+            entity["label"]
+            for entity in entities
+            if entity["node_type"] == "person"
+        ]
+        verified_entities = [
+            {
+                "node_type": entity["node_type"],
+                "label": entity["label"],
+                "status": "heuristic",
+                "source": entity.get("source", "keeper"),
+            }
+            for entity in entities
+        ]
+        chronology = [
+            {"when": match.group(0), "text": excerpt(text, 220)}
+            for match in DATE_HINT_RE.finditer(text)
+        ]
+        if not chronology:
+            chronology = [{"when": event["created_at"], "text": excerpt(text, 220)}]
+        analysis_id = new_id("analysis")
+        self.conn.execute(
+            """
+            INSERT INTO semantic_analyses
+              (analysis_id, run_id, event_id, memory_id, created_at, analyzer,
+               scope, facts_json, chronology_json, key_topics_json, people_json,
+               events_json, verified_entities_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                analysis_id,
+                run_id,
+                event["event_id"],
+                memory_id,
+                now_iso(),
+                "rule-based-light-model-v0",
+                candidate["scope"],
+                json.dumps([text], sort_keys=True),
+                json.dumps(chronology, sort_keys=True),
+                json.dumps(topics, sort_keys=True),
+                json.dumps(people, sort_keys=True),
+                json.dumps(
+                    [
+                        {
+                            "event_id": event["event_id"],
+                            "source_ref": event["source_ref"],
+                            "text": excerpt(text, 220),
+                        }
+                    ],
+                    sort_keys=True,
+                ),
+                json.dumps(verified_entities, sort_keys=True),
+                json.dumps({"memory_id": memory_id}, sort_keys=True),
+            ),
+        )
+        return analysis_id
+
+    def _refresh_graph_groups(self, scope: str) -> None:
+        ts = now_iso()
+        rows = self.conn.execute(
+            """
+            SELECT group_label, node_type, COUNT(*) AS node_count
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ?
+            GROUP BY group_label, node_type
+            """,
+            (scope,),
+        ).fetchall()
+        for row in rows:
+            edge_count = self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM memory_graph_edges ge
+                JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+                JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+                WHERE src.scope = ?
+                  AND (src.node_type = ? OR dst.node_type = ?)
+                """,
+                (scope, row["node_type"], row["node_type"]),
+            ).fetchone()["count"]
+            existing = self.conn.execute(
+                """
+                SELECT group_id
+                FROM memory_graph_groups
+                WHERE scope = ? AND group_label = ? AND node_type = ?
+                """,
+                (scope, row["group_label"], row["node_type"]),
+            ).fetchone()
+            if existing:
+                self.conn.execute(
+                    """
+                    UPDATE memory_graph_groups
+                    SET updated_at = ?, node_count = ?, edge_count = ?
+                    WHERE group_id = ?
+                    """,
+                    (ts, row["node_count"], edge_count, existing["group_id"]),
+                )
+            else:
+                self.conn.execute(
+                    """
+                    INSERT INTO memory_graph_groups
+                      (group_id, created_at, updated_at, scope, group_label,
+                       node_type, node_count, edge_count, metadata_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}')
+                    """,
+                    (
+                        new_id("group"),
+                        ts,
+                        ts,
+                        scope,
+                        row["group_label"],
+                        row["node_type"],
+                        row["node_count"],
+                        edge_count,
+                    ),
+                )
+
+    def _refresh_digital_brain_state(self, scope: str) -> None:
+        ts = now_iso()
+        counts = self.conn.execute(
+            """
+            SELECT hemisphere, COUNT(*) AS count
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ?
+            GROUP BY hemisphere
+            """,
+            (scope,),
+        ).fetchall()
+        by_hemi = {str(row["hemisphere"] or ""): int(row["count"]) for row in counts}
+        left_count = by_hemi.get("left", 0)
+        right_count = by_hemi.get("right", 0)
+        existing = self.conn.execute(
+            "SELECT state_id FROM digital_brain_state WHERE scope = ?",
+            (scope,),
+        ).fetchone()
+        calibration = {
+            "mode": "deterministic-v0",
+            "left_meaning": "structured work memory",
+            "right_meaning": "people, preferences, interests, patterns",
+        }
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE digital_brain_state
+                SET updated_at = ?, left_count = ?, right_count = ?,
+                    calibration_json = ?
+                WHERE state_id = ?
+                """,
+                (
+                    ts,
+                    left_count,
+                    right_count,
+                    json.dumps(calibration, sort_keys=True),
+                    existing["state_id"],
+                ),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO digital_brain_state
+                  (state_id, created_at, updated_at, scope, left_count,
+                   right_count, calibration_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, '{}')
+                """,
+                (
+                    new_id("brain"),
+                    ts,
+                    ts,
+                    scope,
+                    left_count,
+                    right_count,
+                    json.dumps(calibration, sort_keys=True),
+                ),
+            )
+
+    def _graph_counts(self, scope: str) -> dict[str, int]:
+        node_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ?
+            """,
+            (scope,),
+        ).fetchone()["count"]
+        edge_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM memory_graph_edges ge
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            WHERE src.scope = ?
+            """,
+            (scope,),
+        ).fetchone()["count"]
+        group_count = self.conn.execute(
+            "SELECT COUNT(*) AS count FROM memory_graph_groups WHERE scope = ?",
+            (scope,),
+        ).fetchone()["count"]
+        return {
+            "nodes": int(node_count),
+            "edges": int(edge_count),
+            "groups": int(group_count),
+        }
+
+    def _find_duplicate_graph_nodes(self, scope: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT node_type, canonical_key, COUNT(*) AS count
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ?
+            GROUP BY node_type, canonical_key
+            HAVING COUNT(*) > 1
+            """,
+            (scope,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _find_graph_conflicts(self, scope: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT label, COUNT(DISTINCT node_type) AS type_count
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ?
+            GROUP BY canonical_key
+            HAVING COUNT(DISTINCT node_type) > 1
+            """,
+            (scope,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _reconnect_interests(self, scope: str) -> list[dict[str, Any]]:
+        interest_nodes = self.conn.execute(
+            """
+            SELECT graph_node_id, label
+            FROM memory_graph_nodes
+            WHERE status = 'active' AND scope = ? AND node_type = 'interest'
+            """,
+            (scope,),
+        ).fetchall()
+        findings = []
+        for interest in interest_nodes:
+            matches = self.conn.execute(
+                """
+                SELECT graph_node_id, label, node_type
+                FROM memory_graph_nodes
+                WHERE status = 'active'
+                  AND scope = ?
+                  AND graph_node_id != ?
+                  AND blob LIKE ?
+                LIMIT 20
+                """,
+                (scope, interest["graph_node_id"], f"%{interest['label']}%"),
+            ).fetchall()
+            findings.append(
+                {
+                    "interest": interest["label"],
+                    "matches": [dict(row) for row in matches],
+                }
+            )
+        return findings
+
+    def _export_chat_history(self, *, scope: str | None) -> dict[str, list[dict[str, Any]]]:
+        turn_rows = self.conn.execute(
+            """
+            SELECT turn_id, thread_id, created_at, role, actor, scope,
+                   content, metadata_json
+            FROM conversation_turns
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        summary_rows = self.conn.execute(
+            """
+            SELECT summary_id, thread_id, created_at, scope, summary,
+                   summary_type, metadata_json
+            FROM thread_summaries
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        return {
+            "turns": [dict(row) for row in turn_rows],
+            "summaries": [dict(row) for row in summary_rows],
+        }
+
+    def _export_node_evidence(self, *, scope: str | None) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT ne.evidence_id, ne.graph_node_id, ne.item_id, ne.memory_id,
+                   ne.event_id, ne.created_at, ne.source_ref, ne.quote,
+                   ne.confidence
+            FROM node_evidence ne
+            JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+            WHERE (? IS NULL OR gn.scope = ?)
+            ORDER BY ne.created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _export_edge_evidence(self, *, scope: str | None) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT ee.evidence_id, ee.graph_edge_id, ee.item_id, ee.memory_id,
+                   ee.event_id, ee.created_at, ee.source_ref, ee.quote,
+                   ee.confidence
+            FROM edge_evidence ee
+            JOIN memory_graph_edges ge ON ge.graph_edge_id = ee.graph_edge_id
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            WHERE (? IS NULL OR src.scope = ?)
+            ORDER BY ee.created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def _loads_json(value: Any, fallback: Any) -> Any:
+        if isinstance(value, (dict, list)):
+            return value
+        try:
+            return json.loads(value or "")
+        except (TypeError, json.JSONDecodeError):
+            return fallback
+
+    @staticmethod
+    def _dedupe_entities(entities: list[dict[str, str]]) -> list[dict[str, str]]:
+        seen: set[tuple[str, str]] = set()
+        deduped = []
+        for entity in entities:
+            node_type = str(entity.get("node_type", "fact")).strip() or "fact"
+            label = str(entity.get("label", "")).strip()
+            if not label:
+                continue
+            key = (node_type, canonical_key(label))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append({**entity, "node_type": node_type, "label": label})
+        return deduped
+
+    @staticmethod
+    def _normalize_graph_node_type(node_type: str) -> str:
+        normalized = (node_type or "fact").strip().lower().replace(" ", "_")
+        aliases = {
+            "constraint": "rule",
+            "constraints": "rule",
+            "decisions": "decision",
+            "documents": "document",
+            "fail": "gotcha",
+            "failure": "gotcha",
+            "failures": "gotcha",
+            "interests": "interest",
+            "lesson": "pattern",
+            "lessons": "pattern",
+            "memory": "fact",
+            "people": "person",
+            "projects": "project",
+            "success": "pattern",
+            "successes": "pattern",
+            "tools": "tool",
+        }
+        return aliases.get(normalized, normalized)
+
+    @staticmethod
+    def _item_label(item_type: str, text: str) -> str:
+        return f"{item_type}: {excerpt(text, 80)}"
+
+    @staticmethod
+    def _edge_type_for_entity(node_type: str) -> str:
+        if node_type == "project":
+            return "belongs_to"
+        if node_type == "tool":
+            return "uses"
+        if node_type == "document":
+            return "references"
+        if node_type == "person":
+            return "stated_by"
+        if node_type == "data":
+            return "mentions_data"
+        return "relates_to"
+
+    @staticmethod
+    def _node_topics(node_type: str, label: str, blob: str) -> list[str]:
+        candidates = [node_type, label, *query_tokens(blob)]
+        topics = []
+        for item in candidates:
+            normalized = canonical_key(str(item))
+            if normalized and normalized not in topics:
+                topics.append(normalized)
+        return topics[:12]
+
+    def _upsert_memory_graph_node(
+        self,
+        *,
+        node_type: str,
+        label: str,
+        scope: str,
+        blob: str,
+        summary: str,
+        confidence: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        node_type = self._normalize_graph_node_type(node_type)
+        label = label.strip()
+        key = canonical_key(label)
+        ts = now_iso()
+        existing = self.conn.execute(
+            """
+            SELECT graph_node_id, blob, summary, importance
+            FROM memory_graph_nodes
+            WHERE scope = ? AND node_type = ? AND canonical_key = ?
+            """,
+            (scope, node_type, key),
+        ).fetchone()
+        embedding_text = " ".join([label, summary, blob])
+        if existing:
+            graph_node_id = str(existing["graph_node_id"])
+            merged_blob = self._merge_blob(existing["blob"], blob)
+            merged_summary = existing["summary"] or summary
+            importance = min(1.0, float(existing["importance"] or 0.5) + 0.05)
+            self.conn.execute(
+                """
+                UPDATE memory_graph_nodes
+                SET updated_at = ?, blob = ?, summary = ?, importance = ?,
+                    topics_json = ?, hemisphere = ?, visual_x = ?, visual_y = ?,
+                    embedding_json = ?
+                WHERE graph_node_id = ?
+                """,
+                (
+                    ts,
+                    merged_blob,
+                    merged_summary,
+                    importance,
+                    json.dumps(self._node_topics(node_type, label, blob)),
+                    hemisphere_for_node(node_type),
+                    deterministic_position(key)[0],
+                    deterministic_position(key)[1],
+                    json.dumps(lexical_embedding(embedding_text)),
+                    graph_node_id,
+                ),
+            )
+            return graph_node_id
+
+        graph_node_id = new_id("gnode")
+        visual_x, visual_y = deterministic_position(key)
+        self.conn.execute(
+            """
+            INSERT INTO memory_graph_nodes
+              (graph_node_id, created_at, updated_at, node_type, label,
+               canonical_key, scope, group_label, blob, summary, importance,
+               confidence, status, aliases_json, topics_json, chronology_json,
+               verified_status, verifier, hemisphere, visual_x, visual_y,
+               embedding_json, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '[]',
+                    ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                graph_node_id,
+                ts,
+                ts,
+                node_type,
+                label,
+                key,
+                scope,
+                group_label(node_type),
+                self._merge_blob("", blob),
+                summary,
+                0.55,
+                confidence,
+                json.dumps([label], sort_keys=True),
+                json.dumps(self._node_topics(node_type, label, blob), sort_keys=True),
+                "heuristic",
+                "rule-based-keeper-v0",
+                hemisphere_for_node(node_type),
+                visual_x,
+                visual_y,
+                json.dumps(lexical_embedding(embedding_text)),
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        return graph_node_id
+
+    def _upsert_memory_graph_edge(
+        self,
+        *,
+        source_graph_node_id: str,
+        target_graph_node_id: str,
+        edge_type: str,
+        label: str,
+        confidence: str,
+        source_memory_id: str,
+        source_event_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        ts = now_iso()
+        existing = self.conn.execute(
+            """
+            SELECT graph_edge_id, weight
+            FROM memory_graph_edges
+            WHERE source_graph_node_id = ?
+              AND target_graph_node_id = ?
+              AND edge_type = ?
+            """,
+            (source_graph_node_id, target_graph_node_id, edge_type),
+        ).fetchone()
+        if existing:
+            edge_id = str(existing["graph_edge_id"])
+            self.conn.execute(
+                """
+                UPDATE memory_graph_edges
+                SET updated_at = ?, weight = ?, evidence_count = evidence_count + 1
+                WHERE graph_edge_id = ?
+                """,
+                (ts, min(10.0, float(existing["weight"] or 1.0) + 0.25), edge_id),
+            )
+            return edge_id
+
+        edge_id = new_id("gedge")
+        self.conn.execute(
+            """
+            INSERT INTO memory_graph_edges
+              (graph_edge_id, created_at, updated_at, source_graph_node_id,
+               target_graph_node_id, edge_type, label, weight, confidence,
+               source_memory_id, source_event_id, evidence_count, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?, ?, ?, 1, ?)
+            """,
+            (
+                edge_id,
+                ts,
+                ts,
+                source_graph_node_id,
+                target_graph_node_id,
+                edge_type,
+                label,
+                confidence,
+                source_memory_id,
+                source_event_id,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        return edge_id
+
+    def _add_node_evidence(
+        self,
+        *,
+        graph_node_id: str,
+        item_id: str,
+        memory_id: str,
+        event: sqlite3.Row,
+        quote: str,
+        confidence: str,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO node_evidence
+              (evidence_id, graph_node_id, item_id, memory_id, event_id,
+               created_at, source_ref, quote, confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id("nev"),
+                graph_node_id,
+                item_id,
+                memory_id,
+                event["event_id"],
+                now_iso(),
+                event["source_ref"],
+                excerpt(quote, 600),
+                confidence,
+            ),
+        )
+
+    def _add_edge_evidence(
+        self,
+        *,
+        graph_edge_id: str,
+        item_id: str,
+        memory_id: str,
+        event: sqlite3.Row,
+        quote: str,
+        confidence: str,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO edge_evidence
+              (evidence_id, graph_edge_id, item_id, memory_id, event_id,
+               created_at, source_ref, quote, confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id("eev"),
+                graph_edge_id,
+                item_id,
+                memory_id,
+                event["event_id"],
+                now_iso(),
+                event["source_ref"],
+                excerpt(quote, 600),
+                confidence,
+            ),
+        )
+
+    @staticmethod
+    def _merge_blob(existing: str, new_text: str, *, limit: int = 4000) -> str:
+        new_line = f"- {excerpt(new_text, 260)}"
+        existing = (existing or "").strip()
+        if not new_text.strip():
+            return existing
+        if new_line in existing:
+            return existing
+        merged = "\n".join(part for part in [existing, new_line] if part).strip()
+        if len(merged) <= limit:
+            return merged
+        return merged[-limit:].lstrip()
+
     def _candidate(self, candidate_id: str) -> sqlite3.Row | None:
         return self.conn.execute(
             "SELECT * FROM candidate_memories WHERE candidate_id = ?", (candidate_id,)
         ).fetchone()
+
+    def _node_hits(
+        self,
+        query: str,
+        *,
+        scope: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        tokens = query_tokens(query)
+        if not tokens:
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT n.node_id, n.memory_id, n.node_type, n.label, n.scope,
+                   m.text AS memory_text
+            FROM nodes n
+            JOIN memories m ON m.memory_id = n.memory_id
+            WHERE m.status = 'active'
+              AND (? IS NULL OR n.scope = ?)
+            """,
+            (scope, scope),
+        ).fetchall()
+        hits = []
+        for row in rows:
+            haystack = " ".join(
+                [
+                    str(row["node_type"] or ""),
+                    str(row["label"] or ""),
+                    str(row["memory_text"] or "")[:700],
+                ]
+            ).lower()
+            score = 0
+            for token in tokens:
+                if token in haystack:
+                    score += 3 if token in str(row["label"] or "").lower() else 1
+            if score:
+                item = dict(row)
+                item["score"] = score
+                hits.append(item)
+        hits.sort(
+            key=lambda item: (
+                -item["score"],
+                item["node_type"],
+                item["label"],
+                item["memory_id"],
+            )
+        )
+        return hits[: max(1, limit)]
+
+    def _graph_node_hits(
+        self,
+        query: str,
+        *,
+        scope: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        tokens = query_tokens(query)
+        if not tokens:
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT DISTINCT gn.graph_node_id, gn.node_type, gn.label,
+                   gn.group_label, gn.scope, gn.blob, gn.summary,
+                   gn.importance, mi.memory_id, mi.item_id, mi.text AS item_text
+            FROM memory_graph_nodes gn
+            JOIN node_evidence ne ON ne.graph_node_id = gn.graph_node_id
+            JOIN memory_items mi ON mi.item_id = ne.item_id
+            JOIN memories m ON m.memory_id = mi.memory_id
+            WHERE gn.status = 'active'
+              AND mi.status = 'active'
+              AND m.status = 'active'
+              AND (? IS NULL OR gn.scope = ?)
+            """,
+            (scope, scope),
+        ).fetchall()
+        hits = []
+        for row in rows:
+            haystack = " ".join(
+                [
+                    str(row["node_type"] or ""),
+                    str(row["group_label"] or ""),
+                    str(row["label"] or ""),
+                    str(row["summary"] or ""),
+                    str(row["blob"] or "")[:1000],
+                    str(row["item_text"] or "")[:700],
+                ]
+            ).lower()
+            score = 0
+            label_text = str(row["label"] or "").lower()
+            for token in tokens:
+                if token in haystack:
+                    score += 4 if token in label_text else 1
+            if score:
+                item = dict(row)
+                item["score"] = score + float(row["importance"] or 0)
+                hits.append(item)
+        hits.sort(
+            key=lambda item: (
+                -item["score"],
+                item["group_label"],
+                item["label"],
+                item["memory_id"],
+            )
+        )
+        return hits[: max(1, limit)]
+
+    def _expand_by_graph(
+        self,
+        memory_ids: Any,
+        *,
+        depth: int,
+        scope: str | None,
+    ) -> dict[str, str]:
+        seeds = {str(memory_id) for memory_id in memory_ids if memory_id}
+        if not seeds or depth <= 0:
+            return {}
+
+        expanded: dict[str, str] = {}
+        frontier = set(seeds)
+        seen = set(seeds)
+        for _level in range(depth):
+            placeholders = ",".join("?" for _ in frontier)
+            if not placeholders:
+                break
+            params: list[Any] = list(frontier)
+            scope_clause = ""
+            if scope:
+                scope_clause = "AND n2.scope = ?"
+                params.append(scope)
+            rows = self.conn.execute(
+                f"""
+                SELECT DISTINCT n2.memory_id, n2.node_type, n2.label
+                FROM nodes n1
+                JOIN edges e
+                  ON e.source_node_id = n1.node_id OR e.target_node_id = n1.node_id
+                JOIN nodes n2
+                  ON n2.node_id = e.source_node_id OR n2.node_id = e.target_node_id
+                JOIN memories m ON m.memory_id = n2.memory_id
+                WHERE n1.memory_id IN ({placeholders})
+                  AND m.status = 'active'
+                  {scope_clause}
+                """,
+                params,
+            ).fetchall()
+            next_frontier = set()
+            for row in rows:
+                memory_id = str(row["memory_id"])
+                if memory_id in seen:
+                    continue
+                expanded[memory_id] = (
+                    f"graph neighbor: {row['node_type']} / {row['label']}"
+                )
+                next_frontier.add(memory_id)
+                seen.add(memory_id)
+            frontier = next_frontier
+            if not frontier:
+                break
+        return expanded
+
+    def _memories_by_id(self, memory_ids: list[str]) -> dict[str, sqlite3.Row]:
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT memory_id, text, kind, scope, confidence, sensitivity,
+                   source_trust, status, updated_at
+            FROM memories
+            WHERE memory_id IN ({placeholders})
+              AND status = 'active'
+            """,
+            memory_ids,
+        ).fetchall()
+        return {str(row["memory_id"]): row for row in rows}
+
+    def _nodes_for_memories(self, memory_ids: list[str]) -> dict[str, list[sqlite3.Row]]:
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT node_id, memory_id, node_type, label, scope
+            FROM nodes
+            WHERE memory_id IN ({placeholders})
+            ORDER BY memory_id, node_type, label
+            """,
+            memory_ids,
+        ).fetchall()
+        by_memory: dict[str, list[sqlite3.Row]] = defaultdict(list)
+        for row in rows:
+            by_memory[str(row["memory_id"])].append(row)
+        return by_memory
+
+    def _graph_nodes_for_memories(self, memory_ids: list[str]) -> dict[str, list[sqlite3.Row]]:
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT DISTINCT mi.memory_id, gn.graph_node_id, gn.node_type,
+                   gn.label, gn.group_label, gn.blob, gn.summary,
+                   gn.importance, gn.confidence
+            FROM memory_items mi
+            JOIN node_evidence ne ON ne.item_id = mi.item_id
+            JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+            WHERE mi.memory_id IN ({placeholders})
+              AND gn.status = 'active'
+            ORDER BY mi.memory_id, gn.group_label, gn.label
+            """,
+            memory_ids,
+        ).fetchall()
+        by_memory: dict[str, list[sqlite3.Row]] = defaultdict(list)
+        for row in rows:
+            by_memory[str(row["memory_id"])].append(row)
+        return by_memory
+
+    def _graph_edges_for_memories(self, memory_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT ge.source_memory_id AS memory_id, ge.graph_edge_id,
+                   ge.edge_type, ge.label, ge.weight, ge.evidence_count,
+                   src.node_type AS source_type, src.label AS source_label,
+                   dst.node_type AS target_type, dst.label AS target_label
+            FROM memory_graph_edges ge
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            WHERE ge.source_memory_id IN ({placeholders})
+            ORDER BY ge.source_memory_id, ge.edge_type, dst.label
+            """,
+            memory_ids,
+        ).fetchall()
+        by_memory: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            by_memory[str(row["memory_id"])].append(dict(row))
+        return by_memory
+
+    def _sources_for_memories(self, memory_ids: list[str]) -> dict[str, list[sqlite3.Row]]:
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT s.memory_id, s.event_id, s.source_type, s.source_ref,
+                   e.actor, e.created_at, e.content
+            FROM sources s
+            JOIN events e ON e.event_id = s.event_id
+            WHERE s.memory_id IN ({placeholders})
+            ORDER BY e.created_at ASC
+            """,
+            memory_ids,
+        ).fetchall()
+        by_memory: dict[str, list[sqlite3.Row]] = defaultdict(list)
+        for row in rows:
+            by_memory[str(row["memory_id"])].append(row)
+        return by_memory
+
+    @staticmethod
+    def _primary_graph_node(
+        memory: sqlite3.Row,
+        graph_nodes: list[sqlite3.Row],
+        legacy_nodes: list[sqlite3.Row],
+    ) -> dict[str, str]:
+        non_actor_nodes = [
+            node
+            for node in graph_nodes
+            if not (node["node_type"] == "person" and str(node["label"]).lower() == "user")
+        ]
+        for desired_type in PRIMARY_GRAPH_TYPES:
+            for node in non_actor_nodes:
+                if node["node_type"] == desired_type:
+                    return {
+                        "node_type": str(node["node_type"]),
+                        "label": str(node["label"]),
+                    }
+        for node in graph_nodes:
+            return {
+                "node_type": str(node["node_type"]),
+                "label": str(node["label"]),
+            }
+        return MemoryStore._primary_node(memory, legacy_nodes)
+
+    @staticmethod
+    def _primary_node(memory: sqlite3.Row, nodes: list[sqlite3.Row]) -> dict[str, str]:
+        for node in nodes:
+            if node["node_type"] != "memory":
+                return {
+                    "node_type": str(node["node_type"]),
+                    "label": str(node["label"]),
+                }
+        return {
+            "node_type": str(memory["kind"]),
+            "label": str(memory["kind"]),
+        }
+
+    @staticmethod
+    def _excerpt(text: str, limit: int) -> str:
+        text = (text or "").strip()
+        if limit <= 0:
+            return ""
+        if len(text) <= limit:
+            return text
+        return text[: max(0, limit - 1)].rstrip() + "…"
+
+    @staticmethod
+    def _empty_tree_pack(query: str, scope: str | None) -> dict[str, Any]:
+        return {
+            "query": query,
+            "scope": scope or "all",
+            "retrieval": {
+                "mode": "deterministic hybrid tree retrieval",
+                "seed_count": 0,
+                "branch_count": 0,
+                "depth": 0,
+                "include_raw": False,
+            },
+            "branches": [],
+        }
 
     def _audit(
         self,

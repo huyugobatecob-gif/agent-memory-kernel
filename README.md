@@ -26,7 +26,9 @@ metadata;
 This project takes a middle path: every memory starts as an event, becomes a
 candidate, passes review or policy, and only then becomes active memory. Active
 memory has source links, trust labels, audit history, graph nodes, and an
-agent-ready context pack.
+agent-ready context pack. When an agent needs deeper working context, the same
+data can be returned as a Memory Tree Pack: short branch labels at the top,
+active memories in the middle, and raw source excerpts at the bottom.
 
 ## Status
 
@@ -41,7 +43,19 @@ Included now:
 - Secret-like content quarantine.
 - Active memory search.
 - Agent context packs with provenance.
-- Basic graph nodes and `relates_to` edges.
+- Conversation turns, thread messages, and rolling summaries.
+- Compact `memory_items`.
+- Persistent memory graph nodes and edges.
+- Node and edge evidence.
+- Keeper runs and graph commands audit.
+- Graph groups and optimization runs.
+- Light Model semantic analyses: facts, chronology, key topics, people, events,
+  verified entities.
+- Profile intro, profile rules, project profile metadata, and LLM usage stats.
+- Digital Brain state: left/right counts, calibration, node hemisphere, visual
+  coordinates.
+- Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
+- Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -50,8 +64,8 @@ Not included yet:
 
 - hosted API server;
 - web UI;
-- embeddings;
-- production LLM extractor;
+- provider embeddings;
+- production LLM Keeper/extractor;
 - production Hermes integration;
 - multi-user auth.
 
@@ -111,6 +125,39 @@ Build a context pack for an agent:
 agent-memory context-pack --db .memory/demo.db "planning an SEO loop"
 ```
 
+Build a tree pack for an agent before planning:
+
+```bash
+agent-memory tree-pack --db .memory/demo.db "planning an SEO loop" --scope professional
+```
+
+Inspect the persistent graph tree:
+
+```bash
+agent-memory graph --db .memory/demo.db nodes --scope professional
+agent-memory graph --db .memory/demo.db edges --scope professional
+agent-memory graph --db .memory/demo.db groups --scope professional
+agent-memory graph --db .memory/demo.db analyses --scope professional
+agent-memory graph --db .memory/demo.db keeper-runs
+agent-memory graph --db .memory/demo.db optimize --mode record_linkage --scope professional
+```
+
+Build the richer context that Hermes would pass to an agent:
+
+```bash
+agent-memory build-context --db .memory/demo.db "planning an SEO loop" --scope professional
+```
+
+Record profile and usage metadata:
+
+```bash
+agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO projects."
+agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
+agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
+agent-memory export-profile --db .memory/demo.db --scope professional
+agent-memory import-profile --db .memory/restored.db exported-profile.json
+```
+
 Export a readable vault:
 
 ```bash
@@ -123,15 +170,20 @@ The kernel uses a simple lifecycle:
 
 ```mermaid
 flowchart LR
-    A["Event"] --> B["Candidate Memory"]
+    A["Conversation Turn / Event"] --> B["Candidate Memory"]
     B --> C{"Policy / Review"}
     C -->|"approve"| D["Active Memory"]
     C -->|"reject"| E["Rejected Candidate"]
     C -->|"secret-like"| F["Quarantine"]
-    D --> G["Search"]
-    D --> H["Context Pack"]
-    D --> I["Markdown Export"]
-    D --> J["Graph Nodes + Edges"]
+    D --> G["Memory Item"]
+    G --> H["Keeper Run"]
+    H --> I["Memory Graph Nodes"]
+    H --> J["Memory Graph Edges"]
+    I --> K["Evidence"]
+    J --> K
+    I --> L["Memory Tree Pack"]
+    J --> L
+    L --> M["Context Builder"]
 ```
 
 Every active memory keeps:
@@ -143,7 +195,8 @@ Every active memory keeps:
 - sensitivity;
 - source trust;
 - audit trail;
-- graph nodes and edges.
+- compact memory item;
+- graph nodes, graph edges, and evidence.
 
 ## Scopes
 
@@ -159,6 +212,42 @@ The starter scopes are intentionally simple:
 The default public template focuses on `personal` and `professional` so it is
 useful for people who do not work with loops. Teams that do work with iterative
 systems can add outcome-oriented layers on top.
+
+## Memory Tree Pack
+
+The Memory Tree Pack is the main agent-facing retrieval format for planning
+work. Tags and graph nodes help the kernel route the query, but the agent gets
+grounded context:
+
+```text
+Root query
+  Branch: project / demo-site
+    Why selected
+    Active memories
+    Related graph nodes
+    Raw provenance excerpts
+```
+
+This keeps the top of the tree compact while still letting an agent inspect the
+source conversation, session summary, decision, or tool result that created a
+memory. It is designed for Hermes-style orchestration: ask for the tree before
+planning, then record new events after the work.
+
+Under the hood, approved memories now flow through a Keeper step:
+
+```text
+event -> candidate -> active memory -> memory_item
+      -> memory_graph_nodes / memory_graph_edges
+      -> node_evidence / edge_evidence
+      -> semantic_analyses / graph_groups / digital_brain_state
+      -> tree-pack / build-context
+```
+
+The starter Keeper is deterministic and dependency-free. It already writes the
+same structural slots expected by a richer model-backed implementation:
+entities, links, commands, normalized nodes, dedupe keys, blobs, importance, and
+embedding fields. The starter Light Model also records facts, chronology, key
+topics, people, events, and verified entities.
 
 ## SEO / Loop Extension
 
@@ -188,7 +277,7 @@ Hermes should not own the memory. Hermes should call the memory kernel.
 
 Recommended shape:
 
-1. Before planning, Hermes asks the kernel for a context pack.
+1. Before planning, Hermes asks the kernel for a Memory Tree Pack.
 2. During work, Hermes records events and candidate memories.
 3. After work, a reviewer or policy promotes useful candidates.
 4. Future agents retrieve only the relevant memory tree instead of scanning old
@@ -242,6 +331,7 @@ src/agent_memory_kernel/
   extractors/            deterministic v0 extractor and extension seams
 docs/
   implementation-plan.md  phased build plan
+  memory-tree-pack.md     tree-shaped retrieval format
   v0-memory-contract.md  lifecycle and data contract
   hermes-integration.md  adapter architecture
   roadmap.md             next milestones

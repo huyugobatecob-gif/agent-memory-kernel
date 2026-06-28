@@ -86,6 +86,43 @@ Fields:
 Active memory can be corrected or soft-deleted. Deletion should not erase audit
 history.
 
+### 4. Conversation History
+
+Conversation history is stored separately from durable memory.
+
+Tables:
+
+- `conversation_turns`: append-only turns with `thread_id`, `role`, `actor`,
+  `scope`, `content`, and `metadata_json`.
+- `thread_messages`: message-level records linked to turns.
+- `thread_summaries`: rolling or session summaries for context building.
+
+Conversation turns can optionally be passed into `remember()`. Direct user turns
+may be trusted; assistant/tool turns should remain reviewable unless a system
+policy explicitly approves them.
+
+### 5. Memory Item
+
+A memory item is the compact durable fact/decision/rule/attempt that can be
+inserted into context and linked into the graph.
+
+Fields:
+
+- `item_id`
+- `memory_id`
+- `event_id`
+- `item_type`
+- `scope`
+- `text`
+- `status`
+- `confidence`
+- `sensitivity`
+- `source_trust`
+- `owner`
+- `project`
+- `expires_at`
+- `metadata_json`
+
 ## Default Scopes
 
 - `personal`: user preferences and personal context.
@@ -150,35 +187,222 @@ for explicit handling.
 
 ## Graph Model
 
-The graph is intentionally small in v0.
+The persistent graph-tree layer mirrors the reference architecture shape without
+copying third-party code. It is stored separately from the legacy `nodes` /
+`edges` compatibility tables.
 
 Node types:
 
-- `memory`
 - `person`
 - `project`
+- `interest`
 - `document`
+- `data`
 - `tool`
-- `decision`
+- `fact`
 - `preference`
 - `rule`
+- `decision`
+- `attempt`
+- `outcome`
+- `gotcha`
+- `pattern`
+- `event`
+
+`memory_graph_nodes` fields:
+
+- `graph_node_id`
+- `created_at`
+- `updated_at`
+- `node_type`
+- `label`
+- `canonical_key`
+- `scope`
+- `group_label`
+- `blob`
+- `summary`
+- `importance`
+- `confidence`
+- `status`
+- `aliases_json`
+- `topics_json`
+- `chronology_json`
+- `verified_status`
+- `verified_at`
+- `verifier`
+- `hemisphere`
+- `visual_x`
+- `visual_y`
+- `embedding_json`
+- `metadata_json`
+
+`canonical_key` is used for deterministic dedupe. The uniqueness rule is:
+
+```text
+scope + node_type + canonical_key
+```
+
+Default group labels:
+
+- `person`
+- `project`
+- `interest`
+- `document`
+- `data`
+- `tool`
+- `decision`
+- `rule`
+- `attempt`
+- `outcome`
+- `gotcha`
+- `pattern`
 
 Edge types:
 
 - `relates_to`
 - `belongs_to`
 - `uses`
+- `references`
+- `mentions_data`
+- `stated_by`
 - `decided_in`
 - `derived_from`
 - `supersedes`
 - `conflicts_with`
 
-The v0 store creates an anchor `memory` node and links extracted nodes to it
-with `relates_to`. More advanced extractors can add richer graph structures.
+`memory_graph_edges` fields:
+
+- `graph_edge_id`
+- `source_graph_node_id`
+- `target_graph_node_id`
+- `edge_type`
+- `label`
+- `weight`
+- `confidence`
+- `source_memory_id`
+- `source_event_id`
+- `evidence_count`
+- `metadata_json`
+
+Every node and edge should be backed by evidence:
+
+- `node_evidence`: links graph nodes to memory items, memories, events, source
+  refs, and quotes.
+- `edge_evidence`: links graph edges to the same evidence trail.
+
+The v0 implementation writes a local deterministic `embedding_json` vector so
+the schema is ready for provider embeddings. Production users can replace it
+with OpenAI embeddings without changing the table contract.
+
+## Graph Groups
+
+`memory_graph_groups` stores the grouped view used by graph browsers and memory
+tree UIs.
+
+Fields:
+
+- `group_id`
+- `scope`
+- `group_label`
+- `node_type`
+- `node_count`
+- `edge_count`
+- `metadata_json`
+
+## Keeper
+
+Keeper is the write-path process that turns active memory into graph structure.
+
+Current v0 Keeper:
+
+- extracts entities from deterministic rules;
+- normalizes node types;
+- deduplicates graph nodes by canonical key;
+- writes memory items;
+- writes graph nodes and graph edges;
+- writes node and edge evidence;
+- records `keeper_runs`;
+- records applied `graph_commands`.
+
+Future Keepers can use GPT JSON extraction with the same output shape:
+
+```json
+{
+  "item": {},
+  "entities": [],
+  "links": [],
+  "commands": []
+}
+```
+
+## Light Model Analysis
+
+`semantic_analyses` records the low-cost semantic layer expected by the sample
+architecture.
+
+Fields:
+
+- `analysis_id`
+- `run_id`
+- `event_id`
+- `memory_id`
+- `analyzer`
+- `scope`
+- `facts_json`
+- `chronology_json`
+- `key_topics_json`
+- `people_json`
+- `events_json`
+- `verified_entities_json`
+- `metadata_json`
+
+The v0 implementation is deterministic. A production implementation can swap in
+a GPT Keeper or GPT Light Model while preserving this table contract.
+
+## Profile And Usage
+
+Profile-related tables:
+
+- `profile_notes`: stores `intro` and `rule` notes.
+- `project_profiles`: stores `access_json`, `env_snapshot_json`,
+  `saved_model_choices_json`, and `data_enrichment_snapshot_json`.
+- `llm_usage_stats`: stores provider, model, thread, token counts, cost, and
+  currency.
+
+These fields make profile export/import possible without mixing user profile
+state into raw chat logs.
+
+## Graph Optimization
+
+`graph_optimization_runs` records graph maintenance passes.
+
+Supported v0 modes:
+
+- `record_linkage`
+- `knowledge_consistency`
+- `llm_check`
+- `interests_reconnect`
+- `hemisphere_markup`
+- `brain_calibration`
+
+Each run stores `before_json`, `after_json`, and `findings_json`.
+
+## Digital Brain
+
+The digital-brain layer is metadata over graph nodes, not a separate source of
+truth.
+
+Node fields:
+
+- `hemisphere`
+- `visual_x`
+- `visual_y`
+
+`digital_brain_state` stores scope-level left/right counts and calibration JSON.
 
 ## Context Pack
 
-A context pack is the agent-facing output format.
+A context pack is the compact agent-facing output format.
 
 It must include:
 
@@ -201,6 +425,95 @@ Selected memories:
   (source=evt_...; trust=trusted; why_selected=query match;
   why_trusted=trusted source with medium confidence)
 ```
+
+## Memory Tree Pack
+
+A Memory Tree Pack is the deeper agent-facing output format. It is used when an
+agent needs the relevant branch of history, not only a flat list of memories.
+
+It must include:
+
+- root query;
+- scope;
+- retrieval mode;
+- selected branches;
+- why each branch was selected;
+- active memories under each branch;
+- related graph nodes;
+- memory graph nodes;
+- graph relationships;
+- raw provenance excerpts when requested.
+
+Example:
+
+```markdown
+## Memory Tree Pack
+
+Root:
+- query: planning SEO loop
+- scope: professional
+- retrieval: deterministic hybrid tree retrieval
+- branches: 1
+
+### Branch 1: project / demo-site
+
+Why selected:
+- active memory text match
+- node match: project / demo-site
+
+Active memories:
+- [professional:rule:medium; trust=trusted; id=mem_...]
+  Rule: project demo-site should track failed SEO attempts.
+
+Related nodes:
+- project / demo-site
+- memory / rule
+
+Memory graph nodes:
+- Projects / demo-site (type=project; id=gnode_...; importance=0.6)
+
+Relationships:
+- rule / rule: ... -[belongs_to]-> project / demo-site
+
+Raw provenance:
+- source=session://...; actor=user; type=manual; at=...
+```
+
+Tags, labels, and graph nodes are routing hints. Active memories and raw
+provenance are the grounding material.
+
+## Context Builder
+
+The full context builder composes:
+
+- core rules;
+- saved rules;
+- profile / People nodes;
+- thread summaries;
+- compact memory;
+- recent messages;
+- `MEMORY_TREE_SUPPLEMENT`.
+
+This is the recommended Hermes planning input for non-trivial tasks.
+
+## Profile Export
+
+Profile export must include:
+
+- profile notes;
+- project profiles;
+- memory tree groups, nodes, and edges;
+- node and edge evidence;
+- chat history;
+- LLM usage stats;
+- semantic analyses;
+- Keeper runs;
+- optimization runs;
+- digital brain state.
+
+Profile import must restore profile notes, project metadata, chat turns, and
+LLM usage stats at minimum. Graph reconstruction can be performed by re-ingest
+or by importing graph records in a richer adapter.
 
 ## Corrections
 

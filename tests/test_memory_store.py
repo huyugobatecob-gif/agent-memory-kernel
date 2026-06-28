@@ -80,6 +80,7 @@ class MemoryStoreTests(unittest.TestCase):
 
             store.correct_memory(memory_id, "Decision: use SQLite for the local-first memory store.")
             self.assertIn("local-first", store.context_pack("SQLite"))
+            self.assertIn("local-first", store.list_memory_items()[0]["text"])
 
             store.export_markdown(export_dir)
             self.assertTrue((export_dir / "professional.md").exists())
@@ -88,6 +89,7 @@ class MemoryStoreTests(unittest.TestCase):
 
             store.delete_memory(memory_id, reason="test cleanup")
             self.assertEqual(store.search("SQLite"), [])
+            self.assertEqual(store.list_memory_items(), [])
             store.close()
 
     def test_approved_memory_creates_graph_nodes_and_edges(self) -> None:
@@ -112,6 +114,190 @@ class MemoryStoreTests(unittest.TestCase):
 
             self.assertGreaterEqual(node_count, 2)
             self.assertGreaterEqual(edge_count, 1)
+
+            item_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM memory_items WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()["count"]
+            graph_node_count = store.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM memory_graph_nodes gn
+                JOIN node_evidence ne ON ne.graph_node_id = gn.graph_node_id
+                WHERE ne.memory_id = ?
+                """,
+                (memory_id,),
+            ).fetchone()["count"]
+            graph_edge_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM memory_graph_edges WHERE source_memory_id = ?",
+                (memory_id,),
+            ).fetchone()["count"]
+            keeper_count = store.conn.execute(
+                "SELECT COUNT(*) AS count FROM keeper_runs WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()["count"]
+
+            self.assertEqual(item_count, 1)
+            self.assertGreaterEqual(graph_node_count, 2)
+            self.assertGreaterEqual(graph_edge_count, 1)
+            self.assertEqual(keeper_count, 1)
+            store.close()
+
+    def test_memory_tree_pack_returns_branches_and_raw_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Rule: project demo-site should track failed SEO attempts and keep raw dialogue context.",
+                scope="professional",
+                source_ref="session://seo-loop-1",
+                auto_approve=True,
+            )
+            store.remember(
+                "Decision: project demo-site uses Memory Tree Pack before planning new loops.",
+                scope="professional",
+                source_ref="session://seo-loop-2",
+                auto_approve=True,
+            )
+
+            tree = store.retrieve_tree("demo-site failed SEO", scope="professional")
+            self.assertGreaterEqual(len(tree["branches"]), 1)
+            self.assertEqual(tree["scope"], "professional")
+            self.assertTrue(any(branch["raw_events"] for branch in tree["branches"]))
+
+            pack = store.memory_tree_pack("demo-site failed SEO", scope="professional")
+            self.assertIn("## Memory Tree Pack", pack)
+            self.assertIn("Branch 1", pack)
+            self.assertIn("project / demo-site", pack)
+            self.assertIn("Related nodes", pack)
+            self.assertIn("Memory graph nodes", pack)
+            self.assertIn("Relationships", pack)
+            self.assertIn("Raw provenance", pack)
+            self.assertIn("Rule: project demo-site", pack)
+            store.close()
+
+    def test_conversation_turn_context_builder_and_graph_lists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            turn = store.record_turn(
+                "Decision: project demo-site uses Hermes and GPT for SEO memory.",
+                thread_id="thread-1",
+                role="user",
+                scope="professional",
+                remember=True,
+                auto_approve=True,
+            )
+            summary_id = store.add_thread_summary(
+                "We discussed demo-site SEO memory and Hermes graph retrieval.",
+                thread_id="thread-1",
+                scope="professional",
+            )
+
+            self.assertTrue(turn["turn_id"].startswith("turn_"))
+            self.assertTrue(summary_id.startswith("sum_"))
+            self.assertGreaterEqual(len(store.list_memory_items(scope="professional")), 1)
+            self.assertTrue(
+                any(node["label"] == "demo-site" for node in store.list_graph_nodes(scope="professional"))
+            )
+            self.assertGreaterEqual(len(store.list_graph_edges(scope="professional")), 1)
+            self.assertGreaterEqual(len(store.list_keeper_runs()), 1)
+
+            context = store.context_builder_pack(
+                "demo-site SEO memory",
+                scope="professional",
+                thread_id="thread-1",
+            )
+            self.assertIn("## Agent Context Builder", context)
+            self.assertIn("Thread summaries", context)
+            self.assertIn("Recent messages", context)
+            self.assertIn("MEMORY_TREE_SUPPLEMENT", context)
+            self.assertIn("Memory graph nodes", context)
+            store.close()
+
+    def test_profile_usage_optimization_and_export_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.record_turn(
+                "Decision: project demo-site uses GPT for SEO graph memory on 2026-06-28.",
+                thread_id="thread-2",
+                scope="professional",
+                remember=True,
+                auto_approve=True,
+            )
+            intro_id = store.upsert_profile_note(
+                "This workspace focuses on SEO projects.",
+                scope="professional",
+                note_type="intro",
+            )
+            rule_id = store.upsert_profile_note(
+                "Always retrieve the Memory Tree before planning.",
+                scope="professional",
+                note_type="rule",
+            )
+            profile_id = store.upsert_project_profile(
+                scope="professional",
+                project="demo-site",
+                access={"role": "owner"},
+                env_snapshot={"runtime": "local"},
+                saved_model_choices={"keeper": "gpt-4.1-mini"},
+                data_enrichment_snapshot={"wordstat": "enabled"},
+            )
+            usage_id = store.record_llm_usage(
+                provider="openai",
+                model="gpt-4.1-mini",
+                scope="professional",
+                thread_id="thread-2",
+                prompt_tokens=100,
+                completion_tokens=40,
+                cost=0.01,
+            )
+
+            optimization = store.optimize_graph("brain_calibration", scope="professional")
+            exported = store.export_profile(scope="professional", project="demo-site")
+            context = store.context_builder_pack(
+                "demo-site SEO memory",
+                scope="professional",
+                thread_id="thread-2",
+            )
+
+            self.assertTrue(intro_id.startswith("pnote_"))
+            self.assertTrue(rule_id.startswith("pnote_"))
+            self.assertTrue(profile_id.startswith("profile_"))
+            self.assertTrue(usage_id.startswith("usage_"))
+            self.assertTrue(optimization["optimization_id"].startswith("opt_"))
+            self.assertGreaterEqual(len(store.list_graph_groups(scope="professional")), 1)
+            self.assertGreaterEqual(len(store.list_semantic_analyses(scope="professional")), 1)
+            self.assertGreaterEqual(len(store.digital_brain_state(scope="professional")), 1)
+            self.assertEqual(store.list_llm_usage(scope="professional")[0]["total_tokens"], 140)
+            self.assertIn("profile_notes", exported)
+            self.assertIn("memory_tree", exported)
+            self.assertIn("chat_history", exported)
+            self.assertIn("llm_usage_stats", exported)
+            self.assertIn("semantic_analyses", exported)
+            self.assertIn("digital_brain", exported)
+            self.assertIn("node_evidence", exported["memory_tree"])
+            self.assertIn("edge_evidence", exported["memory_tree"])
+            self.assertIn("optimization_runs", exported)
+            self.assertIn("Profile intro", context)
+            self.assertIn("This workspace focuses on SEO projects.", context)
+            self.assertIn("Profile rules", context)
+            self.assertIn("Always retrieve the Memory Tree before planning.", context)
+            self.assertTrue(exported["memory_tree"]["groups"])
+            self.assertTrue(exported["memory_tree"]["nodes"])
+
+            imported = MemoryStore(Path(tmp) / "imported.db")
+            imported.init_db()
+            counts = imported.import_profile(exported)
+            self.assertGreaterEqual(counts["profile_notes"], 2)
+            self.assertGreaterEqual(counts["project_profiles"], 1)
+            self.assertGreaterEqual(counts["conversation_turns"], 1)
+            self.assertGreaterEqual(counts["llm_usage_stats"], 1)
+            imported.close()
             store.close()
 
 

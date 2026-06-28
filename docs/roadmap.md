@@ -7,11 +7,21 @@ Status: implemented in this template.
 - SQLite store.
 - CLI.
 - Events, candidates, active memories.
+- Conversation turns, thread messages, and thread summaries.
+- Memory items.
 - Manual review.
 - Conservative auto-approval.
 - Quarantine for secret-like text.
-- Basic graph nodes and edges.
+- Persistent graph nodes and edges.
+- Node and edge evidence.
+- Keeper runs and graph commands audit.
+- Light Model semantic analyses.
+- Profile notes, project profile metadata, and profile export.
+- LLM usage stats.
+- Graph groups, optimization runs, and Digital Brain calibration.
 - Context packs.
+- Memory Tree Packs.
+- Context builder packs.
 - Markdown vault export.
 - Tests.
 
@@ -26,7 +36,8 @@ Planned:
 - success/failure comparison;
 - reusable rule extraction;
 - conflict detection between old and new rules;
-- project-level memory packs.
+- project-level tree packs;
+- success/failure branches inside tree packs.
 
 This is the layer that makes loops powerful for SEO projects, QA projects,
 research projects, and agent optimization.
@@ -42,7 +53,8 @@ Planned:
 - MCP server;
 - file-based vault adapter;
 - optional OpenAI extractor;
-- optional embedding search.
+- optional provider embeddings;
+- optional semantic reranker.
 
 ## v0.4: Review UI
 

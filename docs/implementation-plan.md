@@ -13,7 +13,7 @@ The project should remain universal by default:
   support workflows, CRM memory;
 - local-first storage;
 - auditable lifecycle;
-- simple graph model that can deepen over time.
+- persistent graph-tree model that can deepen over time.
 
 The key rule: domain-specific intelligence should be built as extensions over
 the kernel, not hard-coded into the kernel.
@@ -66,7 +66,8 @@ Files:
 Lifecycle:
 
 ```text
-event -> candidate_memory -> review/policy -> active_memory -> context_pack
+conversation_turn / event -> candidate_memory -> review/policy
+  -> active_memory -> memory_item -> memory_graph -> context_pack / tree_pack
 ```
 
 Tasks:
@@ -78,12 +79,17 @@ Tasks:
 5. Preserve source links and audit logs.
 6. Support correction and soft-delete.
 7. Export human-readable markdown vaults.
-8. Return agent-ready context packs.
+8. Return compact agent-ready context packs.
+9. Return branch-oriented Memory Tree Packs for planning.
+10. Store conversation turns, thread messages, and thread summaries.
+11. Create memory items for active memories.
+12. Store profile intro/rules, project profiles, and LLM usage stats.
 
 Done when:
 
 - pending memories do not appear in search;
-- approved memories appear in search and context packs;
+- approved memories appear in search, context packs, and tree packs;
+- approved memories create memory items;
 - quarantined content cannot be approved directly;
 - corrections update active memory;
 - deleted memory is no longer retrieved;
@@ -98,7 +104,8 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk.db
 
 ## Phase 2: Graph Layer
 
-Goal: make memory navigable without overbuilding ontology too early.
+Goal: make memory navigable with a persistent graph-tree without overbuilding
+domain ontology too early.
 
 Files:
 
@@ -109,20 +116,29 @@ Files:
 
 Starter nodes:
 
-- `memory`
 - `person`
 - `project`
+- `interest`
 - `document`
+- `data`
 - `tool`
+- `fact`
 - `decision`
 - `preference`
 - `rule`
+- `attempt`
+- `outcome`
+- `gotcha`
+- `pattern`
 
 Starter edges:
 
 - `relates_to`
 - `belongs_to`
 - `uses`
+- `references`
+- `mentions_data`
+- `stated_by`
 - `decided_in`
 - `derived_from`
 - `supersedes`
@@ -130,16 +146,29 @@ Starter edges:
 
 Tasks:
 
-1. Create an anchor node for each active memory.
-2. Link extracted entities to the anchor node.
-3. Keep graph extraction deterministic in v0.
-4. Document how richer extractors can add deeper graph structure.
+1. Create `memory_items` for each active memory.
+2. Create deduplicated `memory_graph_nodes`.
+3. Create weighted `memory_graph_edges`.
+4. Store node and edge evidence.
+5. Record Keeper runs and graph commands.
+6. Record Light Model semantic analyses.
+7. Maintain graph groups and digital brain state.
+8. Keep graph extraction deterministic in v0.
+9. Build a tree pack from memory hits, graph node hits, and graph neighbors.
+10. Document how richer Keepers can add GPT extraction and embeddings.
 
 Done when:
 
-- approved memory creates at least one `memory` node;
-- extracted project/person nodes are linked by edges;
-- tests verify graph creation.
+- approved memory creates a `memory_item`;
+- extracted project/person/tool/data nodes are deduped in `memory_graph_nodes`;
+- graph relationships are linked by `memory_graph_edges`;
+- node and edge evidence point back to events;
+- Keeper runs are auditable;
+- semantic analyses store facts, chronology, key topics, people, events, and
+  verified entities;
+- graph groups and digital brain state are inspectable;
+- tree packs return branches with graph nodes, relationships, and raw provenance;
+- tests verify graph creation, context builder, and tree retrieval.
 
 ## Phase 3: Personal / Professional Public Template
 
@@ -176,8 +205,12 @@ Files:
 
 Provider responsibilities:
 
-- request context packs before planning;
+- request Memory Tree Packs before planning;
+- request full context builder packs for non-trivial planning;
+- request compact context packs for small tasks;
+- record conversation turns and thread summaries;
 - record post-work memories as candidates;
+- inspect graph nodes and Keeper audit when debugging retrieval;
 - expose pending review;
 - keep memory lifecycle inside `MemoryStore`.
 
@@ -190,8 +223,12 @@ Tasks:
 
 Done when:
 
+- Hermes can call `tree_pack(query)`;
+- Hermes can call `context_builder_pack(query)`;
+- Hermes can call `record_turn(...)`;
 - Hermes can call `context_pack(query)`;
 - Hermes can call `remember(summary)`;
+- Hermes can inspect graph nodes;
 - pending candidates stay reviewable.
 
 ## Phase 5: Outcome / Loop Extension
