@@ -109,6 +109,8 @@ Included now:
 - OpenAI-compatible embedding provider adapter for hosted vectors without a
   hard SDK dependency.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
+- Hermes/Python production turn wrapper: `run_agent_turn()` builds the prompt
+  envelope, calls a supplied main agent, saves the exchange, and runs Keeper.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Export control previews with policy decisions, scope counts, and aggregate
   risk flags before memory leaves the store.
@@ -134,7 +136,7 @@ Not included yet:
 - web UI;
 - approximate-nearest-neighbor indexes and live embedding provider certification;
 - live production Keeper traces, prompt tuning, and managed model configuration;
-- production Hermes integration;
+- rollout into every live Hermes agent profile and traffic shadow review;
 - hosted multi-user auth/RBAC beyond the local bearer-token guard.
 
 ## Install
@@ -657,6 +659,25 @@ Recommended shape:
    chats.
 
 See [docs/hermes-integration.md](docs/hermes-integration.md).
+
+For direct Python integration, wrap the main agent call:
+
+```python
+from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
+
+provider = HermesMemoryProvider(".memory/hermes-memory.db")
+
+result = provider.run_agent_turn(
+    "Plan the next SEO loop",
+    lambda prompt: {"assistant_text": priority_model.chat(prompt["messages"]).text},
+    thread_id="seo-demo",
+    scope="professional",
+    agent_id="writer",
+)
+```
+
+This calls Router first, gives the main agent the prepared prompt envelope,
+saves the exchange, runs or queues Keeper, and returns Router/Keeper audit IDs.
 
 Runtime hook shape:
 

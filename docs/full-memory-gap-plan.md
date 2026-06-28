@@ -461,13 +461,15 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-full-memory
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** Tests cover `before_turn(query, thread_id, scope)`, `build_prompt_context(...)`, `record_turn(...)`, `keeper_analyze_turn(...)`, `retrieve_context(...)`, `ingest_graph(...)`, and `after_turn(user_text, assistant_text, thread_id, scope)`.
+**Verification:** Tests cover `before_turn(query, thread_id, scope)`, `build_prompt_context(...)`, `record_turn(...)`, `keeper_analyze_turn(...)`, `retrieve_context(...)`, `ingest_graph(...)`, `after_turn(user_text, assistant_text, thread_id, scope)`, and `run_agent_turn(query, main_agent, ...)`.
 
 **Result:** Baseline implemented. `MemoryOrchestrator` now provides one stable
 entrypoint for live agent memory instead of many low-level calls, and Hermes can
-treat memory as a service rather than as logic inside every agent. Remaining
-work is production rollout inside every live Hermes agent path, richer raw graph
-command normalization, and adapter certification on real traffic.
+treat memory as a service rather than as logic inside every agent.
+`run_agent_turn()` now wraps Router, the main agent call, turn persistence, and
+Keeper for local Python runtimes. Remaining work is production rollout inside
+every live Hermes agent path, richer raw graph command normalization, and
+adapter certification on real traffic.
 
 ### Step 4: Add The LLM-Backed Keeper
 
@@ -610,14 +612,14 @@ metadata.
 
 ### Step 9: Add Hermes Before/After Hooks
 
-**What we do:** Extend the Hermes provider from a thin demo wrapper into a practical adapter with two lifecycle hooks.
+**What we do:** Extend the Hermes provider from a thin demo wrapper into a practical adapter with lifecycle hooks and a one-call local runtime wrapper.
 
 **Files:**
 
 - Modify `adapters/hermes_provider/hermes_provider.py`.
 - Modify `adapters/hermes_provider/README.md`.
 - Modify `docs/hermes-integration.md`.
-- Add tests in `tests/test_hermes_provider.py`.
+- Add tests in `tests/test_orchestrator.py`.
 
 **Commands:**
 
@@ -625,7 +627,7 @@ metadata.
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-**Verification:** `before_agent_turn()` returns prompt envelope data from the Router. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis. The main agent never receives the full graph, only the selected memory supplement and surrounding context.
+**Verification:** `before_agent_turn()` returns prompt envelope data from the Router. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis. `run_agent_turn()` calls a supplied main agent with the selected prompt envelope and returns Router/Keeper audit IDs. The main agent never receives the full graph, only the selected memory supplement and surrounding context.
 
 **Result:** Hermes can make every agent memory-aware without each agent implementing memory logic.
 

@@ -55,6 +55,10 @@ The concrete contracts live in:
 
 Hermes should call these hooks through an adapter or service. The main agent
 should receive a selected prompt envelope, not direct graph traversal rights.
+For local Python integrations, `run_agent_turn()` wraps the complete production
+turn: it calls Router, passes the prompt envelope to the supplied main agent,
+saves the exchange, runs or queues Keeper, and returns `router_run_id`,
+`selected_branch_ids`, `keeper_job_id`, and saved turn IDs.
 
 ## Adapter Boundary
 
@@ -64,6 +68,9 @@ Suggested interface:
 
 ```python
 class HermesMemoryProvider:
+    def run_agent_turn(self, query: str, main_agent, thread_id: str = "default", scope: str = "professional") -> dict:
+        ...
+
     def before_agent_turn(self, query: str, thread_id: str = "default", scope: str = "professional") -> dict:
         ...
 

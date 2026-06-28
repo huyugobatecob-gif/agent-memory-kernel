@@ -6,6 +6,7 @@ small service-shaped API for the complete memory turn lifecycle.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +118,107 @@ class MemoryOrchestrator:
             "access_decisions": before["access_decisions"],
             "warnings": before["warnings"],
         }
+
+    def run_agent_turn(
+        self,
+        query: str,
+        main_agent: Callable[[dict[str, Any]], Any],
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "chat",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
+        limit: int = 8,
+        recent_messages: int = 6,
+        enable_brain_style: bool = True,
+        auto_approve: bool = False,
+        keeper_mode: str = "sync",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one full production turn around a caller-supplied main agent."""
+        before = self.before_turn(
+            query,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode,
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+            limit=limit,
+            recent_messages=recent_messages,
+            enable_brain_style=enable_brain_style,
+        )
+        model_result = main_agent(before["prompt_envelope"])
+        assistant_text = self._assistant_text_from_model_result(model_result)
+        after = self.after_turn(
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            user_text=query,
+            assistant_text=assistant_text,
+            auto_approve=auto_approve,
+            keeper_mode=keeper_mode,
+            metadata={
+                **(metadata or {}),
+                "orchestrator_phase": "run_agent_turn",
+                "router_run_id": before["router_run_id"],
+            },
+        )
+        return {
+            "phase": "agent_turn",
+            "status": "completed",
+            "thread_id": thread_id,
+            "scope": scope,
+            "assistant_text": assistant_text,
+            "model_result": model_result,
+            "prompt_envelope": before["prompt_envelope"],
+            "router_run_id": before["router_run_id"],
+            "selected_branch_ids": before["selected_branch_ids"],
+            "access_decisions": before["access_decisions"],
+            "warnings": before["warnings"],
+            "keeper_job_id": after.get("keeper_job_id", ""),
+            "saved_turn_ids": after.get("saved_turn_ids", []),
+            "before": before,
+            "after": after,
+        }
+
+    @staticmethod
+    def _assistant_text_from_model_result(model_result: Any) -> str:
+        if isinstance(model_result, str):
+            assistant_text = model_result.strip()
+            if assistant_text:
+                return assistant_text
+        if isinstance(model_result, dict):
+            for key in ("assistant_text", "text", "content", "output_text"):
+                value = model_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            messages = model_result.get("messages")
+            if isinstance(messages, list):
+                for message in reversed(messages):
+                    if not isinstance(message, dict):
+                        continue
+                    if message.get("role") != "assistant":
+                        continue
+                    content = message.get("content")
+                    if isinstance(content, str) and content.strip():
+                        return content.strip()
+        raise ValueError(
+            "main_agent must return assistant text as a string or dict field "
+            "assistant_text/text/content/output_text"
+        )
 
     def retrieve_context(
         self,

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from agent_memory_kernel import MemoryOrchestrator, MemoryStore
+from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
 from agent_memory_kernel.server import handle_api_request
 
 
@@ -64,6 +65,75 @@ class MemoryOrchestratorTests(unittest.TestCase):
             self.assertEqual(changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             self.assertGreaterEqual(len(changes["saved_turns"]), 2)
             store.close()
+
+    def test_orchestrator_run_agent_turn_wraps_main_agent_and_keeper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            store.remember(
+                "Pattern: demo-site successful SEO loops refresh intent and internal links together.",
+                scope="professional",
+                actor="user",
+                source_type="manual",
+                auto_approve=True,
+            )
+            orchestrator = MemoryOrchestrator(store)
+            observed: dict[str, object] = {}
+
+            def main_agent(prompt_envelope: dict[str, object]) -> dict[str, str]:
+                observed["prompt_envelope"] = prompt_envelope
+                messages = prompt_envelope["messages"]
+                self.assertIsInstance(messages, list)
+                self.assertIn("MEMORY_TREE_SUPPLEMENT", str(messages))
+                return {"assistant_text": "Reuse the refresh intent and internal links pattern."}
+
+            result = orchestrator.run_agent_turn(
+                "Plan the next demo-site SEO loop.",
+                main_agent,
+                thread_id="seo-demo",
+                scope="professional",
+                agent_id="planner",
+            )
+
+            self.assertEqual(result["phase"], "agent_turn")
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(
+                result["assistant_text"],
+                "Reuse the refresh intent and internal links pattern.",
+            )
+            self.assertIn("prompt_envelope", observed)
+            self.assertTrue(result["router_run_id"].startswith("router_"))
+            self.assertTrue(result["keeper_job_id"].startswith("kjob_"))
+            self.assertGreaterEqual(len(result["saved_turn_ids"]), 2)
+            changes = store.memory_changes(keeper_job_id=str(result["keeper_job_id"]))
+            self.assertEqual(changes["keeper_job"]["keeper_job_id"], result["keeper_job_id"])
+            store.close()
+
+    def test_hermes_provider_exposes_run_agent_turn_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            provider = HermesMemoryProvider(Path(tmp) / "memory.db")
+            provider.store.remember(
+                "Rule: demo-site content refreshes must include internal links.",
+                scope="professional",
+                actor="user",
+                source_type="manual",
+                auto_approve=True,
+            )
+
+            result = provider.run_agent_turn(
+                "Plan demo-site refresh.",
+                lambda envelope: {
+                    "assistant_text": "I will include the internal links rule in the plan."
+                },
+                thread_id="seo-demo",
+                scope="professional",
+                agent_id="planner",
+            )
+
+            self.assertEqual(result["phase"], "agent_turn")
+            self.assertTrue(result["router_run_id"].startswith("router_"))
+            self.assertTrue(result["keeper_job_id"].startswith("kjob_"))
+            provider.store.close()
 
     def test_orchestrator_retrieve_record_and_ingest_graph(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

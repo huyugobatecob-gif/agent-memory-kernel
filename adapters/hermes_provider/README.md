@@ -17,6 +17,8 @@ The adapter should:
 - run `evaluate_shadow_trace()` after review to keep regression fixtures;
 - expose `before_agent_turn()` and `after_agent_turn()` as the high-level
   `MemoryOrchestrator` lifecycle hooks;
+- expose `run_agent_turn()` for local Python runtimes that want one wrapper
+  around Router, the main agent call, turn persistence, and Keeper;
 - call `before_model_call()` before a main agent/model answers;
 - call `after_saved_turn()` after the exchange is persisted;
 - expose `retrieve_context()`, `build_prompt_context()`,
@@ -244,9 +246,28 @@ provider.evaluate_shadow_trace(
 )
 ```
 
-Production runtime should then use `before_model_call()` to get the prompt
-envelope and `after_saved_turn()` to save the exchange and create reviewable
-Keeper candidates.
+Production runtime can either call the explicit two-step hooks or use the
+single Python wrapper:
+
+```python
+def main_agent(prompt_envelope: dict) -> dict:
+    response = priority_model.chat(prompt_envelope["messages"])
+    return {"assistant_text": response.text}
+
+result = provider.run_agent_turn(
+    "Plan the next demo-site SEO refresh loop.",
+    main_agent,
+    thread_id="seo-demo",
+    scope="professional",
+    agent_id="seo-planner",
+)
+
+changes = provider.memory_changes(keeper_job_id=result["keeper_job_id"])
+```
+
+For service, HTTP, or MCP integrations, use `before_model_call()` to get the
+prompt envelope and `after_saved_turn()` to save the exchange and create
+reviewable Keeper candidates.
 
 After `after_saved_turn()`, inspect the returned Keeper job:
 

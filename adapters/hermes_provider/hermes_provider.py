@@ -6,6 +6,7 @@ Hermes orchestrates agents, while Agent Memory Kernel owns memory lifecycle.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -550,6 +551,49 @@ class HermesMemoryProvider:
             model_id=model_id,
             token_budget=token_budget,
             limit=limit,
+        )
+
+    def run_agent_turn(
+        self,
+        query: str,
+        main_agent: Callable[[dict[str, Any]], Any],
+        *,
+        thread_id: str = "default",
+        scope: str = "professional",
+        user_id: str = "user_default",
+        agent_id: str = "agent",
+        model_id: str = "",
+        mode: str = "chat",
+        token_budget: int = 12000,
+        requested_lanes: list[str] | None = None,
+        allowed_scopes: list[str] | None = None,
+        denied_scopes: list[str] | None = None,
+        limit: int = 8,
+        recent_messages: int = 6,
+        enable_brain_style: bool = True,
+        auto_approve: bool = False,
+        keeper_mode: str = "sync",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.orchestrator.run_agent_turn(
+            query,
+            main_agent,
+            thread_id=thread_id,
+            scope=scope,
+            user_id=user_id,
+            agent_id=agent_id,
+            model_id=model_id,
+            mode=mode,
+            token_budget=token_budget,
+            requested_lanes=requested_lanes,
+            allowed_scopes=allowed_scopes,
+            denied_scopes=denied_scopes,
+            limit=limit,
+            recent_messages=recent_messages,
+            enable_brain_style=enable_brain_style,
+            auto_approve=auto_approve,
+            keeper_mode=keeper_mode,
+            metadata=metadata,
         )
 
     def keeper_analyze_turn(self, **kwargs: Any) -> dict[str, Any]:
