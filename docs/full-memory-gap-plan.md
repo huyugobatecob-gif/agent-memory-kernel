@@ -339,8 +339,8 @@ Remaining for full memory:
   recipes.
 - Broader hosted/remote MCP deployment patterns for agents that should not use
   local stdio.
-- Hosted embedding adapters, approximate-nearest-neighbor indexes, and
-  production semantic reranking beyond the provider-neutral local contract.
+- Approximate-nearest-neighbor indexes, live embedding provider certification,
+  and production semantic reranking beyond the provider-neutral local contract.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Richer browser batch editing queues, deeper graph exploration views, and
   managed push/email/web delivery beyond the baseline browser review, graph,
@@ -572,11 +572,11 @@ embedding tests can be added behind optional integration flags.
 
 **Result:** Baseline local reranking is implemented through
 `src/agent_memory_kernel/embeddings.py`, with a provider-neutral
-`EmbeddingProvider` contract, deterministic `LocalEmbeddingProvider`, stored
-embedding reuse, and tests that prove optional provider ranking can be injected
-without a live service. Remaining work is hosted embedding adapters,
-approximate-nearest-neighbor indexes, and provider-specific integration tests
-for larger corpora.
+`EmbeddingProvider` contract, deterministic `LocalEmbeddingProvider`,
+OpenAI-compatible `OpenAIEmbeddingProvider`, stored embedding reuse, and tests
+that prove optional provider ranking can be injected without a live service.
+Remaining work is approximate-nearest-neighbor indexes and provider-specific
+live integration certification for larger corpora.
 
 ### Step 8: Build The Prompt Envelope
 

@@ -104,6 +104,8 @@ Included now:
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Provider-neutral embedding contract with local deterministic fallback and
   optional provider rerank hook for larger corpora.
+- OpenAI-compatible embedding provider adapter for hosted vectors without a
+  hard SDK dependency.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Export control previews with policy decisions, scope counts, and aggregate
@@ -128,7 +130,7 @@ Not included yet:
 
 - hosted multi-user API server;
 - web UI;
-- hosted embedding provider adapters and approximate-nearest-neighbor indexes;
+- approximate-nearest-neighbor indexes and live embedding provider certification;
 - production LLM Keeper eval suite and managed model configuration;
 - production Hermes integration;
 - hosted multi-user auth/RBAC beyond the local bearer-token guard.

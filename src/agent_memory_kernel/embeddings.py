@@ -215,6 +215,63 @@ class LocalEmbeddingProvider:
         return [lexical_embedding(text, dims=self.dims) for text in texts]
 
 
+class OpenAIEmbeddingProvider:
+    """OpenAI-compatible embedding adapter without a hard SDK dependency."""
+
+    def __init__(
+        self,
+        client: object,
+        *,
+        model: str = "text-embedding-3-small",
+        dimensions: int | None = None,
+    ) -> None:
+        self.client = client
+        self.model = model
+        self.dimensions = dimensions
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        clean = [str(text or "") for text in texts]
+        if not clean:
+            return []
+        embeddings = getattr(self.client, "embeddings", None)
+        if embeddings is None or not hasattr(embeddings, "create"):
+            raise TypeError("client must expose embeddings.create")
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "input": clean,
+        }
+        if self.dimensions is not None:
+            kwargs["dimensions"] = int(self.dimensions)
+        response = embeddings.create(**kwargs)
+        vectors = self._vectors_from_response(response)
+        if len(vectors) != len(clean):
+            raise ValueError("embedding response must contain one vector per input text")
+        return vectors
+
+    @staticmethod
+    def _vectors_from_response(response: Any) -> list[list[float]]:
+        data = response.get("data") if isinstance(response, dict) else getattr(response, "data", None)
+        if data is None:
+            raise ValueError("embedding response missing data")
+        items = list(data)
+        if all(_embedding_index(item) is not None for item in items):
+            items.sort(key=lambda item: int(_embedding_index(item) or 0))
+        vectors: list[list[float]] = []
+        for item in items:
+            embedding = item.get("embedding") if isinstance(item, dict) else getattr(item, "embedding", None)
+            if not isinstance(embedding, (list, tuple)):
+                raise ValueError("embedding item missing vector")
+            vectors.append([float(value) for value in embedding])
+        return vectors
+
+
+def _embedding_index(item: Any) -> int | None:
+    value = item.get("index") if isinstance(item, dict) else getattr(item, "index", None)
+    if value is None:
+        return None
+    return int(value)
+
+
 def query_tokens(text: str) -> list[str]:
     tokens: list[str] = []
     for token in TOKEN_RE.findall((text or "").lower()):

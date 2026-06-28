@@ -282,13 +282,14 @@ Implemented now:
 - OpenAI-compatible lightweight extractor adapter;
 - local deterministic semantic reranker;
 - provider-neutral embedding contract with local fallback;
+- OpenAI-compatible embedding provider adapter;
 - file-based vault adapter.
 
 Planned:
 
 - hosted or remote MCP deployment patterns;
-- hosted embedding provider adapters;
-- provider-backed approximate-nearest-neighbor reranker for larger corpora.
+- provider-backed approximate-nearest-neighbor reranker for larger corpora;
+- live embedding provider certification fixtures.
 
 ## v0.4: Review UI
 

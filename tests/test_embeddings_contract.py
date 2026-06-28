@@ -6,6 +6,7 @@ from typing import Sequence
 from agent_memory_kernel.embeddings import (
     EmbeddedDocument,
     LocalEmbeddingProvider,
+    OpenAIEmbeddingProvider,
     cosine_similarity,
     lexical_embedding,
     rank_documents,
@@ -27,6 +28,29 @@ class FakeProvider:
         if any(term in lowered for term in ["style", "tone", "voice"]):
             vector[2] = 1.0
         return vector
+
+
+class FakeEmbeddingsEndpoint:
+    def __init__(self) -> None:
+        self.last_kwargs = {}
+
+    def create(self, **kwargs):
+        self.last_kwargs = kwargs
+        vectors = []
+        for index, text in enumerate(kwargs["input"]):
+            lowered = text.lower()
+            vector = [0.0, 0.0]
+            if "conversion" in lowered or "signup" in lowered:
+                vector[0] = 1.0
+            if "backup" in lowered:
+                vector[1] = 1.0
+            vectors.append({"index": index, "embedding": vector})
+        return {"data": list(reversed(vectors))}
+
+
+class FakeOpenAIClient:
+    def __init__(self) -> None:
+        self.embeddings = FakeEmbeddingsEndpoint()
 
 
 class EmbeddingsContractTests(unittest.TestCase):
@@ -81,6 +105,30 @@ class EmbeddingsContractTests(unittest.TestCase):
 
         self.assertEqual(ranked[0]["document_id"], "mem_signup")
         self.assertEqual(ranked[0]["embedding_source"], "provider")
+
+    def test_openai_embedding_provider_supports_compatible_client(self) -> None:
+        client = FakeOpenAIClient()
+        provider = OpenAIEmbeddingProvider(
+            client,
+            model="text-embedding-test",
+            dimensions=2,
+        )
+
+        vectors = provider.embed(["conversion lift", "backup plan"])
+
+        self.assertEqual(vectors, [[1.0, 0.0], [0.0, 1.0]])
+        self.assertEqual(client.embeddings.last_kwargs["model"], "text-embedding-test")
+        self.assertEqual(client.embeddings.last_kwargs["dimensions"], 2)
+
+        ranked = rank_documents(
+            "conversion lift",
+            [
+                EmbeddedDocument("mem_signup", "signup copy worked"),
+                EmbeddedDocument("mem_backup", "backup SQLite first"),
+            ],
+            provider=provider,
+        )
+        self.assertEqual(ranked[0]["document_id"], "mem_signup")
 
 
 if __name__ == "__main__":
