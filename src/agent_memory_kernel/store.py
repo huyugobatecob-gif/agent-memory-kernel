@@ -1744,21 +1744,46 @@ class MemoryStore:
         self.conn.commit()
 
     def delete_memory(self, memory_id: str, *, actor: str = "user", reason: str = "") -> None:
+        self._deactivate_memory(memory_id, status="deleted", actor=actor, reason=reason)
+
+    def distrust_memory(self, memory_id: str, *, actor: str = "user", reason: str = "") -> None:
+        self._deactivate_memory(memory_id, status="distrusted", actor=actor, reason=reason)
+
+    def expire_memory(self, memory_id: str, *, actor: str = "system", reason: str = "") -> None:
+        self._deactivate_memory(memory_id, status="expired", actor=actor, reason=reason)
+
+    def _deactivate_memory(
+        self,
+        memory_id: str,
+        *,
+        status: str,
+        actor: str,
+        reason: str,
+    ) -> None:
+        status = (status or "").strip().lower()
+        if status not in {"deleted", "distrusted", "expired"}:
+            raise ValueError("status must be deleted, distrusted, or expired")
         row = self.conn.execute(
             "SELECT memory_id FROM memories WHERE memory_id = ?", (memory_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"memory not found: {memory_id}")
+        ts = now_iso()
         self.conn.execute(
-            "UPDATE memories SET status = 'deleted', updated_at = ? WHERE memory_id = ?",
-            (now_iso(), memory_id),
+            "UPDATE memories SET status = ?, updated_at = ? WHERE memory_id = ?",
+            (status, ts, memory_id),
         )
         self.conn.execute(
-            "UPDATE memory_items SET status = 'deleted', updated_at = ? WHERE memory_id = ?",
-            (now_iso(), memory_id),
+            "UPDATE memory_items SET status = ?, updated_at = ? WHERE memory_id = ?",
+            (status, ts, memory_id),
         )
-        self._propagate_deleted_memory(memory_id)
-        self._audit("delete", "memory", memory_id, actor=actor, details={"reason": reason})
+        self._propagate_inactive_memory(memory_id)
+        action = {
+            "deleted": "delete",
+            "distrusted": "distrust",
+            "expired": "expire",
+        }[status]
+        self._audit(action, "memory", memory_id, actor=actor, details={"reason": reason})
         self.conn.commit()
 
     def export_markdown(self, out_dir: str | Path) -> None:
@@ -2328,7 +2353,7 @@ class MemoryStore:
         )
         return analysis_id
 
-    def _propagate_deleted_memory(self, memory_id: str) -> None:
+    def _propagate_inactive_memory(self, memory_id: str) -> None:
         affected_scopes = {
             str(row["scope"])
             for row in self.conn.execute(

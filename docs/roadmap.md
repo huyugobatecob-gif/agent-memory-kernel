@@ -75,6 +75,7 @@ Current status: the first local runtime hook slice exists through
 `MemoryStore.after_saved_turn()`, and the Hermes provider wrapper. It proves the
 Router/envelope/Keeper candidate loop, but full v0.2 still requires the full
 lifecycle, security, permission, poisoning, and service-mode gates above.
+Delete, distrust, and expire now suppress retrieval and active graph export.
 
 ## v0.3: Adapters
 

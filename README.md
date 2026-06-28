@@ -342,7 +342,7 @@ The kernel is intentionally conservative:
 - secret-like values are quarantined;
 - every active memory has provenance;
 - untrusted sources stay pending by default;
-- correction and soft-delete are first-class operations.
+- correction, soft-delete, distrust, and expiration are first-class operations.
 
 This is important because agent memory can otherwise become a prompt-injection
 and data-leak surface.

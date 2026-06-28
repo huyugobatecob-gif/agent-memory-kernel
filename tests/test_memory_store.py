@@ -101,6 +101,44 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(profile["memory_tree"]["edge_evidence"], [])
             store.close()
 
+    def test_distrust_and_expire_suppress_retrieval_and_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            distrusted = store.remember(
+                "Rule: project distrust-site should avoid stale source data.",
+                scope="professional",
+                auto_approve=True,
+            )
+            distrusted_id = distrusted["candidates"][0]["memory_id"]
+            store.distrust_memory(distrusted_id, reason="unreliable source")
+
+            self.assertEqual(store.search("stale source data", scope="professional"), [])
+            self.assertEqual(store.list_graph_nodes(scope="professional"), [])
+            self.assertEqual(store.list_graph_edges(scope="professional"), [])
+
+            expired = store.remember(
+                "Rule: project expire-site refresh cadence is weekly.",
+                scope="professional",
+                auto_approve=True,
+            )
+            expired_id = expired["candidates"][0]["memory_id"]
+            store.expire_memory(expired_id, reason="old cadence")
+
+            self.assertEqual(store.search("refresh cadence", scope="professional"), [])
+            self.assertEqual(store.list_graph_nodes(scope="professional"), [])
+            self.assertEqual(store.list_graph_edges(scope="professional"), [])
+            actions = [
+                row["action"]
+                for row in store.conn.execute(
+                    "SELECT action FROM audit_log WHERE target_type = 'memory'"
+                ).fetchall()
+            ]
+            self.assertIn("distrust", actions)
+            self.assertIn("expire", actions)
+            store.close()
+
     def test_approved_memory_creates_graph_nodes_and_edges(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

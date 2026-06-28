@@ -421,6 +421,24 @@ def cmd_delete(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_distrust(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    store.distrust_memory(args.memory_id, actor=args.actor, reason=args.reason)
+    store.close()
+    print_json({"memory_id": args.memory_id, "status": "distrusted"})
+    return 0
+
+
+def cmd_expire(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    store.expire_memory(args.memory_id, actor=args.actor, reason=args.reason)
+    store.close()
+    print_json({"memory_id": args.memory_id, "status": "expired"})
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -696,6 +714,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="user")
     p.add_argument("--reason", default="")
     p.set_defaults(func=cmd_delete)
+
+    p = sub.add_parser("distrust", help="Keep memory for audit but suppress retrieval")
+    add_common_db(p)
+    p.add_argument("memory_id")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_distrust)
+
+    p = sub.add_parser("expire", help="Expire active memory and suppress retrieval")
+    add_common_db(p)
+    p.add_argument("memory_id")
+    p.add_argument("--actor", default="system")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_expire)
 
     p = sub.add_parser("export", help="Export active memories to a markdown vault")
     add_common_db(p)
