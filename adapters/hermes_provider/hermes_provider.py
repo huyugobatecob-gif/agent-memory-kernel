@@ -266,6 +266,29 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def notification_transport_payloads(
+        self,
+        *,
+        transport: str = "webhook",
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        assigned_to: str | None = None,
+        sla_status: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.notification_transport_payloads(
+            transport=transport,
+            status=status,
+            scope=scope,
+            topic=topic,
+            severity=severity,
+            assigned_to=assigned_to,
+            sla_status=sla_status,
+            limit=limit,
+        )
+
     def assign_notification(
         self,
         notification_id: str,

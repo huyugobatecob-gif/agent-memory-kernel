@@ -333,10 +333,10 @@ Remaining for full memory:
   deterministic reranker.
 - Richer outcome comparison, scoring, and automatic lesson extraction.
 - Richer browser batch editing queues, deeper graph exploration views, and
-  push/email/web notification transports beyond the baseline browser review,
-  graph, and conflict pages, machine-readable review inbox with inline conflict
-  warnings, notification queue, approve/reject batch flow, and active-memory
-  lifecycle batch correction flow.
+  managed push/email/web delivery beyond the baseline browser review, graph,
+  and conflict pages, machine-readable review inbox with inline conflict
+  warnings, notification queue, transport payload builder, approve/reject batch
+  flow, and active-memory lifecycle batch correction flow.
 - Hosted identity, tenancy, and delegation rules beyond the local
   agent/scope/action capability report and read/write policies.
 - Production current-best-answer resolution beyond the baseline explicit

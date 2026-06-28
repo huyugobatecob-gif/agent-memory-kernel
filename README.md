@@ -92,8 +92,8 @@ Included now:
   results.
 - Graph browser data API with nodes, edges, and source previews.
 - Operator notification queue, reviewer assignment, SLA status filtering, and
-  escalation reports for review candidates, export approvals, and expired
-  export artifacts.
+  escalation reports plus webhook/email/push payload builders for review
+  candidates, export approvals, and expired export artifacts.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.

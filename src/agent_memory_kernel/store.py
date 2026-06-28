@@ -105,6 +105,7 @@ REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
 NOTIFICATION_ESCALATION_VERSION = "notification-escalation-v0.1"
+NOTIFICATION_TRANSPORT_VERSION = "notification-transport-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
@@ -1639,6 +1640,47 @@ class MemoryStore:
             "count": len(notifications),
             "summary": summary,
             "notifications": notifications,
+        }
+
+    def notification_transport_payloads(
+        self,
+        *,
+        transport: str = "webhook",
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        assigned_to: str | None = None,
+        sla_status: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Build local-first notification payloads for external transports."""
+        transport = (transport or "webhook").strip().lower()
+        if transport not in {"webhook", "email", "push"}:
+            raise ValueError("notification transport must be webhook, email, or push")
+        listed = self.list_notifications(
+            status=status,
+            scope=scope,
+            topic=topic,
+            severity=severity,
+            assigned_to=assigned_to,
+            sla_status=sla_status,
+            limit=limit,
+        )
+        payloads = [
+            self._notification_transport_payload(notification, transport)
+            for notification in listed["notifications"]
+        ]
+        return {
+            "version": NOTIFICATION_TRANSPORT_VERSION,
+            "transport": transport,
+            "status_filter": listed["status_filter"],
+            "scope": listed["scope"],
+            "topic": listed["topic"],
+            "sla_status": listed["sla_status"],
+            "count": len(payloads),
+            "summary": listed["summary"],
+            "payloads": payloads,
         }
 
     def ack_notification(
@@ -11536,6 +11578,63 @@ class MemoryStore:
             "recommended_action": recommended_action,
             "reason": reason,
             "notification": notification,
+        }
+
+    @staticmethod
+    def _notification_transport_payload(
+        notification: dict[str, Any],
+        transport: str,
+    ) -> dict[str, Any]:
+        notification_id = str(notification.get("notification_id", ""))
+        topic = str(notification.get("topic", "notification"))
+        severity = str(notification.get("severity", "info"))
+        title = str(notification.get("title") or topic)
+        message = str(notification.get("message") or "")
+        base = {
+            "notification_id": notification_id,
+            "transport": transport,
+            "severity": severity,
+            "topic": topic,
+            "scope": notification.get("scope", ""),
+            "assigned_to": notification.get("assigned_to", ""),
+            "sla": notification.get("sla", {}),
+        }
+        if transport == "webhook":
+            return {
+                **base,
+                "event": "agent_memory.notification",
+                "payload": {"notification": notification},
+            }
+        if transport == "email":
+            subject = f"[{severity.upper()}] {title}"
+            body_lines = [
+                message,
+                "",
+                f"Notification: {notification_id}",
+                f"Topic: {topic}",
+                f"Scope: {notification.get('scope', '')}",
+                (
+                    "Target: "
+                    f"{notification.get('target_type', '')}/"
+                    f"{notification.get('target_id', '')}"
+                ),
+                f"SLA: {notification.get('sla', {}).get('status', 'unknown')}",
+            ]
+            return {
+                **base,
+                "subject": subject,
+                "body": "\n".join(body_lines).strip(),
+            }
+        return {
+            **base,
+            "title": title,
+            "body": message,
+            "data": {
+                "notification_id": notification_id,
+                "target_type": notification.get("target_type", ""),
+                "target_id": notification.get("target_id", ""),
+                "action_path": notification.get("action_path", ""),
+            },
         }
 
     @staticmethod

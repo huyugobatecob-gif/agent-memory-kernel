@@ -359,6 +359,7 @@ Useful endpoints:
 - `POST /memory/delete`
 - `POST /memory/distrust`
 - `POST /memory/expire`
+- `POST /notifications/transport`
 - `POST /brain/style`
 - `POST /conflict/record`
 - `POST /conflict/list`
@@ -502,8 +503,10 @@ Hermes can show per-operator queues before a richer hosted UI exists.
 Every notification includes computed SLA metadata from `due_at`; Hermes can
 filter `sla_status=overdue` or `sla_status=due_soon` for escalation queues.
 Hermes can call `notification_escalations()` or MCP
-`memory_notification_escalations` for a policy-only escalation report before
-any push/email/web transport exists.
+`memory_notification_escalations` for a policy-only escalation report.
+Hermes can call `notification_transport_payloads()` or MCP
+`memory_notifications_transport` to build local-first webhook, email, or push
+payloads for an external delivery service.
 Hermes should show this to a human reviewer or policy service; the main agent
 should not silently promote its own Keeper output.
 For multiple candidates, Hermes can call `review_batch()` or MCP

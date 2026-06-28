@@ -86,6 +86,8 @@ Operator and graph tools:
   export, and maintenance actions; supports assignment and SLA filters.
 - `memory_notification_escalations`: list SLA-driven escalation candidates
   without sending notification transports.
+- `memory_notifications_transport`: build webhook, email, or push payloads for
+  external notification delivery.
 - `memory_notification_assign`: assign a notification to a reviewer or
   operator.
 - `memory_notification_ack`: acknowledge a notification without resolving it.

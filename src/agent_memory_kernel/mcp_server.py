@@ -374,6 +374,25 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_notifications_transport": {
+        "endpoint": "/notifications/transport",
+        "description": "Build webhook, email, or push payloads for operator notifications.",
+        "inputSchema": _schema(
+            {
+                "transport": _string("Transport shape: webhook, email, or push.", "webhook"),
+                "status": _string("Notification status: open, acknowledged, resolved, or all.", "open"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "topic": _string("Optional notification topic.", ""),
+                "severity": _string("Optional severity: info, warning, high, or critical.", ""),
+                "assigned_to": _string("Optional assigned operator filter.", ""),
+                "sla_status": _string(
+                    "Optional SLA filter: overdue, due_soon, on_track, no_due_date, invalid_due_date, or resolved.",
+                    "",
+                ),
+                "limit": _integer("Maximum payloads.", 50),
+            }
+        ),
+    },
     "memory_notification_assign": {
         "endpoint": "/notifications/assign",
         "description": "Assign an operator notification to a reviewer.",

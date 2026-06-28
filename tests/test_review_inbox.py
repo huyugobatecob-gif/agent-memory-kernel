@@ -271,6 +271,19 @@ class ReviewInboxTests(unittest.TestCase):
                 escalations["escalations"][0]["recommended_action"],
                 "escalate_assigned_owner",
             )
+            email_transport = handle_api_request(
+                store,
+                "/notifications/transport",
+                {
+                    "transport": "email",
+                    "assigned_to": "reviewer-a",
+                    "sla_status": "overdue",
+                },
+            )
+            self.assertEqual(email_transport["version"], "notification-transport-v0.1")
+            self.assertEqual(email_transport["transport"], "email")
+            self.assertIn("subject", email_transport["payloads"][0])
+            self.assertIn(notification["notification_id"], email_transport["payloads"][0]["body"])
 
             acknowledged = handle_api_request(
                 store,
@@ -307,6 +320,22 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertEqual(
                 mcp_list["result"]["structuredContent"]["sla"]["status"],
                 "no_due_date",
+            )
+            mcp_transport = mcp_server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_notifications_transport",
+                        "arguments": {"transport": "push", "status": "acknowledged"},
+                    },
+                }
+            )
+            self.assertFalse(mcp_transport["result"]["isError"])
+            self.assertEqual(
+                mcp_transport["result"]["structuredContent"]["transport"],
+                "push",
             )
 
             store.approve_candidate(candidate_id, actor="reviewer")
@@ -509,6 +538,13 @@ class ReviewInboxTests(unittest.TestCase):
                 provider.notifications(status="open", sla_status="no_due_date")["count"],
                 1,
             )
+            provider_transport = provider.notification_transport_payloads(
+                transport="webhook",
+                status="open",
+                assigned_to="reviewer-provider",
+            )
+            self.assertEqual(provider_transport["version"], "notification-transport-v0.1")
+            self.assertEqual(provider_transport["payloads"][0]["event"], "agent_memory.notification")
             self.assertEqual(provider.notification_escalations()["count"], 0)
             acknowledged = provider.ack_notification(
                 notifications["notifications"][0]["notification_id"],

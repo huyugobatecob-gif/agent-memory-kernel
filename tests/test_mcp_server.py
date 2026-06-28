@@ -67,6 +67,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_review_batch", names)
             self.assertIn("memory_notifications_list", names)
             self.assertIn("memory_notification_escalations", names)
+            self.assertIn("memory_notifications_transport", names)
             self.assertIn("memory_notification_assign", names)
             self.assertIn("memory_notification_ack", names)
             self.assertIn("memory_notification_resolve", names)

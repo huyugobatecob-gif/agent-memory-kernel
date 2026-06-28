@@ -166,6 +166,17 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             include_acknowledged=bool(payload.get("include_acknowledged", True)),
             limit=int(payload.get("limit", 50) or 50),
         )
+    if path == "/notifications/transport":
+        return store.notification_transport_payloads(
+            transport=str(payload.get("transport", "webhook")),
+            status=str(payload.get("status", "open")),
+            scope=payload.get("scope"),
+            topic=payload.get("topic"),
+            severity=payload.get("severity"),
+            assigned_to=payload.get("assigned_to"),
+            sla_status=payload.get("sla_status"),
+            limit=int(payload.get("limit", 50) or 50),
+        )
     if path == "/notifications/assign":
         return store.assign_notification(
             str(payload.get("notification_id", "")),

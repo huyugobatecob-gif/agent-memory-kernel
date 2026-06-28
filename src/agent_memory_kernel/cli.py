@@ -242,6 +242,25 @@ def cmd_notifications_escalations(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_notifications_transport(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.notification_transport_payloads(
+            transport=args.transport,
+            status=args.status,
+            scope=args.scope,
+            topic=args.topic,
+            severity=args.severity,
+            assigned_to=args.assigned_to,
+            sla_status=args.sla_status,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_notifications_assign(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1527,6 +1546,20 @@ def build_parser() -> argparse.ArgumentParser:
     np.add_argument("--open-only", action="store_true")
     np.add_argument("--limit", type=int, default=50)
     np.set_defaults(func=cmd_notifications_escalations)
+
+    np = notifications_sub.add_parser("transport", help="Build notification transport payloads")
+    np.add_argument("--transport", default="webhook", choices=["webhook", "email", "push"])
+    np.add_argument("--status", default="open", choices=["open", "acknowledged", "resolved", "all"])
+    np.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    np.add_argument("--topic")
+    np.add_argument("--severity", choices=["info", "warning", "high", "critical"])
+    np.add_argument("--assigned-to")
+    np.add_argument(
+        "--sla-status",
+        choices=["overdue", "due_soon", "on_track", "no_due_date", "invalid_due_date", "resolved"],
+    )
+    np.add_argument("--limit", type=int, default=50)
+    np.set_defaults(func=cmd_notifications_transport)
 
     np = notifications_sub.add_parser("assign", help="Assign a memory notification to an operator")
     np.add_argument("notification_id")
