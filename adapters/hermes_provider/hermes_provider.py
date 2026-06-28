@@ -985,6 +985,30 @@ class HermesMemoryProvider:
             retention_days=retention_days,
         )
 
+    def export_custody_report(
+        self,
+        actor: str = "hermes",
+        scope: str | None = None,
+        project: str = "",
+        redaction_profile: str = "safe",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+        passphrase_env: str = "AGENT_MEMORY_EXPORT_PASSPHRASE",
+        offhost_required: bool = True,
+    ) -> dict[str, Any]:
+        return self.store.export_custody_report(
+            actor=actor,
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
+            passphrase_env=passphrase_env,
+            offhost_required=offhost_required,
+        )
+
     def request_export_approval(
         self,
         *,

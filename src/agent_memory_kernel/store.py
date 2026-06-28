@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 import sqlite3
@@ -113,6 +114,7 @@ EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
 EXPORT_RETENTION_VERSION = "export-retention-v0.1"
+EXPORT_CUSTODY_VERSION = "export-custody-v0.1"
 ENCRYPTED_EXPORT_VERSION = "encrypted-export-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
@@ -3697,6 +3699,73 @@ class MemoryStore:
             "sensitive_export": sensitive_export,
             "risk_flags": risk_flags,
             "scopes": scope_reports,
+        }
+
+    def export_custody_report(
+        self,
+        *,
+        actor: str = "user",
+        scope: str | None = None,
+        project: str = "",
+        redaction_profile: str = "safe",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+        passphrase_env: str = "AGENT_MEMORY_EXPORT_PASSPHRASE",
+        offhost_required: bool = True,
+    ) -> dict[str, Any]:
+        """Preview export key custody and artifact handling without storing secrets."""
+        control = self.export_control_report(
+            actor=actor,
+            scope=scope,
+            project=project,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+        )
+        passphrase_env = (passphrase_env or "AGENT_MEMORY_EXPORT_PASSPHRASE").strip()
+        passphrase_configured = bool(os.environ.get(passphrase_env, ""))
+        artifact_ref = (artifact_ref or "").strip()
+        required_actions: list[str] = []
+        if not control["allowed"]:
+            required_actions.append("resolve_export_policy_denial")
+        if control["sensitive_export"]["approval_required"] and not approval_id:
+            required_actions.append("request_sensitive_export_approval")
+        if not passphrase_configured:
+            required_actions.append("configure_passphrase_env")
+        if offhost_required and not artifact_ref:
+            required_actions.append("provide_offhost_artifact_ref")
+        retention = control["retention"]
+        if int(retention.get("retention_days", 0)) == 0:
+            required_actions.append("confirm_zero_day_retention")
+        ready = not required_actions
+        return {
+            "version": EXPORT_CUSTODY_VERSION,
+            "actor": actor,
+            "scope": control["scope"],
+            "project": control["project"],
+            "redaction_profile": control["redaction_profile"],
+            "allowed": control["allowed"],
+            "ready_for_encrypted_export": ready,
+            "required_actions": required_actions,
+            "key_custody": {
+                "secrets_stored_in_db": False,
+                "passphrase_env": passphrase_env,
+                "passphrase_configured": passphrase_configured,
+                "kdf": {
+                    "algorithm": "PBKDF2-HMAC-SHA256",
+                    "iterations": ENCRYPTED_EXPORT_KDF_ITERATIONS,
+                },
+            },
+            "artifact_custody": {
+                "artifact_ref": artifact_ref,
+                "offhost_required": offhost_required,
+                "artifact_ref_present": bool(artifact_ref),
+                "recommended_storage": "encrypted_offhost_vault" if offhost_required else "local_allowed",
+            },
+            "retention": retention,
+            "sensitive_export": control["sensitive_export"],
+            "export_control": control,
         }
 
     def request_export_approval(

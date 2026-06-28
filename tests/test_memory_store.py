@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -479,6 +480,57 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(manifest["export"]["export_kind"], "markdown")
             self.assertEqual(manifest["export"]["retention_days"], 30)
             store.close()
+
+    def test_export_custody_report_checks_key_and_artifact_controls(self) -> None:
+        env_name = "AMK_TEST_EXPORT_PASSPHRASE"
+        previous = os.environ.pop(env_name, None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                store = MemoryStore(Path(tmp) / "memory.db")
+                store.init_db()
+                store.remember(
+                    "Decision: custody-site export should be governed.",
+                    scope="professional",
+                    auto_approve=True,
+                )
+
+                missing = store.export_custody_report(
+                    actor="reviewer",
+                    scope="professional",
+                    redaction_profile="safe",
+                    passphrase_env=env_name,
+                )
+
+                self.assertEqual(missing["version"], "export-custody-v0.1")
+                self.assertFalse(missing["key_custody"]["secrets_stored_in_db"])
+                self.assertFalse(missing["key_custody"]["passphrase_configured"])
+                self.assertIn("configure_passphrase_env", missing["required_actions"])
+                self.assertIn("provide_offhost_artifact_ref", missing["required_actions"])
+
+                os.environ[env_name] = "test passphrase"
+                ready = handle_api_request(
+                    store,
+                    "/export/custody",
+                    {
+                        "actor": "reviewer",
+                        "scope": "professional",
+                        "redaction_profile": "safe",
+                        "passphrase_env": env_name,
+                        "artifact_ref": "vault://exports/custody-site",
+                        "retention_days": 30,
+                    },
+                )
+
+                self.assertTrue(ready["key_custody"]["passphrase_configured"])
+                self.assertTrue(ready["artifact_custody"]["artifact_ref_present"])
+                self.assertEqual(ready["required_actions"], [])
+                self.assertTrue(ready["ready_for_encrypted_export"])
+                store.close()
+        finally:
+            if previous is None:
+                os.environ.pop(env_name, None)
+            else:
+                os.environ[env_name] = previous
 
     def test_secret_like_content_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

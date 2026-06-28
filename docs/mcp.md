@@ -105,6 +105,10 @@ Operator and graph tools:
 - `memory_export_profile`: export the profile, memory tree, graph, evidence,
   outcomes, and related metadata. Accepts `redaction_profile` (`full`, `safe`,
   or `metadata`) to preserve structure while redacting content-bearing fields.
+- `memory_export_custody`: check export policy, sensitive approval,
+  passphrase-environment configuration, off-host artifact custody, retention,
+  and the zero-secret-storage guarantee before an export leaves the local
+  machine.
 - `memory_export_encrypted_profile`: export the governed profile payload as an
   authenticated `encrypted-export-v0.1` envelope using a passphrase from a
   configured environment variable.

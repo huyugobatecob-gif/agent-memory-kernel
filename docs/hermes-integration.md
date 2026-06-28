@@ -179,6 +179,20 @@ class HermesMemoryProvider:
     ) -> dict:
         ...
 
+    def export_custody_report(
+        self,
+        actor: str = "hermes",
+        scope: str | None = None,
+        project: str = "",
+        redaction_profile: str = "safe",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+        passphrase_env: str = "AGENT_MEMORY_EXPORT_PASSPHRASE",
+        offhost_required: bool = True,
+    ) -> dict:
+        ...
+
     def request_export_approval(self, **kwargs) -> dict:
         ...
 
@@ -278,7 +292,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
 `memory_graph_edges`, `memory_graph_browser`, `memory_export_control`, `memory_export_profile`,
-`memory_export_encrypted_profile`, `memory_import_encrypted_profile`, and
+`memory_export_custody`, `memory_export_encrypted_profile`,
+`memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,
 `memory_notification_ack`, `memory_notification_resolve`,
 `memory_notification_escalations`,
@@ -339,6 +354,7 @@ Useful endpoints:
 - `POST /read-policy/list`
 - `POST /capability/check`
 - `POST /export/control`
+- `POST /export/custody`
 - `POST /export/profile`
 - `POST /export/encrypted-profile`
 - `POST /import/encrypted-profile`
@@ -752,6 +768,7 @@ Workspace profile export:
 
 ```bash
 agent-memory export-control --scope professional --project demo-site --actor writer --redaction-profile safe
+agent-memory export-custody --scope professional --project demo-site --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo-site/exported-profile.encrypted.json
 agent-memory export-profile --scope professional --project demo-site --redaction-profile safe
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --scope professional --project demo-site --redaction-profile safe --out exported-profile.encrypted.json
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile exported-profile.encrypted.json --db .memory/restored.db
@@ -761,6 +778,12 @@ agent-memory import-profile exported-profile.json --db .memory/restored.db
 Run export control before export. It returns matched export policy, aggregate
 counts by scope, sensitivity/trust breakdowns, denied scopes, and risk flags
 without returning memory content.
+Run export custody before encrypted/off-host export. It reuses the export policy
+decision and reports whether sensitive approval, passphrase environment
+configuration, artifact custody, and retention controls are ready. The report
+explicitly states that passphrases and derived keys are not stored in the memory
+database; Hermes should pass only an environment variable name to MCP/HTTP, not
+the passphrase itself.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when Hermes
 should share memory structure without sharing content-bearing fields.
 For `full` exports that include personal or secret active memory, Hermes should

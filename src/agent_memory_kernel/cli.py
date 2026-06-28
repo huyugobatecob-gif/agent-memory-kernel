@@ -969,6 +969,26 @@ def cmd_export_control(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_custody(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.export_custody_report(
+            actor=args.actor,
+            scope=args.scope,
+            project=args.project,
+            redaction_profile=args.redaction_profile,
+            approval_id=args.approval_id,
+            retention_days=args.retention_days,
+            artifact_ref=args.artifact_ref,
+            passphrase_env=args.passphrase_env,
+            offhost_required=not args.local_artifact_ok,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_export_approval_request(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2000,6 +2020,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--approval-id", default="")
     p.add_argument("--retention-days", type=int)
     p.set_defaults(func=cmd_export_control)
+
+    p = sub.add_parser("export-custody", help="Preview encrypted export key and artifact custody")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="safe", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
+    p.add_argument("--artifact-ref", default="")
+    p.add_argument("--passphrase-env", default="AGENT_MEMORY_EXPORT_PASSPHRASE")
+    p.add_argument("--local-artifact-ok", action="store_true")
+    p.set_defaults(func=cmd_export_custody)
 
     p = sub.add_parser("export-approval", help="Request or decide sensitive export approval")
     add_common_db(p)

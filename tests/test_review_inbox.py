@@ -595,6 +595,13 @@ class ReviewInboxTests(unittest.TestCase):
             export_control = provider.export_control_report(actor="reviewer", scope="professional")
             self.assertEqual(export_control["version"], "export-control-v0.1")
             self.assertTrue(export_control["allowed"])
+            export_custody = provider.export_custody_report(
+                actor="reviewer",
+                scope="professional",
+                offhost_required=False,
+            )
+            self.assertEqual(export_custody["version"], "export-custody-v0.1")
+            self.assertFalse(export_custody["key_custody"]["secrets_stored_in_db"])
             export_request = provider.request_export_approval(
                 actor="reviewer",
                 requested_by="operator",

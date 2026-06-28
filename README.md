@@ -112,6 +112,9 @@ Included now:
   manifests.
 - Encrypted profile export/import envelopes with passphrase-derived keys:
   `encrypted-export-v0.1`.
+- Export custody reports that verify export policy, sensitive approval,
+  passphrase configuration, off-host artifact custody, and zero secret storage
+  in the memory database.
 - Markdown vault export.
 - CLI.
 - Tests and demo commands.
@@ -350,6 +353,7 @@ agent-memory migration-status --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory export-control --db .memory/demo.db --scope professional --actor writer --redaction-profile safe
+agent-memory export-custody --db .memory/demo.db --scope professional --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo/exported-profile.encrypted.json
 agent-memory export-profile --db .memory/demo.db --scope professional --redaction-profile safe
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --db .memory/demo.db --out exported-profile.encrypted.json --scope professional --redaction-profile safe
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile --db .memory/restored.db exported-profile.encrypted.json
@@ -408,6 +412,11 @@ read/export policies are enforced outside the prompt hook too.
 Use `export-control` before `export-profile` or markdown export to see whether
 the actor can export the requested scope, what aggregate memory counts are in
 scope, and whether personal, secret, or denied-scope risk flags are present.
+Use `export-custody` before encrypted/off-host exports to verify the same policy
+decision plus key custody requirements: the passphrase comes from an environment
+variable, no passphrase or derived key is stored in SQLite, and production
+exports can require an external artifact reference such as object storage,
+vault, or backup ID.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when the
 export should preserve structure while replacing memory content-bearing fields
 with explicit redaction markers. `full` is the default and includes content.
@@ -419,6 +428,12 @@ agent-memory export-control --db .memory/demo.db \
   --actor writer \
   --scope professional \
   --redaction-profile safe
+
+agent-memory export-custody --db .memory/demo.db \
+  --actor writer \
+  --scope professional \
+  --redaction-profile safe \
+  --artifact-ref s3://memory-exports/demo/exported-profile.encrypted.json
 
 agent-memory export-profile --db .memory/demo.db \
   --scope professional \
@@ -461,6 +476,10 @@ agent-memory export-retention --db .memory/demo.db enforce --actor janitor
 Encrypted profile exports wrap the same governed/redacted profile payload in an
 authenticated `encrypted-export-v0.1` envelope. CLI commands can read the
 passphrase from `AGENT_MEMORY_EXPORT_PASSPHRASE` or `--passphrase-file`.
+The passphrase is intentionally treated as runtime custody, not memory data:
+`export-custody` reports whether the configured environment variable exists and
+whether an off-host artifact reference was supplied, but it never returns or
+stores key material.
 
 Inspect derived-memory invalidation after corrections or lifecycle changes:
 
@@ -703,7 +722,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_correct`, `memory_lifecycle_batch`, `memory_delete`, `memory_distrust`,
 `memory_expire`, `memory_graph_browser`,
 `memory_export_control`, `memory_export_profile`,
-`memory_export_encrypted_profile`, `memory_import_encrypted_profile`,
+`memory_export_custody`, `memory_export_encrypted_profile`,
+`memory_import_encrypted_profile`,
 `memory_export_approval_request`, `memory_export_approval_list`,
 `memory_export_approval_approve`, `memory_export_approval_reject`,
 `memory_export_retention_list`, `memory_export_retention_enforce`,

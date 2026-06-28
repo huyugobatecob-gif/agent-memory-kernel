@@ -575,6 +575,23 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_export_custody": {
+        "endpoint": "/export/custody",
+        "description": "Preview encrypted export key custody and artifact handling without storing secrets.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Exporting actor.", "mcp"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "project": _string("Optional project filter.", ""),
+                "redaction_profile": _string("Redaction profile: full, safe, or metadata.", "safe"),
+                "approval_id": _string("Optional approved sensitive export approval id.", ""),
+                "retention_days": _integer("Optional retention days for this export.", 0),
+                "artifact_ref": _string("Optional external artifact reference.", ""),
+                "passphrase_env": _string("Environment variable containing export passphrase.", "AGENT_MEMORY_EXPORT_PASSPHRASE"),
+                "offhost_required": _boolean("Require off-host encrypted artifact custody.", True),
+            }
+        ),
+    },
     "memory_export_profile": {
         "endpoint": "/export/profile",
         "description": "Export project profile and memory tree, optionally applying a redaction profile.",

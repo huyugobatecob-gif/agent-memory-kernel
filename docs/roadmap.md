@@ -221,8 +221,13 @@ export-encrypted-profile`, `agent-memory import-encrypted-profile`,
 `/export/encrypted-profile`, `/import/encrypted-profile`, Hermes encrypted
 export wrappers, and MCP `memory_export_encrypted_profile` /
 `memory_import_encrypted_profile`. The local envelope is
-`encrypted-export-v0.1`; hosted key management and encrypted off-host backup
-recipes are still backlog.
+`encrypted-export-v0.1`.
+Baseline export custody is implemented through `agent-memory export-custody`,
+`/export/custody`, Hermes `export_custody_report()`, and MCP
+`memory_export_custody`. The report verifies export policy, sensitive approval,
+passphrase environment configuration, off-host artifact reference, retention,
+and zero secret storage in SQLite. Hosted KMS integrations and managed
+off-host backup recipes are still backlog.
 The Hermes-style policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
@@ -293,7 +298,8 @@ Planned:
 - richer browser batch editing queues;
 - richer conflict-resolution workflows beyond scan/record;
 - managed push/email/web delivery beyond local transport payloads;
-- hosted key-management and export custody controls.
+- hosted KMS integrations and managed off-host backup recipes beyond the local
+  export custody report.
 
 ## v1.0: Stable Memory Contract
 

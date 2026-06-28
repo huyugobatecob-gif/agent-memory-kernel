@@ -48,6 +48,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)
             self.assertIn("memory_export_control", names)
+            self.assertIn("memory_export_custody", names)
             self.assertIn("memory_export_profile", names)
             self.assertIn("memory_export_encrypted_profile", names)
             self.assertIn("memory_import_encrypted_profile", names)
@@ -143,6 +144,23 @@ class MCPServerTests(unittest.TestCase):
             self.assertEqual(
                 export_control["result"]["structuredContent"]["version"],
                 "export-control-v0.1",
+            )
+
+            export_custody = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 51,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_export_custody",
+                        "arguments": {"actor": "designer", "scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(export_custody["result"]["isError"])
+            self.assertEqual(
+                export_custody["result"]["structuredContent"]["version"],
+                "export-custody-v0.1",
             )
 
             export_profile = server.handle_message(

@@ -259,6 +259,11 @@ Already present:
   `memory_import_encrypted_profile`; envelopes use `encrypted-export-v0.1`
   with passphrase-derived keys, ChaCha20 stream encryption, and HMAC
   authentication.
+- Baseline export custody through `agent-memory export-custody`,
+  `/export/custody`, Hermes `export_custody_report()`, and MCP
+  `memory_export_custody`; reports verify export policy, sensitive approval,
+  passphrase environment configuration, off-host artifact reference, retention,
+  and zero secret storage in SQLite.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
@@ -732,11 +737,12 @@ notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, SLA status
 filtering, and policy-only escalation reports.
 Remaining work is richer browser batch editing, richer graph navigation,
-notification transports, and hosted key-management controls.
+managed notification delivery, and hosted KMS/off-host backup recipes beyond
+the local custody report.
 Export-control, redaction-profile, sensitive-export approval, export retention,
-and encrypted profile export baselines are implemented, but richer browser
-flows, notification transports, and hosted key-management/off-host encryption
-remain production backlog.
+encrypted profile export, notification transport payloads, and local export
+custody baselines are implemented, but richer browser flows, managed
+notification delivery, and hosted KMS/off-host backup remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

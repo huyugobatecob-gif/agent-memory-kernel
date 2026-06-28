@@ -317,6 +317,18 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             approval_id=str(payload.get("approval_id", "")),
             retention_days=payload.get("retention_days"),
         )
+    if path == "/export/custody":
+        return store.export_custody_report(
+            actor=str(payload.get("actor", "user")),
+            scope=payload.get("scope"),
+            project=str(payload.get("project", "")),
+            redaction_profile=str(payload.get("redaction_profile", "safe")),
+            approval_id=str(payload.get("approval_id", "")),
+            retention_days=payload.get("retention_days"),
+            artifact_ref=str(payload.get("artifact_ref", "")),
+            passphrase_env=str(payload.get("passphrase_env", "AGENT_MEMORY_EXPORT_PASSPHRASE")),
+            offhost_required=bool(payload.get("offhost_required", True)),
+        )
     if path == "/export/approval/request":
         return store.request_export_approval(
             actor=str(payload.get("actor", "user")),
