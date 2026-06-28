@@ -141,7 +141,7 @@ The grounding material is:
 - raw provenance excerpts;
 - audit-backed correction and deletion history.
 
-Before planning, Hermes or another orchestrator should ask for:
+Before planning, a runtime adapter should ask for:
 
 ```bash
 agent-memory tree-pack "planning SEO content loop" --scope professional

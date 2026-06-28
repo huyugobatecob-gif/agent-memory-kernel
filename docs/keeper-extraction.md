@@ -38,7 +38,7 @@ def cheap_model_complete(request: dict):
 
 
 store = MemoryStore(
-    ".memory/hermes-memory.db",
+    ".memory/agent-memory.db",
     extractor=LLMKeeperExtractor(
         cheap_model_complete,
         model="cheap-memory-model",

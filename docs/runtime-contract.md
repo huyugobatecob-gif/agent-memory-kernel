@@ -1,7 +1,7 @@
 # Runtime Contract
 
 This contract defines the live memory loop. It is the boundary between an
-orchestrator such as Hermes, the memory kernel, and any main model provider.
+orchestrator, the memory kernel, and any main model provider.
 
 The core invariant:
 
@@ -15,7 +15,7 @@ selected, policy-filtered prompt envelope.
 
 ## Actors
 
-- `orchestrator`: Hermes or another runtime that receives user tasks and calls
+- `orchestrator`: an agent runtime that receives user tasks and calls
   models.
 - `memory_kernel`: this repository. It owns storage, retrieval, review,
   lifecycle, and graph mutation.
@@ -374,7 +374,7 @@ Baseline implementation:
   extraction fails, it rolls back the failed Keeper ingest, records a failed
   Keeper job with `metadata.operational_failure`, and keeps the saved turns
   inspectable through `memory-changes`.
-- `/operational/status`, the Hermes provider wrapper, and MCP
+- `/operational/status`, Python adapter wrappers, and MCP
   `memory_operational_status` expose local health checks for required tables,
   SQLite quick check, storage size, and configured fallback behavior.
 - `agent-memory worker --daemon` provides a long-running polling Keeper worker;

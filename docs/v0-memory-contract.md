@@ -494,7 +494,7 @@ The full context builder composes:
 - recent messages;
 - `MEMORY_TREE_SUPPLEMENT`.
 
-This is the recommended Hermes planning input for non-trivial tasks.
+This is the recommended runtime planning input for non-trivial tasks.
 
 ## Profile Export
 

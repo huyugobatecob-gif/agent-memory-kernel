@@ -1,7 +1,7 @@
-# Production Rollout Playbook
+# Runtime Adapter Production Rollout Playbook
 
 This playbook describes how to introduce Agent Memory Kernel into a live
-Hermes-style agent system without giving the main agent direct graph access.
+agent runtime without giving the main agent direct graph access.
 
 The safe production pattern is:
 
@@ -19,11 +19,11 @@ Run these before any live agent uses memory:
 
 ```bash
 agent-memory contract assert
-agent-memory migration-status --db .memory/hermes-memory.db
-agent-memory acceptance seed --db .memory/hermes-memory.db
-agent-memory acceptance assert --db .memory/hermes-memory.db
-agent-memory conformance seed --db .memory/hermes-memory.db
-agent-memory conformance assert --db .memory/hermes-memory.db
+agent-memory migration-status --db .memory/agent-memory.db
+agent-memory acceptance seed --db .memory/agent-memory.db
+agent-memory acceptance assert --db .memory/agent-memory.db
+agent-memory conformance seed --db .memory/agent-memory.db
+agent-memory conformance assert --db .memory/agent-memory.db
 agent-memory keeper-eval
 ```
 
@@ -31,7 +31,7 @@ For an existing live database, create a backup before migrations or large
 policy changes:
 
 ```bash
-agent-memory backup --db .memory/hermes-memory.db --out .memory/backups/hermes-memory.db
+agent-memory backup --db .memory/agent-memory.db --out .memory/backups/agent-memory.db
 ```
 
 ## Shadow Rollout
@@ -41,7 +41,7 @@ output during shadow rollout.
 
 ```bash
 agent-memory shadow-turn "Plan the next SEO loop" \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --thread-id seo-demo \
   --scope professional \
   --agent-id seo-planner \
@@ -54,30 +54,30 @@ agent-memory shadow-turn "Plan the next SEO loop" \
 Review the trace:
 
 ```bash
-agent-memory shadow-traces --db .memory/hermes-memory.db --thread-id seo-demo
-agent-memory memory-changes --db .memory/hermes-memory.db --thread-id seo-demo
-agent-memory review inbox --db .memory/hermes-memory.db --status open --scope professional
+agent-memory shadow-traces --db .memory/agent-memory.db --thread-id seo-demo
+agent-memory memory-changes --db .memory/agent-memory.db --thread-id seo-demo
+agent-memory review inbox --db .memory/agent-memory.db --status open --scope professional
 ```
 
 Promote accepted behavior into a regression fixture:
 
 ```bash
 agent-memory shadow-eval trace_xxxxxxxxxxxxxxxx \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --expected-json '{"expected_branch_labels":["seo-demo"],"require_candidates":true}'
 ```
 
-## Live Hermes Wrapper
+## Live Runtime Wrapper
 
-For local Python Hermes runtimes, prefer `run_agent_turn()` when the main agent
-call is in the same process:
+For local Python runtimes, prefer `MemoryOrchestrator.run_agent_turn()` when the
+main agent call is in the same process:
 
 ```python
-from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
+from agent_memory_kernel import MemoryOrchestrator
 
-provider = HermesMemoryProvider(".memory/hermes-memory.db")
+memory = MemoryOrchestrator.from_path(".memory/agent-memory.db")
 
-result = provider.run_agent_turn(
+result = memory.run_agent_turn(
     "Plan the next SEO loop",
     lambda prompt: {"assistant_text": priority_model.chat(prompt["messages"]).text},
     thread_id="seo-demo",
@@ -88,7 +88,7 @@ result = provider.run_agent_turn(
 )
 ```
 
-Hermes should log at least:
+The runtime should log at least:
 
 - `router_run_id`
 - `selected_branch_ids`
@@ -101,7 +101,7 @@ For service or MCP integrations, use the explicit two-step lifecycle:
 
 ```bash
 agent-memory before-model-call "Plan the next SEO loop" \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --thread-id seo-demo \
   --scope professional \
   --agent-id seo-planner \
@@ -109,7 +109,7 @@ agent-memory before-model-call "Plan the next SEO loop" \
   --allowed-scopes professional
 
 agent-memory after-saved-turn \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --thread-id seo-demo \
   --scope professional \
   --agent-id seo-planner \
@@ -134,7 +134,7 @@ After=network.target
 [Service]
 WorkingDirectory=/srv/agent-memory-kernel
 Environment=PYTHONPATH=/srv/agent-memory-kernel/src
-ExecStart=/usr/bin/python3 -m agent_memory_kernel.cli worker --db /srv/agent-memory/hermes-memory.db --daemon --poll-interval 5 --limit 10
+ExecStart=/usr/bin/python3 -m agent_memory_kernel.cli worker --db /srv/agent-memory/agent-memory.db --daemon --poll-interval 5 --limit 10
 Restart=always
 RestartSec=5
 
@@ -145,8 +145,8 @@ WantedBy=multi-user.target
 For bounded maintenance jobs:
 
 ```bash
-agent-memory worker --db .memory/hermes-memory.db --once --limit 10
-agent-memory worker --db .memory/hermes-memory.db --daemon --max-iterations 20 --stop-when-idle
+agent-memory worker --db .memory/agent-memory.db --once --limit 10
+agent-memory worker --db .memory/agent-memory.db --daemon --max-iterations 20 --stop-when-idle
 ```
 
 ## API Deployment
@@ -156,7 +156,7 @@ place authentication, TLS, and network policy outside the process.
 
 ```bash
 AGENT_MEMORY_API_TOKEN="change-me" agent-memory serve \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --host 127.0.0.1 \
   --port 8765 \
   --auth-token-env AGENT_MEMORY_API_TOKEN
@@ -181,7 +181,7 @@ The repository ships a stdio MCP server, not a hosted remote MCP server.
 Preferred pattern:
 
 ```bash
-agent-memory mcp --db .memory/hermes-memory.db
+agent-memory mcp --db .memory/agent-memory.db
 ```
 
 Run it on the same host as the agent runtime or MCP client. If an agent runs on
@@ -205,7 +205,7 @@ For normal production agents, deny auto-approval and require review:
 
 ```bash
 agent-memory write-policy set \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --agent-id seo-planner \
   --scope professional \
   --action auto_approve \
@@ -217,7 +217,7 @@ For lane isolation:
 
 ```bash
 agent-memory read-policy set \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --agent-id seo-planner \
   --scope personal \
   --action inject \
@@ -228,7 +228,7 @@ agent-memory read-policy set \
 Check effective permissions before delegation:
 
 ```bash
-agent-memory capability --db .memory/hermes-memory.db --actor seo-planner --scope professional
+agent-memory capability --db .memory/agent-memory.db --actor seo-planner --scope professional
 ```
 
 ## Observability
@@ -236,11 +236,11 @@ agent-memory capability --db .memory/hermes-memory.db --actor seo-planner --scop
 After live traffic starts, check:
 
 ```bash
-agent-memory operational-status --db .memory/hermes-memory.db
-agent-memory observability --db .memory/hermes-memory.db --scope professional --thread-id seo-demo
-agent-memory router-runs --db .memory/hermes-memory.db --thread-id seo-demo
-agent-memory memory-quality --db .memory/hermes-memory.db --scope professional
-agent-memory notifications --db .memory/hermes-memory.db --status open --scope professional
+agent-memory operational-status --db .memory/agent-memory.db
+agent-memory observability --db .memory/agent-memory.db --scope professional --thread-id seo-demo
+agent-memory router-runs --db .memory/agent-memory.db --thread-id seo-demo
+agent-memory memory-quality --db .memory/agent-memory.db --scope professional
+agent-memory notifications --db .memory/agent-memory.db --status open --scope professional
 ```
 
 Production readiness means:
@@ -259,7 +259,7 @@ If memory behaves badly, disable prompt injection first and preserve audit:
 
 ```bash
 agent-memory read-policy set \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --agent-id seo-planner \
   --scope professional \
   --action inject \
@@ -270,19 +270,19 @@ agent-memory read-policy set \
 Then inspect the latest runs:
 
 ```bash
-agent-memory router-runs --db .memory/hermes-memory.db --thread-id seo-demo
-agent-memory memory-changes --db .memory/hermes-memory.db --thread-id seo-demo
-agent-memory review inbox --db .memory/hermes-memory.db --status open --scope professional
+agent-memory router-runs --db .memory/agent-memory.db --thread-id seo-demo
+agent-memory memory-changes --db .memory/agent-memory.db --thread-id seo-demo
+agent-memory review inbox --db .memory/agent-memory.db --status open --scope professional
 ```
 
 For bad active memory, prefer lifecycle controls over database edits:
 
 ```bash
-agent-memory distrust --db .memory/hermes-memory.db mem_xxxxxxxxxxxxxxxx --reason "bad production memory"
-agent-memory correct --db .memory/hermes-memory.db mem_xxxxxxxxxxxxxxxx "Corrected text" --reason "operator correction"
-agent-memory delete --db .memory/hermes-memory.db mem_xxxxxxxxxxxxxxxx --reason "remove from retrieval"
+agent-memory distrust --db .memory/agent-memory.db mem_xxxxxxxxxxxxxxxx --reason "bad production memory"
+agent-memory correct --db .memory/agent-memory.db mem_xxxxxxxxxxxxxxxx "Corrected text" --reason "operator correction"
+agent-memory delete --db .memory/agent-memory.db mem_xxxxxxxxxxxxxxxx --reason "remove from retrieval"
 ```
 
 If the database itself is unsafe, restore from a verified backup into a new
-target path and switch Hermes to that database only after `migration-status` and
-the conformance suite pass.
+target path and switch the runtime to that database only after
+`migration-status` and the conformance suite pass.

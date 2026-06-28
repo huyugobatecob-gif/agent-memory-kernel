@@ -10,8 +10,9 @@ private workflow. It starts with two default memory lanes:
 - `professional`: projects, decisions, rules, gotchas, working knowledge.
 
 Teams can extend those lanes into project-specific graph trees, success/failure
-loops, Hermes adapters, CRM memory, SEO project memory, support memory, or any
-other domain-specific layer.
+loops, runtime adapters, CRM memory, SEO project memory, support memory, or
+any other domain-specific layer. Hermes is one optional adapter example, not a
+requirement of the kernel.
 
 ## Why this exists
 
@@ -80,7 +81,7 @@ Included now:
 - OpenAI-compatible lightweight extractor adapter with deterministic fallback
   for contract tests and local operation.
 - Offline Keeper extraction eval harness: `keeper-eval`, `/keeper-eval/run`,
-  MCP `memory_keeper_eval`, and Hermes `keeper_eval()`.
+  MCP `memory_keeper_eval`, and adapter wrappers such as Hermes `keeper_eval()`.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report for memory operations.
 - Operator review inbox with source previews, risk flags, inline
@@ -109,7 +110,7 @@ Included now:
 - OpenAI-compatible embedding provider adapter for hosted vectors without a
   hard SDK dependency.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
-- Hermes/Python production turn wrapper: `run_agent_turn()` builds the prompt
+- Runtime/Python production turn wrapper: `run_agent_turn()` builds the prompt
   envelope, calls a supplied main agent, saves the exchange, and runs Keeper.
 - Deterministic vertical slice commands: `slice seed`, `slice run`, `slice assert`.
 - Export control previews with policy decisions, scope counts, and aggregate
@@ -133,10 +134,10 @@ Included now:
 Not included yet:
 
 - hosted multi-user API server;
-- web UI;
+- hosted multi-user web UI beyond the local browser review/graph pages;
 - approximate-nearest-neighbor indexes and live embedding provider certification;
 - live production Keeper traces, prompt tuning, and managed model configuration;
-- rollout into every live Hermes agent profile and traffic shadow review;
+- rollout into live agent runtime profiles and traffic shadow review;
 - hosted multi-user auth/RBAC beyond the local bearer-token guard.
 
 ## Install
@@ -268,7 +269,7 @@ agent-memory graph --db .memory/demo.db brain-style --scope professional
 agent-memory graph --db .memory/demo.db optimize --mode record_linkage --scope professional
 ```
 
-Build the richer context that Hermes would pass to an agent:
+Build the richer context that any runtime adapter would pass to an agent:
 
 ```bash
 agent-memory build-context --db .memory/demo.db "planning an SEO loop" --scope professional
@@ -602,8 +603,8 @@ Root query
 
 This keeps the top of the tree compact while still letting an agent inspect the
 source conversation, session summary, decision, or tool result that created a
-memory. It is designed for Hermes-style orchestration: ask for the tree before
-planning, then record new events after the work.
+memory. It is designed for runtime-adapter orchestration: ask for the tree
+before planning, then record new events after the work.
 
 Under the hood, approved memories now flow through a Keeper step:
 
@@ -646,28 +647,30 @@ and `/outcome/record`, `/outcome/list`, `/outcome/pack`.
 
 See [examples/agent-loop-demo/README.md](examples/agent-loop-demo/README.md).
 
-## Hermes Integration
+## Runtime Adapter Integration
 
-Hermes should not own the memory. Hermes should call the memory kernel.
+The agent runtime should not own the memory. It should call the memory kernel.
 
 Recommended shape:
 
-1. Before planning, Hermes asks the kernel for a Memory Tree Pack.
-2. During work, Hermes records events and candidate memories.
+1. Before planning, the runtime asks the kernel for a Memory Tree Pack.
+2. During work, the runtime records events and candidate memories.
 3. After work, a reviewer or policy promotes useful candidates.
 4. Future agents retrieve only the relevant memory tree instead of scanning old
    chats.
 
-See [docs/hermes-integration.md](docs/hermes-integration.md).
+See [docs/production-rollout.md](docs/production-rollout.md) for the generic
+runtime rollout playbook. Hermes is kept as an optional adapter example in
+[docs/hermes-integration.md](docs/hermes-integration.md).
 
 For direct Python integration, wrap the main agent call:
 
 ```python
-from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
+from agent_memory_kernel import MemoryOrchestrator
 
-provider = HermesMemoryProvider(".memory/hermes-memory.db")
+memory = MemoryOrchestrator.from_path(".memory/runtime-memory.db")
 
-result = provider.run_agent_turn(
+result = memory.run_agent_turn(
     "Plan the next SEO loop",
     lambda prompt: {"assistant_text": priority_model.chat(prompt["messages"]).text},
     thread_id="seo-demo",
@@ -783,8 +786,8 @@ original planning conversation.
 The gap plan for the full automatic memory system is in
 [docs/full-memory-gap-plan.md](docs/full-memory-gap-plan.md). It maps the
 reference-memory findings to the missing repository layers: automatic Keeper,
-Memory Router, prompt envelope, Hermes hooks, API/MCP service mode, review, and
-security hardening.
+Memory Router, prompt envelope, runtime adapter hooks, API/MCP service mode,
+review, and security hardening.
 
 The full-memory work is split into hard contracts so contributors can implement
 it without relying on the original planning conversation:
@@ -799,7 +802,7 @@ it without relying on the original planning conversation:
 - [docs/security-identity-contract.md](docs/security-identity-contract.md)
   defines identity, permissions, trust, audit, and leakage controls.
 - [docs/production-rollout.md](docs/production-rollout.md) gives the
-  Hermes/MCP rollout playbook: preflight, shadow rollout, worker supervision,
+  runtime/MCP rollout playbook: preflight, shadow rollout, worker supervision,
   API/MCP deployment, observability, and rollback.
 - [docs/end-to-end-vertical-slice.md](docs/end-to-end-vertical-slice.md)
   defines the first executable full-memory scenario.
@@ -860,7 +863,7 @@ docs/
   end-to-end-vertical-slice.md  first full-memory acceptance scenario
   memory-tree-pack.md     tree-shaped retrieval format
   v0-memory-contract.md  lifecycle and data contract
-  hermes-integration.md  adapter architecture
+  hermes-integration.md  optional Hermes adapter example
   roadmap.md             next milestones
 examples/
   personal-professional-demo/

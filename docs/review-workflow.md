@@ -4,8 +4,8 @@ Review is the human/operator control surface for memory writes proposed by
 Keeper.
 
 The baseline review inbox is machine-readable, not a web UI. It is intended for
-Hermes, MCP agents, CLI operators, and future UI layers that need one stable
-shape for source preview, risk flags, graph preview, and action handles.
+runtime adapters, MCP agents, CLI operators, and future UI layers that need one
+stable shape for source preview, risk flags, graph preview, and action handles.
 
 ## Inbox
 
@@ -56,7 +56,7 @@ Approving or rejecting a candidate resolves candidate notifications. Approving
 or rejecting an export approval resolves export approval notifications. Purging
 an export retention record resolves the export retention notification.
 Assignments add `assigned_to`, `assigned_by`, `assigned_at`, and optional
-`due_at`, so Hermes or a UI can filter one reviewer queue without changing
+`due_at`, so a runtime adapter or UI can filter one reviewer queue without changing
 memory state. Each notification also returns computed `sla.status`
 (`overdue`, `due_soon`, `on_track`, `no_due_date`, `invalid_due_date`, or
 `resolved`) and can be filtered with `sla_status`.

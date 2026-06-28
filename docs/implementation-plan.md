@@ -9,7 +9,7 @@ The project should remain universal by default:
 
 - default lanes: `personal` and `professional`;
 - optional lanes: `project`, `agent`, `session`;
-- optional domain extensions: Hermes, SEO loops, research loops, QA loops,
+- optional domain extensions: runtime adapters, SEO loops, research loops, QA loops,
   support workflows, CRM memory;
 - local-first storage;
 - auditable lifecycle;
@@ -32,8 +32,8 @@ are implemented and verified:
 - `docs/end-to-end-vertical-slice.md` for the first complete scenario.
 
 This gate keeps the open-source template universal: basic users can keep the
-personal/professional memory model, while Hermes and other orchestrators can add
-automatic runtime memory on top.
+personal/professional memory model, while runtime adapters can add automatic
+memory on top. Hermes is one optional adapter example.
 
 ## Phase 0: Repository Baseline
 
@@ -210,9 +210,10 @@ Done when:
 - a non-technical user can understand what belongs in each lane;
 - examples run with the CLI.
 
-## Phase 4: Hermes Adapter
+## Phase 4: Runtime Adapter Example
 
-Goal: let Hermes use the kernel without owning memory.
+Goal: show how an external runtime can use the kernel without owning memory.
+The bundled Hermes provider is one concrete optional example.
 
 Files:
 
@@ -236,16 +237,16 @@ Tasks:
 1. Keep the adapter thin.
 2. Define the provider interface.
 3. Add integration examples.
-4. Later, connect the provider to real Hermes runtime hooks.
+4. Later, connect the provider to real runtime hooks.
 
 Done when:
 
-- Hermes can call `tree_pack(query)`;
-- Hermes can call `context_builder_pack(query)`;
-- Hermes can call `record_turn(...)`;
-- Hermes can call `context_pack(query)`;
-- Hermes can call `remember(summary)`;
-- Hermes can inspect graph nodes;
+- an adapter can call `tree_pack(query)`;
+- an adapter can call `context_builder_pack(query)`;
+- an adapter can call `record_turn(...)`;
+- an adapter can call `context_pack(query)`;
+- an adapter can call `remember(summary)`;
+- an adapter can inspect graph nodes;
 - pending candidates stay reviewable.
 
 ## Phase 5: Outcome / Loop Extension

@@ -22,7 +22,7 @@ The same report is exposed through:
 
 - HTTP: `POST /observability`
 - MCP: `memory_observability`
-- Python/Hermes wrapper: `observability_report()`
+- Python adapter wrapper: `observability_report()`
 
 The report returns:
 

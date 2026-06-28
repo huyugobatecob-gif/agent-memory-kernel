@@ -24,7 +24,7 @@ The same surfaces are available through:
 - HTTP: `POST /migration/status`, `POST /backup`, `POST /restore`
 - MCP: `memory_migration_status`, `memory_backup_database`,
   `memory_restore_database`
-- Python/Hermes wrapper: `migration_status()`, `backup_database()`,
+- Python adapter wrapper: `migration_status()`, `backup_database()`,
   `restore_database()`
 
 Safety defaults:

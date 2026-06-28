@@ -2,7 +2,7 @@
 
 **Goal:** turn Agent Memory Kernel into an automatic cross-model memory layer where a lightweight model maintains a graph tree and injects relevant node content into the prompt before any main agent answers.
 **Timeline:** 2-4 weeks for a usable local v0.2, 4-8 weeks for API/MCP, review UI, and production hardening.
-**Dependencies:** Hermes hook points, one low-cost LLM provider key, SQLite migration discipline, prompt-boundary policy, and realistic conversation transcripts for tests.
+**Dependencies:** runtime adapter hook points, one low-cost LLM provider key, SQLite migration discipline, prompt-boundary policy, and realistic conversation transcripts for tests.
 
 ---
 
@@ -65,7 +65,7 @@ Must-have before claiming full memory:
    memory-changes` and `/memory-changes`: a Keeper job can be inspected with
    saved turns, event, candidates, promoted memories, affected graph/context
    surfaces, operator handles, and audit trail.
-7. **Reference orchestration loop.** Provide one runnable Hermes-style demo
+7. **Reference orchestration loop.** Provide one runnable runtime-adapter demo
    where memory is saved, extracted, retrieved, injected, corrected, deleted,
    and then absent from the next prompt.
 8. **Idempotent Keeper and consolidation loop.** Retries must not duplicate
@@ -102,7 +102,7 @@ lightweight-model paths around the main model call:
 
 ```mermaid
 flowchart TD
-  U["User"] --> UI["Chat UI / Hermes UI"]
+  U["User"] --> UI["Chat UI / Agent Runtime UI"]
   UI --> CB["Context Builder"]
   CB --> CP["Context Pack: dialogue, summaries, rules, compact memory"]
   CB --> MG["Memory Graph"]
@@ -145,8 +145,8 @@ derive a soft style instruction, but it must be appended as a guarded system
 preference and must never override user instructions, safety, or factual
 accuracy.
 
-For Hermes, this means the repository should expose a Memory Orchestrator or
-Keeper service with these high-level operations:
+For any runtime adapter, this means the repository should expose a Memory
+Orchestrator or Keeper service with these high-level operations:
 
 - `record_turn` stores the complete exchange.
 - `keeper_analyze_turn` turns the exchange into graph updates.
@@ -171,16 +171,16 @@ Already present:
 - Agent write-policy table and enforcement for record, auto-approve, review,
   lifecycle, outcome, conflict, and supersession paths.
 - Baseline capability and consent reporting through `agent-memory capability`,
-  `/capability/check`, the Hermes provider wrapper, and MCP
+  `/capability/check`, Python adapter wrappers such as Hermes, and MCP
   `memory_capability_check`, with read/export enforcement on direct retrieval
   and export surfaces.
 - Baseline derived-memory invalidation ledger through `agent-memory
-  derived-invalidations`, `/derived-invalidations`, the Hermes provider wrapper,
+  derived-invalidations`, `/derived-invalidations`, Python adapter wrappers,
   and MCP `memory_derived_invalidations`; correction, rollback, delete,
   distrust, expire, and supersede actions record affected graph, evidence,
   prompt-pack, export, and graph-derived style surfaces.
 - Baseline operational failure behavior through `operational_status`,
-  `/operational/status`, the Hermes provider wrapper, and MCP
+  `/operational/status`, Python adapter wrappers, and MCP
   `memory_operational_status`; Router/context failures return a no-memory
   envelope with `metadata.operational_failure`, and Keeper extraction failures
   keep saved turns while marking the Keeper job failed.
@@ -205,30 +205,30 @@ Already present:
 - Baseline Router usefulness feedback through `router_feedback`,
   `/router-feedback/record`, `/memory-quality`, and `agent-memory memory-quality`.
 - Baseline observability and cost accounting through `memory_observability_report`,
-  `agent-memory observability`, `/observability`, the Hermes provider wrapper,
+  `agent-memory observability`, `/observability`, Python adapter wrappers,
   and MCP `memory_observability`; the report joins Router selected branches and
   prompt token estimates, Keeper job status/warnings, and LLM usage tokens/cost.
 - Baseline post-turn change inspection through `agent-memory memory-changes`
   and `/memory-changes`, including saved turns, Keeper event, candidates,
   promoted memories, affected surfaces, handles, and audit trail.
 - Baseline operator review inbox through `agent-memory review inbox`,
-  `/review/inbox`, the Hermes provider wrapper, and MCP `memory_review_inbox`;
+  `/review/inbox`, Python adapter wrappers, and MCP `memory_review_inbox`;
   inbox items include source previews, risk flags, inline possible-conflict
   warnings against active memory, graph previews, review history, audit trail,
   and CLI/HTTP/MCP handles for approve, reject, correct, delete, distrust, and
   expire.
 - Baseline batch review through `agent-memory review batch`, `/review/batch`,
-  Hermes `review_batch()`, and MCP `memory_review_batch`; approve/reject
+  Python adapter `review_batch()`, and MCP `memory_review_batch`; approve/reject
   batches support dry-run and per-candidate results.
 - Baseline active-memory lifecycle batch through `agent-memory lifecycle-batch`,
-  `/memory/lifecycle-batch`, Hermes `batch_memory_lifecycle()`, and MCP
+  `/memory/lifecycle-batch`, Python adapter `batch_memory_lifecycle()`, and MCP
   `memory_lifecycle_batch`; correct/delete/distrust/expire operations support
   dry-run and per-item results.
 - Baseline graph browser data through `agent-memory graph browser`,
-  `/graph/browser`, Hermes `graph_browser()`, and MCP `memory_graph_browser`;
+  `/graph/browser`, Python adapter `graph_browser()`, and MCP `memory_graph_browser`;
   graph nodes and edges include source previews.
 - Baseline operator notification queue through `agent-memory notifications`,
-  `/notifications/*`, Hermes notification wrappers, and MCP
+  `/notifications/*`, Python adapter notification wrappers, and MCP
   `memory_notifications_list` / `memory_notification_assign` /
   `memory_notification_ack` / `memory_notification_resolve` /
   `memory_notification_escalations`; review candidates, sensitive export
@@ -236,43 +236,43 @@ Already present:
   operator handles, reviewer assignment/filtering, computed SLA status from
   `due_at`, and policy-only escalation reports.
 - Baseline export governance through `agent-memory export-control`,
-  `/export/control`, Hermes `export_control_report()`, and MCP
+  `/export/control`, Python adapter `export_control_report()`, and MCP
   `memory_export_control`; export previews show policy decisions, aggregate
   scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
   without returning memory content.
 - Baseline export redaction profiles through `agent-memory export-profile`,
-  `agent-memory export`, `/export/profile`, Hermes `export_profile()`, and MCP
+  `agent-memory export`, `/export/profile`, Python adapter `export_profile()`, and MCP
   `memory_export_profile`; `full`, `safe`, and `metadata` profiles preserve
   export shape while making content inclusion explicit.
 - Baseline sensitive full-export approval through `agent-memory
-  export-approval`, `/export/approval/*`, Hermes export approval wrappers, and
+  export-approval`, `/export/approval/*`, Python adapter export approval wrappers, and
   MCP `memory_export_approval_*`; full exports containing personal or secret
   active memory require an approved one-time request.
 - Baseline export retention ledger through `agent-memory export-retention`,
-  `/export/retention/*`, Hermes retention wrappers, MCP
+  `/export/retention/*`, Python adapter retention wrappers, MCP
   `memory_export_retention_*`, and Markdown export manifests; real exports are
   recorded with retention days, expiry, and purge status.
 - Baseline encrypted profile export through `agent-memory
   export-encrypted-profile`, `agent-memory import-encrypted-profile`,
-  `/export/encrypted-profile`, `/import/encrypted-profile`, Hermes encrypted
+  `/export/encrypted-profile`, `/import/encrypted-profile`, Python adapter encrypted
   export wrappers, and MCP `memory_export_encrypted_profile` /
   `memory_import_encrypted_profile`; envelopes use `encrypted-export-v0.1`
   with passphrase-derived keys, ChaCha20 stream encryption, and HMAC
   authentication.
 - Baseline export custody through `agent-memory export-custody`,
-  `/export/custody`, Hermes `export_custody_report()`, and MCP
+  `/export/custody`, Python adapter `export_custody_report()`, and MCP
   `memory_export_custody`; reports verify export policy, sensitive approval,
   passphrase environment configuration, off-host artifact reference, retention,
   and zero secret storage in SQLite.
 - Baseline file-based vault adapter through `agent-memory vault export/import`,
-  `/vault/export`, `/vault/import`, Hermes `export_vault()` / `import_vault()`,
-  and MCP `memory_vault_export` / `memory_vault_import`; exports use
+  `/vault/export`, `/vault/import`, Python adapter `export_vault()` /
+  `import_vault()`, and MCP `memory_vault_export` / `memory_vault_import`; exports use
   dependency-free markdown files with JSON frontmatter and imports flow through
   the normal review lifecycle.
 - High-level `MemoryOrchestrator` facade with `before_turn`,
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
-  Hermes provider plus HTTP/MCP aliases.
+  Python adapter layer plus HTTP/MCP aliases.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -290,7 +290,9 @@ Already present:
   planning.
 - Deterministic `slice seed/run/assert` vertical fixture.
 - Basic prompt-injection-like quarantine.
-- Hermes provider example with `context_pack`, `tree_pack`, `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile, and usage methods.
+- Optional Hermes provider example with `context_pack`, `tree_pack`,
+  `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile,
+  and usage methods.
 - Local stdlib HTTP API service for runtime hooks, review/list operations, and
   browser review/graph/conflict pages.
 - Dependency-free stdio MCP server for agents that should call the same memory
@@ -306,7 +308,7 @@ Already present:
 Remaining for full memory:
 
 - Production rollout that wires `before_turn` and `after_turn` into each live
-  external Hermes agent path by default.
+  external agent runtime path by default.
 - Production-grade read-time ranking beyond the baseline deterministic policy.
 - Production memory quality contract with broader behavioral metrics and golden
   fixtures.
@@ -330,7 +332,7 @@ Remaining for full memory:
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
 - Deeper prompt budget adapters per model provider.
 - Production evals for guarded brain/style append across real prompt adapters.
-- Production Hermes runtime hooks that call memory before and after agent work.
+- Production runtime adapter hooks that call memory before and after agent work.
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Broader conformance traces for migration, adapter compatibility, and
   real-world memory behavior beyond the baseline public suite.
@@ -446,7 +448,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-full-memory
 
 ### Step 3: Build The Memory Orchestrator Module
 
-**What we do:** Create the central service API that Hermes will call instead of manually composing separate store methods. This orchestrator owns the live turn lifecycle: pre-turn retrieval, prompt envelope construction, post-turn storage, and Keeper scheduling.
+**What we do:** Create the central service API that runtime adapters call instead of manually composing separate store methods. This orchestrator owns the live turn lifecycle: pre-turn retrieval, prompt envelope construction, post-turn storage, and Keeper scheduling.
 
 **Files:**
 
@@ -464,11 +466,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Verification:** Tests cover `before_turn(query, thread_id, scope)`, `build_prompt_context(...)`, `record_turn(...)`, `keeper_analyze_turn(...)`, `retrieve_context(...)`, `ingest_graph(...)`, `after_turn(user_text, assistant_text, thread_id, scope)`, and `run_agent_turn(query, main_agent, ...)`.
 
 **Result:** Baseline implemented. `MemoryOrchestrator` now provides one stable
-entrypoint for live agent memory instead of many low-level calls, and Hermes can
-treat memory as a service rather than as logic inside every agent.
+entrypoint for live agent memory instead of many low-level calls, and any
+runtime adapter can treat memory as a service rather than as logic inside every
+agent.
 `run_agent_turn()` now wraps Router, the main agent call, turn persistence, and
 Keeper for local Python runtimes. Remaining work is production rollout inside
-every live Hermes agent path, richer raw graph command normalization, and
+every live agent runtime path, richer raw graph command normalization, and
 adapter certification on real traffic.
 
 ### Step 4: Add The LLM-Backed Keeper
@@ -495,7 +498,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 `keeper-extraction-v0.1` JSON schema, provider-neutral request shape,
 fallback behavior, metadata preservation, and local contract tests that do not
 require a live model. Offline Keeper evals are exposed through `agent-memory
-keeper-eval`, `/keeper-eval/run`, Hermes `keeper_eval()`, and MCP
+keeper-eval`, `/keeper-eval/run`, Python adapter `keeper_eval()`, and MCP
 `memory_keeper_eval`. Remaining work is production prompt tuning, live trace
 evals, provider-specific latency/cost tracking, and broader precision/recall
 measurement on natural dialogue.
@@ -605,14 +608,15 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli build-context "plan SEO work" 
 supplement placement, guarded brain/style placement, source IDs, and final
 messages ready for a main model call.
 
-**Result:** Baseline implemented in `before_model_call`: Hermes can pass one
-prepared context object to any main model, and graph-derived style hints are
-guarded, advisory, omitted on denied memory access, and visible in prompt
-metadata.
+**Result:** Baseline implemented in `before_model_call`: runtime adapters can
+pass one prepared context object to any main model, and graph-derived style
+hints are guarded, advisory, omitted on denied memory access, and visible in
+prompt metadata.
 
-### Step 9: Add Hermes Before/After Hooks
+### Step 9: Add Runtime Adapter Hooks And Hermes Example
 
-**What we do:** Extend the Hermes provider from a thin demo wrapper into a practical adapter with lifecycle hooks and a one-call local runtime wrapper.
+**What we do:** expose practical lifecycle hooks and keep Hermes as one optional
+adapter example for runtimes that want a Python wrapper.
 
 **Files:**
 
@@ -629,7 +633,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 **Verification:** `before_agent_turn()` returns prompt envelope data from the Router. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis. `run_agent_turn()` calls a supplied main agent with the selected prompt envelope and returns Router/Keeper audit IDs. The main agent never receives the full graph, only the selected memory supplement and surrounding context.
 
-**Result:** Hermes can make every agent memory-aware without each agent implementing memory logic.
+**Result:** Runtime adapters can make agents memory-aware without each agent
+implementing memory logic. Hermes remains a concrete optional adapter example,
+not the core target.
 
 ### Step 10: Add API And MCP Service Mode
 
@@ -666,8 +672,8 @@ optional bearer-token protection for HTTP, and tests for MCP `initialize`,
 stdio MCP deployment and private HTTP/tunnel guidance for remote agents.
 Remaining work is hosted multi-user auth/RBAC, a first-class hosted remote MCP
 server, and broader production adapter certification.
-Hermes, Codex, Claude, browser agents, and local tools can share the same
-memory kernel.
+Agent runtimes such as Hermes, Codex, Claude, browser agents, and local tools
+are examples of clients that can share the same memory kernel.
 
 ### Step 11: Add Background Keeper Worker
 
@@ -739,20 +745,20 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli review --db /tmp/amk-full-memo
 **Verification:** Corrections update active memory, graph summaries, evidence links, and retrieval output.
 
 **Result:** Baseline implemented. `agent-memory review inbox`, `/review/inbox`,
-Hermes `review_inbox()`, and MCP `memory_review_inbox` provide a
+Python adapter `review_inbox()`, and MCP `memory_review_inbox` provide a
 machine-readable operator queue with source preview, risk flags, inline
 possible-conflict warnings against active memory, graph preview, review history,
 audit trail, and CLI/HTTP/MCP handles. HTTP and MCP now expose the matching
 lifecycle actions. `agent-memory review batch`,
-`/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch` provide
+`/review/batch`, Python adapter `review_batch()`, and MCP `memory_review_batch` provide
 approve/reject batches with dry-run and per-item results. `agent-memory
-lifecycle-batch`, `/memory/lifecycle-batch`, Hermes
+lifecycle-batch`, `/memory/lifecycle-batch`, Python adapter
 `batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch` provide active
 memory correct/delete/distrust/expire batches with dry-run and per-item
-results. `agent-memory graph browser`, `/graph/browser`, Hermes
+results. `agent-memory graph browser`, `/graph/browser`, Python adapter
 `graph_browser()`, and MCP `memory_graph_browser` provide graph browser data
 with nodes, edges, and source previews. `agent-memory
-notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
+notifications`, `/notifications/*`, Python adapter notification wrappers, and MCP
 notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, SLA status
 filtering, and policy-only escalation reports.
@@ -809,7 +815,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. Users can inspect Router prompt token
 estimates and selected branches, Keeper job health, and LLM usage tokens/cost
 through `agent-memory observability`, `/observability`, the Hermes provider
-wrapper, and MCP `memory_observability`. Remaining work is wall-clock latency,
+example, and MCP `memory_observability`. Remaining work is wall-clock latency,
 provider billing reconciliation, dashboards, retention policy, and alerts.
 
 ### Step 16: Add End-To-End Demos

@@ -1,6 +1,7 @@
 # Hermes Provider Adapter
 
-This folder is a starter adapter boundary for Hermes.
+This folder is a starter adapter boundary for Hermes. It is optional example
+code; the core memory kernel does not depend on Hermes.
 
 The current implementation is intentionally thin: Hermes should call the kernel
 instead of duplicating memory storage logic.
@@ -103,10 +104,10 @@ Preflight the shared contract before enabling live memory:
 
 ```bash
 agent-memory contract assert
-agent-memory acceptance seed --db .memory/hermes-memory.db
-agent-memory acceptance assert --db .memory/hermes-memory.db
-agent-memory conformance seed --db .memory/hermes-memory.db
-agent-memory conformance assert --db .memory/hermes-memory.db
+agent-memory acceptance seed --db .memory/agent-memory.db
+agent-memory acceptance assert --db .memory/agent-memory.db
+agent-memory conformance seed --db .memory/agent-memory.db
+agent-memory conformance assert --db .memory/agent-memory.db
 ```
 
 This proves the deterministic minimum: selected memory beats no-memory,
@@ -130,7 +131,7 @@ def cheap_model_complete(request: dict):
     return provider_client.responses.create(**request)
 
 provider = HermesMemoryProvider(
-    ".memory/hermes-memory.db",
+    ".memory/agent-memory.db",
     extractor=LLMKeeperExtractor(cheap_model_complete, model="cheap-memory-model"),
 )
 ```

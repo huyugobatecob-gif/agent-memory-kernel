@@ -1,6 +1,8 @@
-# Hermes Integration
+# Hermes Adapter Example
 
-This project is designed so Hermes can use memory without owning memory.
+This page documents Hermes as one optional runtime adapter example. The memory
+kernel itself is runtime-neutral and should also work with other orchestrators,
+agents, CLIs, MCP clients, and hosted services.
 
 Hermes should stay the orchestration layer. Agent Memory Kernel should be the
 memory substrate.
@@ -281,7 +283,7 @@ building blocks.
 Hermes can call the same hooks through the local HTTP service:
 
 ```bash
-agent-memory serve --db .memory/hermes-memory.db --host 127.0.0.1 --port 8765
+agent-memory serve --db .memory/agent-memory.db --host 127.0.0.1 --port 8765
 ```
 
 For non-local or shared environments, require a token without sending it in
@@ -289,7 +291,7 @@ memory payloads:
 
 ```bash
 AGENT_MEMORY_API_TOKEN="change-me" agent-memory serve \
-  --db .memory/hermes-memory.db \
+  --db .memory/agent-memory.db \
   --host 127.0.0.1 \
   --port 8765
 ```
@@ -310,9 +312,9 @@ The conflicts page can scan active memories and record likely conflicts.
 For agents that speak MCP, run the stdio server instead of HTTP:
 
 ```bash
-agent-memory mcp --db .memory/hermes-memory.db
+agent-memory mcp --db .memory/agent-memory.db
 # or
-agent-memory-mcp --db .memory/hermes-memory.db
+agent-memory-mcp --db .memory/agent-memory.db
 ```
 
 The MCP tools mirror the runtime API: `memory_before_model_call`,
@@ -425,8 +427,8 @@ Useful endpoints:
 Before enabling live memory in Hermes, run the deterministic gate:
 
 ```bash
-agent-memory acceptance seed --db .memory/hermes-memory.db
-agent-memory acceptance assert --db .memory/hermes-memory.db
+agent-memory acceptance seed --db .memory/agent-memory.db
+agent-memory acceptance assert --db .memory/agent-memory.db
 ```
 
 Passing this gate does not mean production memory is complete, but failing it
@@ -436,8 +438,8 @@ For adapter compatibility, run the public conformance suite as well:
 
 ```bash
 agent-memory conformance spec
-agent-memory conformance seed --db .memory/hermes-memory.db
-agent-memory conformance assert --db .memory/hermes-memory.db
+agent-memory conformance seed --db .memory/agent-memory.db
+agent-memory conformance assert --db .memory/agent-memory.db
 ```
 
 This suite names the behavior Hermes must preserve: selected professional
@@ -533,7 +535,7 @@ that turn and why?".
 For the broader operator queue, Hermes can call:
 
 ```bash
-agent-memory review --db .memory/hermes-memory.db inbox --status open --scope professional
+agent-memory review --db .memory/agent-memory.db inbox --status open --scope professional
 ```
 
 or MCP `memory_review_inbox`. The inbox returns candidate source previews,
@@ -721,12 +723,12 @@ This records the exchange and either creates Keeper candidates immediately
 jobs can be processed with:
 
 ```bash
-agent-memory worker --db .memory/hermes-memory.db --once --limit 10
-agent-memory worker --db .memory/hermes-memory.db --daemon --poll-interval 5 --limit 10
+agent-memory worker --db .memory/agent-memory.db --once --limit 10
+agent-memory worker --db .memory/agent-memory.db --daemon --poll-interval 5 --limit 10
 ```
 
 Candidates stay pending unless policy explicitly allows auto-approval.
-Run daemon mode under systemd, launchd, or another supervisor for live Hermes
+Run daemon mode under systemd, launchd, or another supervisor for live adapter
 traffic; use `--max-iterations` or `--stop-when-idle` for bounded maintenance
 runs.
 
@@ -791,8 +793,8 @@ agent-memory observability --scope professional --thread-id seo-demo
 Before migrations or production rollout, Hermes operators should run:
 
 ```bash
-agent-memory migration-status --db .memory/hermes-memory.db
-agent-memory backup --db .memory/hermes-memory.db --out .memory/backups/hermes-memory.db
+agent-memory migration-status --db .memory/agent-memory.db
+agent-memory backup --db .memory/agent-memory.db --out .memory/backups/agent-memory.db
 ```
 
 Workspace profile export:
@@ -801,7 +803,7 @@ Workspace profile export:
 agent-memory export-control --scope professional --project demo-site --actor writer --redaction-profile safe
 agent-memory export-custody --scope professional --project demo-site --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo-site/exported-profile.encrypted.json
 agent-memory export-profile --scope professional --project demo-site --redaction-profile safe
-agent-memory vault --db .memory/hermes-memory.db export --out agent-memory-vault --scope professional --redaction-profile safe
+agent-memory vault --db .memory/agent-memory.db export --out agent-memory-vault --scope professional --redaction-profile safe
 agent-memory vault --db .memory/restored.db import agent-memory-vault
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory export-encrypted-profile --scope professional --project demo-site --redaction-profile safe --out exported-profile.encrypted.json
 AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile exported-profile.encrypted.json --db .memory/restored.db

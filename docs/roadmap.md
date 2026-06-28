@@ -53,7 +53,7 @@ research projects, and agent optimization.
 
 Current status: baseline outcome records are implemented through
 `agent-memory outcome record/list/pack`, `/outcome/record`, `/outcome/list`,
-`/outcome/pack`, and the Hermes provider wrapper. Outcome records store
+`/outcome/pack`, and Python adapter wrappers. Outcome records store
 project, loop id, status, hypothesis, action, result, cause, lesson, next
 recommendation, score, and links to candidate/active memory.
 
@@ -66,7 +66,7 @@ production layers around the local kernel:
 - pre-turn Memory Router;
 - post-turn Keeper;
 - prompt envelope;
-- Hermes before/after hooks;
+- runtime adapter before/after hooks;
 - API/MCP service mode;
 - background worker;
 - review and security hardening;
@@ -99,8 +99,8 @@ tested:
 
 Current status: the first local runtime hook slice exists through
 `before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
-`MemoryStore.after_saved_turn()`, `MemoryOrchestrator`, and the Hermes provider
-wrapper. It proves the Router/envelope/Keeper candidate loop and exposes a
+`MemoryStore.after_saved_turn()`, `MemoryOrchestrator`, and optional Python
+adapter wrappers such as Hermes. It proves the Router/envelope/Keeper candidate loop and exposes a
 single service facade for `before_turn`, `build_prompt_context`,
 `retrieve_context`, `record_turn`, `keeper_analyze_turn`, `ingest_graph`, and
 `after_turn`. Local Python runtimes can also use `run_agent_turn()` to wrap
@@ -112,7 +112,7 @@ through `agent-memory serve`, optional bearer-token protection, and a local
 stdio MCP server. `docs/production-rollout.md` now documents preflight, shadow
 rollout, worker supervision, local HTTP deployment, stdio MCP deployment,
 observability, and rollback. Hosted multi-user auth/RBAC, hosted remote MCP,
-and live rollout across all Hermes agent profiles are still backlog. Runtime
+and live rollout across agent runtime profiles are still backlog. Runtime
 scope allow/deny enforcement is implemented for Router retrieval.
 Baseline read-time policy and Router explainability are implemented through
 `prompt_envelope.metadata.read_time_policy`, `selection_decisions`,
@@ -123,7 +123,7 @@ Baseline Router usefulness feedback and quality reporting are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
 Baseline observability and cost accounting are implemented through
-`agent-memory observability`, `/observability`, the Hermes provider wrapper,
+`agent-memory observability`, `/observability`, Python adapter wrappers,
 and MCP `memory_observability`. The report joins Router selected branches and
 prompt token estimates, Keeper status/warnings, and LLM usage tokens/cost.
 Production latency, billing reconciliation, dashboards, retention policy, and
@@ -131,7 +131,7 @@ alerts are still backlog.
 Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
 `keeper-extraction-v0.1`, local schema validation, deterministic fallback,
 candidate extraction metadata, and offline Keeper evals through
-`agent-memory keeper-eval`, `/keeper-eval/run`, Hermes `keeper_eval()`, and MCP
+`agent-memory keeper-eval`, `/keeper-eval/run`, Python adapter `keeper_eval()`, and MCP
 `memory_keeper_eval`. Production Keeper prompt tuning, live provider
 configuration, and real trace evals are still backlog.
 Baseline graph command normalization is implemented through
@@ -146,16 +146,16 @@ Agent read-policy enforcement is implemented for prompt-facing memory injection
 through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
 `prompt_envelope.metadata.read_policy`.
 Baseline capability/consent reporting is implemented through `agent-memory
-capability`, `/capability/check`, the Hermes provider wrapper, and MCP
+capability`, `/capability/check`, Python adapter wrappers, and MCP
 `memory_capability_check`. Direct search/context/tree-pack and export surfaces
 can enforce read/export policy by actor.
 Baseline derived-memory invalidation is implemented through `agent-memory
-derived-invalidations`, `/derived-invalidations`, the Hermes provider wrapper,
+derived-invalidations`, `/derived-invalidations`, Python adapter wrappers,
 and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,
 expire, and supersede lifecycle actions record graph/evidence/prompt-pack/export
 surfaces that were refreshed or invalidated.
 Baseline operational failure handling is implemented through
-`operational_status`, `/operational/status`, the Hermes provider wrapper, and
+`operational_status`, `/operational/status`, Python adapter wrappers, and
 MCP `memory_operational_status`. Prompt retrieval failures return a no-memory
 envelope with `metadata.operational_failure`; Keeper extraction failures keep
 saved turns and mark the Keeper job failed.
@@ -165,12 +165,12 @@ Baseline migration and local recovery are implemented through
 SLOs, encrypted off-host backups, restore drills, migration changelogs, worker
 supervision, and hosted alerting are still backlog.
 Post-turn memory-change inspection is implemented through `agent-memory
-memory-changes`, `/memory-changes`, and the Hermes provider wrapper. A Keeper
+memory-changes`, `/memory-changes`, and Python adapter wrappers. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted
 memories, affected graph/context surfaces, review or lifecycle handles, and
 audit trail.
 The baseline operator review inbox is implemented through `agent-memory review
-inbox`, `/review/inbox`, the Hermes provider wrapper, and MCP
+inbox`, `/review/inbox`, Python adapter wrappers, and MCP
 `memory_review_inbox`. It returns candidate source previews, risk flags, graph
 previews, inline possible-conflict warnings against active memory, review
 history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
@@ -184,7 +184,7 @@ preview/apply through the lifecycle batch API. The graph page includes node
 type/focus links, source/target edge links, and source metadata for evidence
 previews.
 The baseline operator notification queue is implemented through `agent-memory
-notifications`, `/notifications/*`, Hermes notification wrappers, and MCP
+notifications`, `/notifications/*`, Python adapter notification wrappers, and MCP
 `memory_notifications_list` / `memory_notification_assign` /
 `memory_notification_ack` / `memory_notification_resolve` /
 `memory_notification_escalations`.
@@ -193,67 +193,67 @@ expired export artifacts create open notifications that can be assigned to a
 reviewer with optional `due_at`, filtered by computed SLA status, acknowledged,
 resolved, surfaced in policy-only escalation reports, or converted into
 webhook/email/push payloads through `agent-memory notifications transport`,
-`/notifications/transport`, Hermes, and MCP `memory_notifications_transport`.
+`/notifications/transport`, Python adapters, and MCP
+`memory_notifications_transport`.
 Baseline batch review is implemented through `agent-memory review batch`,
-`/review/batch`, Hermes `review_batch()`, and MCP `memory_review_batch`.
+`/review/batch`, Python adapter `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
 Baseline active-memory lifecycle batch is implemented through `agent-memory
-lifecycle-batch`, `/memory/lifecycle-batch`, Hermes
+lifecycle-batch`, `/memory/lifecycle-batch`, Python adapter
 `batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch`.
 Correct/delete/distrust/expire batches support dry-run and per-item results.
 Baseline graph browser data is implemented through `agent-memory graph browser`,
-`/graph/browser`, Hermes `graph_browser()`, and MCP `memory_graph_browser`.
+`/graph/browser`, Python adapter `graph_browser()`, and MCP `memory_graph_browser`.
 Nodes and edges include source previews for future UI navigation.
 Baseline export governance is implemented through `agent-memory export-control`,
-`/export/control`, Hermes `export_control_report()`, and MCP
+`/export/control`, Python adapter `export_control_report()`, and MCP
 `memory_export_control`. Export previews return matched policy, aggregate
 scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
 without returning memory content.
 Baseline export redaction profiles are implemented through
-`agent-memory export-profile`, `agent-memory export`, `/export/profile`, Hermes
-`export_profile()`, and MCP `memory_export_profile`. The supported profiles are
+`agent-memory export-profile`, `agent-memory export`, `/export/profile`, Python adapter `export_profile()`, and MCP `memory_export_profile`. The supported profiles are
 `full`, `safe`, and `metadata`; safe modes preserve graph/export structure while
 replacing content-bearing fields with explicit redaction markers.
 Baseline sensitive full-export approval is implemented through `agent-memory
-export-approval`, `/export/approval/*`, Hermes export approval wrappers, and MCP
+export-approval`, `/export/approval/*`, Python adapter export approval wrappers, and MCP
 `memory_export_approval_*`. Full exports containing personal or secret active
 memory require an approved one-time request; safe/metadata exports remain the
 default structure-sharing path.
 Baseline export retention is implemented through `agent-memory
-export-retention`, `/export/retention/*`, Hermes retention wrappers, and MCP
+export-retention`, `/export/retention/*`, Python adapter retention wrappers, and MCP
 `memory_export_retention_*`. Real exports are recorded with retention days,
 expiry, purge status, and markdown manifests.
 Baseline encrypted profile export is implemented through `agent-memory
 export-encrypted-profile`, `agent-memory import-encrypted-profile`,
-`/export/encrypted-profile`, `/import/encrypted-profile`, Hermes encrypted
+`/export/encrypted-profile`, `/import/encrypted-profile`, Python adapter encrypted
 export wrappers, and MCP `memory_export_encrypted_profile` /
 `memory_import_encrypted_profile`. The local envelope is
 `encrypted-export-v0.1`.
 Baseline export custody is implemented through `agent-memory export-custody`,
-`/export/custody`, Hermes `export_custody_report()`, and MCP
+`/export/custody`, Python adapter `export_custody_report()`, and MCP
 `memory_export_custody`. The report verifies export policy, sensitive approval,
 passphrase environment configuration, off-host artifact reference, retention,
 and zero secret storage in SQLite. Hosted KMS integrations and managed
 off-host backup recipes are still backlog.
-The Hermes-style policy/review acceptance path is covered by tests and
+The runtime policy/review acceptance path is covered by tests and
 `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
 --daemon` are implemented for background post-turn processing. Daemon mode can
 poll continuously under an external supervisor and supports bounded
 `--max-iterations`/`--stop-when-idle` runs for tests and maintenance.
 Shadow rollout traces are implemented through `agent-memory shadow-turn`,
-`agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and the Hermes
-provider wrapper. These traces link Router selections and Keeper proposals with
-`write_policy=propose_only` so real Hermes traffic can be reviewed before live
+`agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and Python
+adapter wrappers. These traces link Router selections and Keeper proposals with
+`write_policy=propose_only` so real runtime traffic can be reviewed before live
 memory writes.
 Baseline shadow evals are implemented through `agent-memory shadow-eval`,
-`agent-memory shadow-evals`, `/shadow-eval`, `/shadow-evals`, and the Hermes
-provider wrapper. They turn reviewed traces into stored pass/fail checks for
+`agent-memory shadow-evals`, `/shadow-eval`, `/shadow-evals`, and Python
+adapter wrappers. They turn reviewed traces into stored pass/fail checks for
 branch selection, candidate text, source IDs, token budget, and access mode.
 Conflict and supersession records are implemented through `agent-memory
 conflict`, `agent-memory supersede`, `agent-memory current-best`,
 `/conflict/record`, `/conflict/list`, `/conflict/detect`, `/current-best`, and
-`/supersede`. `agent-memory conflict detect`, the Hermes provider wrapper, and
+`/supersede`. `agent-memory conflict detect`, Python adapter wrappers, and
 MCP `memory_conflict_detect` provide a baseline active-memory conflict detector
 with report-only and record-open-conflict modes.
 Superseded memory is suppressed from active retrieval and graph export while the
