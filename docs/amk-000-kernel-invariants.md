@@ -176,7 +176,7 @@ The canonical conformance corpus must include:
 - budget-trim prompt envelope fixtures;
 - large-history bounded prompt fixtures;
 - provider formatter boundary snapshots;
-- import/export round trips;
+- import/export round trips, including graph evidence-chain restoration;
 - migration and recovery checks;
 - policy dry-runs and denied-action traces;
 - performance/resource budget checks for large local histories.

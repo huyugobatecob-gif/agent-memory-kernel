@@ -116,7 +116,7 @@ can claim completion.
 | Distrusted sources cannot influence retrieval, summary, graph, export, or derived memory | distrust lifecycle, summaries, semantic analyses, graph/tree, export, prompt envelope | unit test plus conformance golden trace |
 | Scope/lane/namespace boundaries cannot leak across prompt, graph, summary, browser, and export surfaces | read policy, scope filtering, graph/evidence, summaries, prompt envelope, export | unit test plus prompt-envelope snapshot |
 | Correction/rollback/delete/distrust/expire/supersede invalidate derived memory | lifecycle engine, derived invalidation ledger, graph surfaces, summaries, exports | lifecycle report plus import/export round trip |
-| Export/import preserves provenance, ids, tombstones, trust, review, policy, and evidence | profile import/export, bundle import/export, lifecycle/policy state | portable round-trip test plus conformance trace |
+| Export/import preserves provenance, ids, tombstones, trust, review, policy, and evidence | profile import/export, bundle import/export, lifecycle/policy state, graph evidence chains | portable and graph evidence-chain round-trip tests plus conformance trace |
 | Prompt envelopes contain selected, filtered, budgeted content only | Router, context builder, prompt formatter, renderer | deterministic selected-content, budget-trim, and provider-boundary envelope snapshots |
 | Local actors cannot bypass capability grants | read/write/export/inject/lifecycle policies, policy simulator | denied-action trace plus dry-run report |
 | Retrieval is deterministic without live providers | lexical/rule ranking, current-best resolver, tie-breakers | ranking fixture and golden prompt snapshot |

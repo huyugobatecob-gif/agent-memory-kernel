@@ -128,6 +128,7 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_export_preserves_lifecycle_tombstones",
                     "golden_trace_import_restores_lifecycle_tombstones",
                     "golden_trace_import_preserves_policy_metadata",
+                    "golden_trace_import_preserves_graph_evidence_chains",
                     "golden_trace_portable_bundle_manifest_roundtrip",
                 ],
             },
@@ -370,6 +371,15 @@ def conformance_spec() -> dict[str, Any]:
                     "profile export includes applicable read and write policies",
                     "profile import restores policy decisions and policy ids",
                     "restored read/write denials still fail closed",
+                ],
+            },
+            {
+                "id": "golden_trace_import_preserves_graph_evidence_chains",
+                "requires": [
+                    "profile export includes graph nodes, edges, node evidence, and edge evidence",
+                    "profile import restores graph records only when memory/item/event provenance exists",
+                    "restored graph browser source previews link back to imported source events",
+                    "restored prompt-facing retrieval can still use the graph evidence chain",
                 ],
             },
             {
@@ -1595,6 +1605,22 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         restored_lifecycle = restored_export.get("memory_lifecycle", {})
         restored_tombstones = restored_lifecycle.get("tombstones", [])
         restored_tree_text = json.dumps(restored_export.get("memory_tree", {}), sort_keys=True)
+        restored_graph = restored.graph_browser(
+            scope=CONFORMANCE_SCOPE,
+            query=CONFORMANCE_PROJECT,
+            evidence_limit=3,
+        )
+        restored_graph_text = json.dumps(restored_graph, sort_keys=True)
+        restored_graph_prompt = restored.before_model_call(
+            "conformance-site CMS",
+            scope=CONFORMANCE_SCOPE,
+            allowed_scopes=[CONFORMANCE_SCOPE],
+            agent_id="conformance",
+        )
+        restored_graph_prompt_text = json.dumps(
+            restored_graph_prompt.get("prompt_envelope", {}),
+            sort_keys=True,
+        )
         restored_active = restored.search("Statamic", scope=CONFORMANCE_SCOPE, actor="conformance")
         restored_deleted = restored.search("OldSEO", scope=CONFORMANCE_SCOPE, actor="conformance")
         restored_capability = restored.capability_report(
@@ -1641,6 +1667,34 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "restored_status_counts": restored_lifecycle.get("status_counts", {}),
                 "active_result_count": len(restored_active),
                 "deleted_result_count": len(restored_deleted),
+            },
+        )
+        exported_tree = full_export.get("memory_tree", {})
+        _append_result(
+            results,
+            "golden_trace_import_preserves_graph_evidence_chains",
+            bool(exported_tree.get("nodes"))
+            and bool(exported_tree.get("edges"))
+            and bool(exported_tree.get("node_evidence"))
+            and bool(exported_tree.get("edge_evidence"))
+            and import_counts.get("memory_graph_nodes", 0) >= 1
+            and import_counts.get("memory_graph_edges", 0) >= 1
+            and import_counts.get("node_evidence", 0) >= 1
+            and import_counts.get("edge_evidence", 0) >= 1
+            and restored_graph.get("counts", {}).get("nodes", 0) >= 1
+            and "conformance://professional-memory" in restored_graph_text
+            and "Statamic" in restored_graph_text
+            and "Statamic" in restored_graph_prompt_text,
+            {
+                "exported_counts": {
+                    "nodes": len(exported_tree.get("nodes", [])),
+                    "edges": len(exported_tree.get("edges", [])),
+                    "node_evidence": len(exported_tree.get("node_evidence", [])),
+                    "edge_evidence": len(exported_tree.get("edge_evidence", [])),
+                },
+                "import_counts": import_counts,
+                "restored_graph_counts": restored_graph.get("counts", {}),
+                "selected_branch_ids": restored_graph_prompt.get("selected_branch_ids", []),
             },
         )
         _append_result(
@@ -1949,6 +2003,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_provider_prompt_formatters_preserve_boundaries",
         "golden_trace_large_history_prompt_is_bounded",
         "golden_trace_safe_export_redacts_memory_content",
+        "golden_trace_import_preserves_graph_evidence_chains",
         "migration_status_is_compatible",
         "secret_like_memory_is_quarantined",
         "tool_prompt_injection_is_quarantined",

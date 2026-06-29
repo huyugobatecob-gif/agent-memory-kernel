@@ -2252,6 +2252,68 @@ class MemoryStoreTests(unittest.TestCase):
             imported.close()
             store.close()
 
+    def test_import_profile_restores_graph_evidence_chains(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.apply_graph_commands(
+                [
+                    {
+                        "command": "upsert_edge",
+                        "source": {"type": "project", "label": "evidence-site"},
+                        "target": {"type": "tool", "label": "StaticCMS"},
+                        "edge_type": "uses",
+                        "evidence": "User confirmed evidence-site uses StaticCMS.",
+                    }
+                ],
+                scope="professional",
+                actor="keeper",
+                source_type="system",
+                source_ref="fixture://graph-evidence-source",
+                auto_approve=True,
+            )
+            exported = store.export_profile(scope="professional")
+            memory_tree = exported["memory_tree"]
+            self.assertGreaterEqual(len(memory_tree["nodes"]), 2)
+            self.assertGreaterEqual(len(memory_tree["edges"]), 1)
+            self.assertGreaterEqual(len(memory_tree["node_evidence"]), 2)
+            self.assertGreaterEqual(len(memory_tree["edge_evidence"]), 1)
+            self.assertIn("source_graph_node_id", memory_tree["edges"][0])
+            self.assertIn("target_graph_node_id", memory_tree["edges"][0])
+
+            imported = MemoryStore(Path(tmp) / "imported-evidence.db")
+            imported.init_db()
+            counts = imported.import_profile(exported)
+            self.assertGreaterEqual(counts["source_events"], 1)
+            self.assertGreaterEqual(counts["memories"], 1)
+            self.assertGreaterEqual(counts["memory_items"], 1)
+            self.assertGreaterEqual(counts["memory_graph_nodes"], 2)
+            self.assertGreaterEqual(counts["memory_graph_edges"], 1)
+            self.assertGreaterEqual(counts["node_evidence"], 2)
+            self.assertGreaterEqual(counts["edge_evidence"], 1)
+
+            browser = imported.graph_browser(
+                scope="professional",
+                query="evidence-site",
+                evidence_limit=5,
+            )
+            browser_text = json.dumps(browser, sort_keys=True)
+            self.assertGreaterEqual(browser["counts"]["nodes"], 1)
+            self.assertIn("fixture://graph-evidence-source", browser_text)
+            self.assertIn("User confirmed evidence-site uses StaticCMS.", browser_text)
+            self.assertTrue(any(edge["source_previews"] for edge in browser["edges"]))
+
+            restored_prompt = imported.before_model_call(
+                "evidence-site StaticCMS",
+                scope="professional",
+                allowed_scopes=["professional"],
+            )
+            restored_prompt_text = json.dumps(restored_prompt["prompt_envelope"], sort_keys=True)
+            self.assertIn("StaticCMS", restored_prompt_text)
+            imported.close()
+            store.close()
+
     def test_encrypted_profile_export_roundtrip_and_tamper_detection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

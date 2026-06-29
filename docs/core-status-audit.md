@@ -30,7 +30,7 @@ Status labels:
 | Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, budget-trim conformance scenario, provider formatter boundary conformance, Memory Tree renderer | Keep renderers behind the read contract and expand adapter-specific snapshots as extensions. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
-| Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across evidence chains and derived invalidation records. |
+| Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, graph evidence-chain round trip, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across graph evidence chains and derived invalidation records. |
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Add invariant matrix coverage for remaining kernel laws and extension adapter snapshots. |
 
@@ -63,8 +63,8 @@ Status labels:
    budget trimming, and provider formatter boundaries now have local and
    conformance fixtures.
 4. Expand export/import round-trip tests to cover provenance, tombstones, trust
-   state, review history, policy metadata, evidence chains, and derived
-   invalidation records.
+   state, review history, policy metadata, and derived invalidation records.
+   Profile import/export now has a graph evidence-chain conformance trace.
 5. Add remaining kernel-contract coverage for local API/versioning, capability
    grants, adapter budget fixtures, portable bundles, and latency/resource
    measurements. Large-history bounded selection now has local and conformance

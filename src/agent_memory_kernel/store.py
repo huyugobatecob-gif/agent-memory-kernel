@@ -5649,7 +5649,7 @@ class MemoryStore:
             "memory_tree": {
                 "groups": self.list_graph_groups(scope=scope),
                 "nodes": self.list_graph_nodes(scope=scope, limit=500),
-                "edges": self.list_graph_edges(scope=scope, limit=500),
+                "edges": self._export_graph_edges(scope=scope),
                 "node_evidence": self._export_node_evidence(scope=scope),
                 "edge_evidence": self._export_edge_evidence(scope=scope),
             },
@@ -6288,6 +6288,7 @@ class MemoryStore:
         counts = defaultdict(int)
         self._import_memory_policy_state(payload.get("memory_policy_state", {}), counts)
         self._import_memory_lifecycle(payload.get("memory_lifecycle", {}), counts)
+        self._import_memory_tree(payload.get("memory_tree", {}), counts)
 
         for note in payload.get("profile_notes", []):
             if not isinstance(note, dict):
@@ -6810,6 +6811,311 @@ class MemoryStore:
                 ),
             )
             counts["review_actions"] += max(int(inserted.rowcount or 0), 0)
+
+    def _import_memory_tree(self, memory_tree: Any, counts: defaultdict[str, int]) -> None:
+        if not isinstance(memory_tree, dict):
+            return
+
+        node_id_map: dict[str, str] = {}
+        edge_id_map: dict[str, str] = {}
+        touched_scopes: set[str] = set()
+
+        for node in self._importable_rows(memory_tree.get("nodes")):
+            exported_node_id = str(node.get("graph_node_id", ""))
+            label = str(node.get("label", ""))
+            if not exported_node_id or not label or self._is_redaction_marker(label):
+                counts["skipped_invalid"] += 1
+                continue
+            node_type = self._normalize_graph_node_type(str(node.get("node_type", "fact")))
+            scope = normalize_scope(str(node.get("scope", "professional")))
+            touched_scopes.add(scope)
+            canonical = str(node.get("canonical_key") or canonical_key(label))
+            existing = self.conn.execute(
+                "SELECT graph_node_id FROM memory_graph_nodes WHERE graph_node_id = ?",
+                (exported_node_id,),
+            ).fetchone()
+            if existing:
+                node_id_map[exported_node_id] = str(existing["graph_node_id"])
+                continue
+            existing = self.conn.execute(
+                """
+                SELECT graph_node_id
+                FROM memory_graph_nodes
+                WHERE scope = ? AND node_type = ? AND canonical_key = ?
+                """,
+                (scope, node_type, canonical),
+            ).fetchone()
+            if existing:
+                node_id_map[exported_node_id] = str(existing["graph_node_id"])
+                counts["memory_graph_nodes_existing"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_graph_nodes
+                  (graph_node_id, created_at, updated_at, node_type, label,
+                   canonical_key, scope, group_label, blob, summary, importance,
+                   confidence, status, aliases_json, topics_json, chronology_json,
+                   verified_status, verified_at, verifier, hemisphere, visual_x,
+                   visual_y, embedding_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    exported_node_id,
+                    str(node.get("created_at") or now_iso()),
+                    str(node.get("updated_at") or node.get("created_at") or now_iso()),
+                    node_type,
+                    label,
+                    canonical,
+                    scope,
+                    str(node.get("group_label") or group_label(node_type)),
+                    "" if self._is_redaction_marker(node.get("blob", "")) else str(node.get("blob", "")),
+                    "" if self._is_redaction_marker(node.get("summary", "")) else str(node.get("summary", "")),
+                    self._safe_float(node.get("importance"), 0.5),
+                    normalize_confidence(str(node.get("confidence", "medium"))),
+                    str(node.get("status") or "active"),
+                    self._json_text(node.get("aliases_json"), "[]"),
+                    self._json_text(node.get("topics_json"), "[]"),
+                    self._json_text(node.get("chronology_json"), "[]"),
+                    str(node.get("verified_status") or "unverified"),
+                    node.get("verified_at"),
+                    str(node.get("verifier") or ""),
+                    str(node.get("hemisphere") or hemisphere_for_node(node_type)),
+                    node.get("visual_x"),
+                    node.get("visual_y"),
+                    self._json_text(node.get("embedding_json"), "[]"),
+                    self._json_text(node.get("metadata_json"), "{}"),
+                ),
+            )
+            if inserted.rowcount:
+                node_id_map[exported_node_id] = exported_node_id
+                counts["memory_graph_nodes"] += max(int(inserted.rowcount or 0), 0)
+
+        for edge in self._importable_rows(memory_tree.get("edges")):
+            exported_edge_id = str(edge.get("graph_edge_id", ""))
+            if not exported_edge_id:
+                counts["skipped_invalid"] += 1
+                continue
+            source_node_id = self._imported_graph_node_id(
+                edge.get("source_graph_node_id"),
+                node_id_map=node_id_map,
+                node_type=str(edge.get("source_type", "")),
+                label=str(edge.get("source_label", "")),
+                memory_id=str(edge.get("source_memory_id", "")),
+            )
+            target_node_id = self._imported_graph_node_id(
+                edge.get("target_graph_node_id"),
+                node_id_map=node_id_map,
+                node_type=str(edge.get("target_type", "")),
+                label=str(edge.get("target_label", "")),
+                memory_id=str(edge.get("source_memory_id", "")),
+            )
+            edge_type = str(edge.get("edge_type") or "relates_to")
+            if not source_node_id or not target_node_id:
+                counts["skipped_missing_provenance"] += 1
+                continue
+            source_memory_id = str(edge.get("source_memory_id") or "")
+            if source_memory_id and not self._row_exists("memories", "memory_id", source_memory_id):
+                source_memory_id = ""
+            source_event_id = str(edge.get("source_event_id") or "")
+            if source_event_id and not self._row_exists("events", "event_id", source_event_id):
+                source_event_id = ""
+            existing = self.conn.execute(
+                "SELECT graph_edge_id FROM memory_graph_edges WHERE graph_edge_id = ?",
+                (exported_edge_id,),
+            ).fetchone()
+            if existing:
+                edge_id_map[exported_edge_id] = str(existing["graph_edge_id"])
+                continue
+            existing = self.conn.execute(
+                """
+                SELECT graph_edge_id
+                FROM memory_graph_edges
+                WHERE source_graph_node_id = ?
+                  AND target_graph_node_id = ?
+                  AND edge_type = ?
+                """,
+                (source_node_id, target_node_id, edge_type),
+            ).fetchone()
+            if existing:
+                edge_id_map[exported_edge_id] = str(existing["graph_edge_id"])
+                counts["memory_graph_edges_existing"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_graph_edges
+                  (graph_edge_id, created_at, updated_at, source_graph_node_id,
+                   target_graph_node_id, edge_type, label, weight, confidence,
+                   status, source_memory_id, source_event_id, evidence_count,
+                   metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    exported_edge_id,
+                    str(edge.get("created_at") or now_iso()),
+                    str(edge.get("updated_at") or edge.get("created_at") or now_iso()),
+                    source_node_id,
+                    target_node_id,
+                    edge_type,
+                    "" if self._is_redaction_marker(edge.get("label", "")) else str(edge.get("label", "")),
+                    self._safe_float(edge.get("weight"), 1.0),
+                    normalize_confidence(str(edge.get("confidence", "medium"))),
+                    str(edge.get("status") or "active"),
+                    source_memory_id or None,
+                    source_event_id or None,
+                    int(edge.get("evidence_count", 0) or 0),
+                    self._json_text(edge.get("metadata_json"), "{}"),
+                ),
+            )
+            if inserted.rowcount:
+                edge_id_map[exported_edge_id] = exported_edge_id
+                counts["memory_graph_edges"] += max(int(inserted.rowcount or 0), 0)
+
+        for evidence in self._importable_rows(memory_tree.get("node_evidence")):
+            quote = str(evidence.get("quote", ""))
+            exported_node_id = str(evidence.get("graph_node_id", ""))
+            graph_node_id = node_id_map.get(exported_node_id, exported_node_id)
+            if self._is_redaction_marker(quote):
+                counts["skipped_redacted"] += 1
+                continue
+            if not self._graph_evidence_provenance_exists(
+                graph_ref=graph_node_id,
+                graph_table="memory_graph_nodes",
+                graph_column="graph_node_id",
+                item_id=str(evidence.get("item_id", "")),
+                memory_id=str(evidence.get("memory_id", "")),
+                event_id=str(evidence.get("event_id", "")),
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO node_evidence
+                  (evidence_id, graph_node_id, item_id, memory_id, event_id,
+                   created_at, source_ref, quote, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(evidence.get("evidence_id") or new_id("nev")),
+                    graph_node_id,
+                    str(evidence.get("item_id", "")) or None,
+                    str(evidence.get("memory_id", "")) or None,
+                    str(evidence.get("event_id", "")) or None,
+                    str(evidence.get("created_at") or now_iso()),
+                    "" if self._is_redaction_marker(evidence.get("source_ref", "")) else str(evidence.get("source_ref", "")),
+                    quote,
+                    normalize_confidence(str(evidence.get("confidence", "medium"))),
+                ),
+            )
+            counts["node_evidence"] += max(int(inserted.rowcount or 0), 0)
+
+        for evidence in self._importable_rows(memory_tree.get("edge_evidence")):
+            quote = str(evidence.get("quote", ""))
+            exported_edge_id = str(evidence.get("graph_edge_id", ""))
+            graph_edge_id = edge_id_map.get(exported_edge_id, exported_edge_id)
+            if self._is_redaction_marker(quote):
+                counts["skipped_redacted"] += 1
+                continue
+            if not self._graph_evidence_provenance_exists(
+                graph_ref=graph_edge_id,
+                graph_table="memory_graph_edges",
+                graph_column="graph_edge_id",
+                item_id=str(evidence.get("item_id", "")),
+                memory_id=str(evidence.get("memory_id", "")),
+                event_id=str(evidence.get("event_id", "")),
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO edge_evidence
+                  (evidence_id, graph_edge_id, item_id, memory_id, event_id,
+                   created_at, source_ref, quote, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(evidence.get("evidence_id") or new_id("eev")),
+                    graph_edge_id,
+                    str(evidence.get("item_id", "")) or None,
+                    str(evidence.get("memory_id", "")) or None,
+                    str(evidence.get("event_id", "")) or None,
+                    str(evidence.get("created_at") or now_iso()),
+                    "" if self._is_redaction_marker(evidence.get("source_ref", "")) else str(evidence.get("source_ref", "")),
+                    quote,
+                    normalize_confidence(str(evidence.get("confidence", "medium"))),
+                ),
+            )
+            counts["edge_evidence"] += max(int(inserted.rowcount or 0), 0)
+
+        for scope in touched_scopes:
+            self._refresh_graph_groups(scope)
+
+    def _imported_graph_node_id(
+        self,
+        exported_graph_node_id: Any,
+        *,
+        node_id_map: dict[str, str],
+        node_type: str,
+        label: str,
+        memory_id: str,
+    ) -> str:
+        exported_id = str(exported_graph_node_id or "")
+        if exported_id in node_id_map:
+            return node_id_map[exported_id]
+        if exported_id and self._row_exists("memory_graph_nodes", "graph_node_id", exported_id):
+            return exported_id
+        normalized_type = self._normalize_graph_node_type(node_type) if node_type else ""
+        key = canonical_key(label)
+        scope = ""
+        if memory_id and self._row_exists("memories", "memory_id", memory_id):
+            row = self.conn.execute(
+                "SELECT scope FROM memories WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()
+            scope = str(row["scope"] or "") if row else ""
+        if normalized_type and key:
+            if scope:
+                row = self.conn.execute(
+                    """
+                    SELECT graph_node_id
+                    FROM memory_graph_nodes
+                    WHERE scope = ? AND node_type = ? AND canonical_key = ?
+                    LIMIT 1
+                    """,
+                    (scope, normalized_type, key),
+                ).fetchone()
+            else:
+                row = self.conn.execute(
+                    """
+                    SELECT graph_node_id
+                    FROM memory_graph_nodes
+                    WHERE node_type = ? AND canonical_key = ?
+                    LIMIT 1
+                    """,
+                    (normalized_type, key),
+                ).fetchone()
+            if row:
+                return str(row["graph_node_id"])
+        return ""
+
+    def _graph_evidence_provenance_exists(
+        self,
+        *,
+        graph_ref: str,
+        graph_table: str,
+        graph_column: str,
+        item_id: str,
+        memory_id: str,
+        event_id: str,
+    ) -> bool:
+        if not graph_ref or not self._row_exists(graph_table, graph_column, graph_ref):
+            return False
+        if item_id and not self._row_exists("memory_items", "item_id", item_id):
+            return False
+        if memory_id and not self._row_exists("memories", "memory_id", memory_id):
+            return False
+        if event_id and not self._row_exists("events", "event_id", event_id):
+            return False
+        return bool(item_id or memory_id or event_id)
 
     def digital_brain_state(self, *, scope: str | None = None) -> list[dict[str, Any]]:
         scope = normalize_scope(scope) if scope else None
@@ -13694,6 +14000,37 @@ class MemoryStore:
             "derived_invalidations": invalidations,
             "audit": audit,
         }
+
+    def _export_graph_edges(self, *, scope: str | None) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT ge.graph_edge_id, ge.created_at, ge.updated_at,
+                   ge.source_graph_node_id, ge.target_graph_node_id,
+                   ge.edge_type, ge.label, ge.weight, ge.confidence, ge.status,
+                   ge.source_memory_id, ge.source_event_id, ge.evidence_count,
+                   ge.metadata_json,
+                   src.node_type AS source_type, src.label AS source_label,
+                   dst.node_type AS target_type, dst.label AS target_label
+            FROM memory_graph_edges ge
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            LEFT JOIN memories m ON m.memory_id = ge.source_memory_id
+            WHERE ge.status = 'active'
+              AND src.status = 'active'
+              AND dst.status = 'active'
+              AND (ge.source_memory_id IS NULL OR m.status = 'active')
+              AND (
+                ? IS NULL OR (
+                  src.scope = ?
+                  AND dst.scope = ?
+                  AND (ge.source_memory_id IS NULL OR m.scope = ?)
+                )
+              )
+            ORDER BY ge.updated_at ASC
+            """,
+            (scope, scope, scope, scope),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def _export_node_evidence(self, *, scope: str | None) -> list[dict[str, Any]]:
         rows = self.conn.execute(
