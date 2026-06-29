@@ -1,5 +1,9 @@
 # Hermes End-To-End Memory Demo
 
+This is an optional adapter example. The core memory kernel is defined in
+[`docs/kernel-charter.md`](../../docs/kernel-charter.md) and does not depend on
+Hermes.
+
 This demo shows the production-shaped loop:
 
 1. Router retrieves existing memory before the agent plans.

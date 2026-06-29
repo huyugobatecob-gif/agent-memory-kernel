@@ -3,6 +3,10 @@
 This provider-neutral demo is the fastest way to see the full memory loop work
 without connecting a private agent runtime.
 
+It demonstrates the core loop defined in
+[`docs/kernel-charter.md`](../../docs/kernel-charter.md); it is not tied to a
+specific runtime or domain pack.
+
 It proves:
 
 - Router selects relevant professional memory before the main model call;

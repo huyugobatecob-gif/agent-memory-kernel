@@ -1,195 +1,246 @@
 # Implementation Plan
 
-This plan is the working map for turning Agent Memory Kernel from a small local
-template into a reusable open-source memory substrate.
+This is the working plan for turning Agent Memory Kernel into a stable,
+reusable memory kernel.
 
-## Product Shape
+The governing document is [kernel-charter.md](kernel-charter.md). Backlog items
+must be classified with [backlog-cutover.md](backlog-cutover.md) before they are
+treated as core work.
 
-The project should remain universal by default:
+## Outcome
 
-- default lanes: `personal` and `professional`;
-- optional lanes: `project`, `agent`, `session`;
-- optional domain extensions: runtime adapters, SEO loops, research loops, QA loops,
-  support workflows, CRM memory;
-- local-first storage;
-- auditable lifecycle;
-- persistent graph-tree model that can deepen over time.
+Agent Memory Kernel should provide a local-first, auditable memory layer that
+any agent runtime or human workflow can use without depending on one product,
+provider, hosted service, or domain.
 
-The key rule: domain-specific intelligence should be built as extensions over
-the kernel, not hard-coded into the kernel.
+The core loop is:
 
-## Full Memory Contract Gate
+```text
+after_saved_turn
+-> store source event
+-> Keeper proposes candidate memory
+-> review or policy promotes/rejects
+-> before_model_call
+-> Router retrieves policy-filtered active memory
+-> prompt envelope receives Memory Tree Supplement
+```
 
-The project is not allowed to claim full automatic memory until these contracts
-are implemented and verified:
+## Scope Model
 
-- `docs/runtime-contract.md` for the live Router/Keeper hooks.
-- `docs/memory-lifecycle-contract.md` for correction, deletion, distrust,
-  expiration, conflict, and export behavior.
-- `docs/cross-model-context-contract.md` for provider-neutral prompt context.
-- `docs/security-identity-contract.md` for identity, scope, permission, trust,
-  and audit rules.
-- `docs/end-to-end-vertical-slice.md` for the first complete scenario.
+### Core
 
-This gate keeps the open-source template universal: basic users can keep the
-personal/professional memory model, while runtime adapters can add automatic
-memory on top. Bundled adapter examples are optional and must stay thin.
+Core work changes the local memory contract itself:
 
-## Phase 0: Repository Baseline
+- source events, turns, and provenance;
+- candidate memories and active memories;
+- personal and professional lanes;
+- graph nodes, graph edges, evidence, and derivation;
+- Keeper proposal contract;
+- Router retrieval contract;
+- prompt envelope and Memory Tree Supplement;
+- review lifecycle and lifecycle mutations;
+- read, write, inject, export, and lifecycle policies;
+- deterministic baseline retrieval;
+- import/export with provenance and tombstones;
+- audit, explainability, and conformance.
 
-Goal: make the project understandable and safe to publish.
+### Extension
+
+Extension work is optional and must consume the core contract:
+
+- runtime adapters;
+- provider formatters;
+- importer/exporter bridges;
+- domain packs such as outcome loops, SEO, research, support, CRM, or QA;
+- optional embeddings and provider-backed rerankers;
+- richer local review UI and graph exploration;
+- notification sender bridges.
+
+### Later Hosted
+
+Hosted work is not required for local full-memory completion:
+
+- hosted multi-user API/UI;
+- tenancy, RBAC, and team administration;
+- hosted dashboards and billing operations;
+- remote MCP hosting;
+- managed alerts and schedulers;
+- KMS/off-host backup custody;
+- hosted adapter registry and badge publishing.
+
+## Done When
+
+The repository can claim full local memory when:
+
+- the local reference loop passes deterministic tests;
+- correction, deletion, distrust, expiration, supersession, and rollback affect
+  prompt-facing retrieval correctly;
+- denied, private, quarantined, or untrusted memory cannot leak into prompts;
+- selected memory is returned with provenance and selection reasons;
+- derived graph, prompt, export, and summary surfaces are invalidated when
+  source memory changes;
+- export/import preserves provenance, policy state, review history, and
+  tombstones;
+- adapters can pass conformance without private project assumptions.
+
+## Phase 0: Scope Reset
+
+Goal: make the project understandable as a kernel before adding more features.
 
 Files:
 
+- `docs/kernel-charter.md`
+- `docs/backlog-cutover.md`
+- `docs/hosted-roadmap.md`
 - `README.md`
-- `LICENSE`
-- `CONTRIBUTING.md`
-- `.gitignore`
-- `.github/workflows/tests.yml`
-- `pyproject.toml`
+- `docs/roadmap.md`
 
 Tasks:
 
-1. Define the project promise in one sentence.
-2. Explain what exists now and what does not.
-3. Add install and quickstart commands.
-4. Add CI that installs the package and runs tests.
-5. Keep the repository free of private project data.
+1. Define the one-sentence project promise.
+2. Separate `core`, `extension`, and `later-hosted` backlog.
+3. Move hosted/platform/runtime/domain rollout language out of the core plan.
+4. Make adapter and domain examples visibly optional.
+5. Add a plain-language model: collect, extract, review, store, retrieve,
+   explain, correct.
 
 Done when:
 
-- a new user can understand the project in under five minutes;
-- tests run locally and in GitHub Actions;
-- no private workspace assumptions are required.
+- new contributors can tell what belongs in the kernel;
+- hosted and domain-specific items are not listed as local v1 blockers;
+- docs link to the charter and backlog cutover.
 
 Verification:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+rg -n "kernel-charter|backlog-cutover|later-hosted|extension" README.md docs
 ```
 
-## Phase 1: Core Local Kernel
+## Phase 1: Kernel Schema And Laws
 
-Goal: implement the durable memory lifecycle.
+Goal: make memory safety invariants enforceable instead of aspirational.
 
 Files:
 
 - `src/agent_memory_kernel/schema.sql`
 - `src/agent_memory_kernel/store.py`
-- `src/agent_memory_kernel/policy.py`
-- `src/agent_memory_kernel/cli.py`
+- `src/agent_memory_kernel/contract.py`
+- `docs/memory-contract.md`
+- `docs/memory-lifecycle-contract.md`
+- `docs/security-identity-contract.md`
 - `tests/test_memory_store.py`
-
-Lifecycle:
-
-```text
-conversation_turn / event -> candidate_memory -> review/policy
-  -> active_memory -> memory_item -> memory_graph -> context_pack / tree_pack
-```
+- `tests/test_contract_acceptance.py`
 
 Tasks:
 
-1. Store raw events append-only.
-2. Extract conservative candidate memories.
-3. Keep candidate review separate from active memory.
-4. Quarantine secret-like content.
-5. Preserve source links and audit logs.
-6. Support correction and soft-delete.
-7. Export human-readable markdown vaults.
-8. Return compact agent-ready context packs.
-9. Return branch-oriented Memory Tree Packs for planning.
-10. Store conversation turns, thread messages, and thread summaries.
-11. Create memory items for active memories.
-12. Store profile intro/rules, project profiles, and LLM usage stats.
+1. Version schemas for source events, candidates, active memories, graph nodes,
+   graph edges, evidence, lanes, policies, review actions, mutations,
+   tombstones, and audit records.
+2. Keep migration behavior explicit and testable.
+3. Add or strengthen invariant tests:
+   - deleted memory cannot reappear from retained evidence;
+   - distrusted sources cannot influence retrieval, summaries, or derived
+     memory;
+   - personal/private lanes cannot leak into professional prompts;
+   - derived memory invalidates on correction, deletion, distrust, expiration,
+     or supersession;
+   - exports preserve provenance, trust state, policy metadata, review history,
+     evidence chains, and tombstones.
+4. Keep deterministic behavior as the default path.
 
 Done when:
 
-- pending memories do not appear in search;
-- approved memories appear in search, context packs, and tree packs;
-- approved memories create memory items;
-- quarantined content cannot be approved directly;
-- corrections update active memory;
-- deleted memory is no longer retrieved;
-- export creates readable markdown files.
+- invariant tests prove the safety rules;
+- the machine-readable contract describes the same laws as the docs;
+- migrations and restore checks report schema compatibility.
 
 Verification:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
-PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk.db
+PYTHONPATH=src python3 -m unittest tests.test_memory_store tests.test_contract_acceptance
 ```
 
-## Phase 2: Graph Layer
+## Phase 2: Local Reference Loop
 
-Goal: make memory navigable with a persistent graph-tree without overbuilding
-domain ontology too early.
+Goal: prove the full memory loop locally before broad adapter work.
 
 Files:
 
-- `src/agent_memory_kernel/schema.sql`
-- `src/agent_memory_kernel/extractors/base.py`
-- `src/agent_memory_kernel/extractors/rules.py`
-- `docs/v0-memory-contract.md`
-
-Starter nodes:
-
-- `person`
-- `project`
-- `interest`
-- `document`
-- `data`
-- `tool`
-- `fact`
-- `decision`
-- `preference`
-- `rule`
-- `attempt`
-- `outcome`
-- `gotcha`
-- `pattern`
-
-Starter edges:
-
-- `relates_to`
-- `belongs_to`
-- `uses`
-- `references`
-- `mentions_data`
-- `stated_by`
-- `decided_in`
-- `derived_from`
-- `supersedes`
-- `conflicts_with`
+- `src/agent_memory_kernel/orchestrator.py`
+- `src/agent_memory_kernel/store.py`
+- `src/agent_memory_kernel/cli.py`
+- `docs/runtime-contract.md`
+- `docs/end-to-end-vertical-slice.md`
+- `tests/test_orchestrator.py`
+- `tests/test_memory_store.py`
 
 Tasks:
 
-1. Create `memory_items` for each active memory.
-2. Create deduplicated `memory_graph_nodes`.
-3. Create weighted `memory_graph_edges`.
-4. Store node and edge evidence.
-5. Record Keeper runs and graph commands.
-6. Record Light Model semantic analyses.
-7. Maintain graph groups and digital brain state.
-8. Keep graph extraction deterministic in v0.
-9. Build a tree pack from memory hits, graph node hits, and graph neighbors.
-10. Document how richer Keepers can add GPT extraction and embeddings.
+1. Keep `after_saved_turn` responsible for raw exchange persistence.
+2. Keep Keeper writes reviewable by default.
+3. Keep `before_model_call` responsible for policy-filtered retrieval.
+4. Ensure the prompt envelope contains selected branch content, not tags only.
+5. Ensure the main model never receives the full graph.
+6. Keep no-memory fallback explicit when retrieval fails or policy denies access.
 
 Done when:
 
-- approved memory creates a `memory_item`;
-- extracted project/person/tool/data nodes are deduped in `memory_graph_nodes`;
-- graph relationships are linked by `memory_graph_edges`;
-- node and edge evidence point back to events;
-- Keeper runs are auditable;
-- semantic analyses store facts, chronology, key topics, people, events, and
-  verified entities;
-- graph groups and digital brain state are inspectable;
-- tree packs return branches with graph nodes, relationships, and raw provenance;
-- tests verify graph creation, context builder, and tree retrieval.
+- `slice seed/run/assert` passes;
+- a corrected memory replaces the old one;
+- deleted, distrusted, expired, and superseded memory is absent from the prompt;
+- lane isolation is visible in prompt metadata;
+- Keeper and Router runs are auditable by ID.
 
-## Phase 3: Personal / Professional Public Template
+Verification:
 
-Goal: support users who only need structured memory, not loops.
+```bash
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice seed --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice run --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice assert --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m unittest tests.test_orchestrator tests.test_memory_store
+```
+
+## Phase 3: Review And Explainability
+
+Goal: make memory inspectable and correctable by humans and supervising agents.
+
+Files:
+
+- `src/agent_memory_kernel/store.py`
+- `src/agent_memory_kernel/cli.py`
+- `src/agent_memory_kernel/server.py`
+- `src/agent_memory_kernel/mcp_server.py`
+- `docs/review-workflow.md`
+- `tests/test_review_inbox.py`
+- `tests/test_server_ui.py`
+- `tests/test_mcp_server.py`
+
+Tasks:
+
+1. Keep approve, reject, correct, delete, distrust, expire, supersede, and
+   rollback available through CLI/API/MCP where appropriate.
+2. Add or strengthen human-readable memory diffs.
+3. Add or strengthen "why this memory exists" views: source evidence, reviewer,
+   lane, policy decision, trust state, lifecycle history, and retrieval history.
+4. Keep batch review and lifecycle actions dry-runnable.
+5. Keep review UI optional over the same core lifecycle.
+
+Done when:
+
+- a reviewer can inspect source evidence before promotion;
+- a reviewer can explain why a memory entered a prompt;
+- lifecycle changes are visible and reversible where reversal is allowed;
+- API/MCP surfaces cannot bypass policy checks.
+
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_review_inbox tests.test_server_ui tests.test_mcp_server
+```
+
+## Phase 4: Personal And Professional Packs
+
+Goal: make the default memory model useful without domain-specific loops.
 
 Files:
 
@@ -197,148 +248,128 @@ Files:
 - `templates/vault/personal.md`
 - `templates/vault/professional.md`
 - `examples/personal-professional-demo/README.md`
+- `docs/memory-contract.md`
 
 Tasks:
 
-1. Keep the default mental model as two lanes.
-2. Show commands for personal preferences.
-3. Show commands for professional rules.
-4. Export markdown files for review.
+1. Define the personal pack: preferences, stable facts, relationships,
+   recurring context, and private defaults.
+2. Define the professional pack: projects, decisions, constraints,
+   collaborators, working rules, gotchas, and professional patterns.
+3. Keep project, agent, and session lanes documented as optional policy scopes.
+4. Provide a beginner workflow: remember, review, retrieve, correct, delete,
+   distrust, export.
 
 Done when:
 
-- a non-technical user can understand what belongs in each lane;
-- examples run with the CLI.
+- a user who does not use agents or loops can still understand the template;
+- examples do not require domain-specific context;
+- personal memory is never returned to professional-only prompts by default.
 
-## Phase 4: Runtime Adapter Example
+Verification:
 
-Goal: show how an external runtime can use the kernel without owning memory.
-The bundled Hermes provider is one concrete optional example, not a required
-architecture dependency.
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_memory_store
+```
+
+## Phase 5: Adapter Contracts And Conformance
+
+Goal: let outside tools use the kernel without copying internal assumptions.
 
 Files:
 
-- `adapters/hermes_provider/hermes_provider.py`
-- `adapters/hermes_provider/README.md`
-- `docs/hermes-integration.md`
-
-Provider responsibilities:
-
-- request Memory Tree Packs before planning;
-- request full context builder packs for non-trivial planning;
-- request compact context packs for small tasks;
-- record conversation turns and thread summaries;
-- record post-work memories as candidates;
-- inspect graph nodes and Keeper audit when debugging retrieval;
-- expose pending review;
-- keep memory lifecycle inside `MemoryStore`.
+- `src/agent_memory_kernel/conformance.py`
+- `src/agent_memory_kernel/contract.py`
+- `docs/runtime-contract.md`
+- `docs/cross-model-context-contract.md`
+- `docs/mcp.md`
+- `tests/test_contract_acceptance.py`
+- `tests/test_mcp_server.py`
 
 Tasks:
 
-1. Keep the adapter thin.
-2. Define the provider interface.
-3. Add integration examples.
-4. Later, connect the provider to real runtime hooks.
+1. Document runtime adapter requirements for pre-call retrieval and post-turn
+   Keeper scheduling.
+2. Document importer/exporter requirements for preserving provenance and
+   lifecycle state.
+3. Document retrieval-enhancer requirements so embeddings or provider rerankers
+   cannot override policy filters.
+4. Add golden traces for correction, deletion, distrust, lane isolation,
+   source mutation, export/import, prompt envelope shape, and deterministic
+   retrieval.
+5. Keep adapter certification local and reproducible.
 
 Done when:
 
-- an adapter can call `tree_pack(query)`;
-- an adapter can call `context_builder_pack(query)`;
-- an adapter can call `record_turn(...)`;
-- an adapter can call `context_pack(query)`;
-- an adapter can call `remember(summary)`;
-- an adapter can inspect graph nodes;
-- pending candidates stay reviewable.
+- a new adapter can run conformance without private data;
+- conformance catches policy bypasses and lifecycle leaks;
+- optional adapters can fail without breaking the kernel.
 
-## Phase 5: Outcome / Loop Extension
+Verification:
 
-Goal: make iterative work improve over time.
-
-This is the SEO-project layer, but it should be generic enough for other
-iterative workflows.
-
-New memory kinds:
-
-- `attempt`
-- `outcome`
-- `lesson`
-- `pattern`
-- `gotcha`
-
-Suggested graph:
-
-```text
-attempt -> produced_outcome
-attempt -> failed_because -> gotcha
-attempt -> succeeded_because -> pattern
-outcome -> created_lesson -> rule
+```bash
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance seed --db /tmp/amk-conformance.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance run --db /tmp/amk-conformance.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
+PYTHONPATH=src python3 -m unittest tests.test_contract_acceptance tests.test_mcp_server
 ```
 
-Tasks:
+## Phase 6: Examples
 
-1. Add an outcome extractor.
-2. Add attempt/outcome schema helpers.
-3. Add success/failure comparison queries.
-4. Build context packs that include both successes and failures.
-5. Add tests using realistic loop examples.
+Goal: demonstrate integration without turning examples into architecture.
 
-Done when:
+Files:
 
-- an agent planning a new loop can retrieve similar successes;
-- the same agent can retrieve similar failures;
-- context packs cite both with provenance;
-- no failed model output becomes durable truth without review.
-
-## Phase 6: API / MCP / UI
-
-Goal: make the kernel easier to use across tools.
-
-Options:
-
-- FastAPI server;
-- MCP server;
-- richer browser review UI;
-- Obsidian/markdown sync;
-- embedding search plugin.
+- `examples/reference-loop-demo/README.md`
+- `examples/personal-professional-demo/README.md`
+- `examples/agent-loop-demo/README.md`
+- `examples/hermes-e2e-demo/README.md`
+- `adapters/hermes_provider/README.md`
 
 Tasks:
 
-1. Keep the SQLite store as source of truth.
-2. Expose stable read/write endpoints.
-3. Add authentication for hosted modes.
-4. Add review inbox UI.
-5. Add graph browser only after real data proves useful navigation patterns.
+1. Keep the provider-neutral reference loop as the canonical demo.
+2. Keep personal/professional memory as the first beginner example.
+3. Keep runtime and domain examples thin.
+4. State clearly that examples consume the kernel contract.
+5. Do not make any example a requirement for local full-memory completion.
 
 Done when:
 
-- external agents can retrieve context without shelling out;
-- humans can approve/reject/correct memory comfortably;
-- exports remain possible.
+- examples can be skipped without losing the core;
+- examples point back to the charter and contracts;
+- domain examples use packs or adapters, not hardcoded kernel behavior.
 
-## Phase 7: Security Hardening
+Verification:
 
-Goal: treat memory as part of the prompt boundary.
+```bash
+rg -n "optional|example|kernel contract|Kernel Charter" examples adapters docs README.md
+```
 
-Tasks:
+## Phase 7: Optional Enhancements
 
-1. Add stronger secret detection.
-2. Add prompt-injection warnings for untrusted sources.
-3. Add source-type policies.
-4. Add import validation.
-5. Add audit export.
-6. Add richer conflict detection for rules.
-7. Add deletion/correction tests around FTS and graph edges.
+Goal: add power without making the kernel heavier.
 
-Done when:
+Extension candidates:
 
-- untrusted content cannot silently create active rules;
-- active memory always includes provenance;
-- dangerous content is quarantined;
-- correction/deletion behavior is documented and tested.
+- embeddings and ANN retrieval;
+- provider-specific prompt format certification;
+- richer graph optimization;
+- local review UI improvements;
+- notification sender bridges;
+- importer/exporter bridges;
+- outcome loop packs;
+- hosted sync experiments.
 
-## Operating Principle
+Rules:
 
-The kernel should remember actions, but it should not blindly trust them.
+1. Enhancements must run after policy filtering, not before it.
+2. Enhancements must not become required for deterministic conformance.
+3. Enhancements must not weaken any memory-safety invariant.
+4. Hosted features stay in [hosted-roadmap.md](hosted-roadmap.md).
 
-The system can record nearly every action as an event. Durable memory is the
-reviewed, cited, retrievable layer that future agents use for planning.
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests
+```

@@ -3,6 +3,9 @@
 This demo shows the default public template: two simple memory lanes that work
 for people who do not use iterative agent loops.
 
+These two lanes are the default model in
+[`docs/kernel-charter.md`](../../docs/kernel-charter.md).
+
 ## Run
 
 ```bash

@@ -3,6 +3,10 @@
 This folder is a starter adapter boundary for Hermes. It is optional example
 code; the core memory kernel does not depend on Hermes.
 
+The boundary is governed by
+[`docs/kernel-charter.md`](../../docs/kernel-charter.md): this adapter consumes
+the kernel contract and must not define core behavior.
+
 The current implementation is intentionally thin: Hermes should call the kernel
 instead of duplicating memory storage logic.
 

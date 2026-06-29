@@ -1,425 +1,177 @@
 # Roadmap
 
-## v0.1: Local Kernel
+This roadmap follows the [Kernel Charter](kernel-charter.md) and
+[Backlog Cutover](backlog-cutover.md).
+
+The project should remain a local-first memory kernel. Adapters, packs,
+embeddings, hosted services, and domain rollouts are valuable only when they
+consume the kernel contract instead of redefining it.
+
+## v0.1: Local Kernel Baseline
 
 Status: implemented in this template.
 
-- SQLite store.
-- CLI.
-- Events, candidates, active memories.
-- Conversation turns, thread messages, and thread summaries.
-- Memory items.
-- Manual review.
-- Conservative auto-approval.
-- Quarantine for secret-like text.
-- Persistent graph nodes and edges.
-- Node and edge evidence.
-- Keeper runs, graph command normalization, and graph command audit.
-- Light Model semantic analyses.
-- Profile notes, project profile metadata, and profile export.
-- LLM usage stats.
-- Export control previews and export redaction profiles.
-- Encrypted profile export/import envelopes.
-- Graph groups, optimization runs, and Digital Brain calibration.
-- Guarded Digital Brain style append in prompt envelopes.
-- Brain/style certification for guarded prompt behavior.
-- Context packs.
-- Memory Tree Packs.
-- Context builder packs.
-- Agent write-policy enforcement.
-- Memory revision history and rollback.
-- Formal Memory Contract and deterministic acceptance harness.
-- Dependency-free semantic reranking for Memory Tree retrieval.
-- Versioned LLM Keeper extraction contract.
-- OpenAI-compatible lightweight extractor adapter.
-- Markdown vault export.
-- Tests.
+Included:
 
-## v0.2: Outcome Memory
+- SQLite source of truth;
+- CLI;
+- source events, candidates, active memories;
+- conversation turns, thread messages, and summaries;
+- personal and professional lanes;
+- memory items;
+- manual review and conservative auto-approval;
+- quarantine for secret-like and prompt-injection-like content;
+- persistent graph nodes, graph edges, node evidence, and edge evidence;
+- Keeper runs, graph command normalization, and graph command audit;
+- context packs, Memory Tree Packs, and context builder packs;
+- write-policy and read-policy enforcement;
+- correction, deletion, distrust, expiration, supersession, and rollback paths;
+- export control, redaction profiles, encrypted export/import, vault export,
+  retention, and approval flows;
+- backup, restore, migration, and restore-drill commands;
+- local HTTP API, stdio MCP server, and worker processing;
+- formal Memory Contract, acceptance harness, and conformance suite;
+- provider-neutral runtime loop and reference demo.
 
-Goal: make iterative work smarter.
+## v0.2: Kernel Charter Cutover
 
-Planned:
+Goal: make the repository read as a memory kernel, not a platform roadmap.
 
-- first-class `attempt`, `outcome`, `lesson`, `pattern`, `gotcha` kinds;
-- outcome scoring;
-- success/failure comparison;
-- reusable rule extraction;
-- conflict detection between old and new rules;
-- project-level tree packs;
-- success/failure branches inside tree packs.
+Core work:
 
-This is the layer that makes loops powerful for SEO projects, QA projects,
-research projects, and agent optimization.
+- keep [kernel-charter.md](kernel-charter.md) as the governing boundary;
+- keep [backlog-cutover.md](backlog-cutover.md) as the classification rule for
+  new work;
+- keep [implementation-plan.md](implementation-plan.md) scoped to local kernel
+  completion;
+- move hosted/platform work to [hosted-roadmap.md](hosted-roadmap.md);
+- keep domain and runtime examples under `examples/` and `adapters/`;
+- keep optional retrieval and provider work as extensions.
 
-Current status: baseline outcome records are implemented through
-`agent-memory outcome record/list/pack/compare`, `/outcome/record`,
-`/outcome/list`, `/outcome/pack`, `/outcome/compare`, and Python adapter
-wrappers. Outcome records store project, loop id, status, hypothesis, action,
-result, cause, lesson, next recommendation, score, and links to
-candidate/active memory. The comparison report extracts reusable success
-lessons, avoid-lessons from failures, score summaries, contrasting causes, and
-next actions.
+Done when:
 
-## v0.2 Full Memory Gap
+- contributors can identify `core`, `extension`, and `later-hosted` work;
+- hosted features are not local full-memory blockers;
+- runtime/domain examples point back to the kernel contract.
 
-The automatic memory gap plan is tracked in
-[full-memory-gap-plan.md](full-memory-gap-plan.md). It adds the missing
-production layers around the local kernel:
+## v0.3: Memory Safety Invariants
 
-- pre-turn Memory Router;
-- post-turn Keeper;
-- prompt envelope;
-- runtime adapter before/after hooks;
-- API/MCP service mode;
-- background worker;
-- review and security hardening;
-- production governed read-time ranking and current-best conflict resolution;
-- production memory quality evals beyond baseline usefulness feedback;
-- versioned conformance spec with golden conversation traces and adapter
-  compatibility tests, with baseline golden traces now covering outcome
-  planning, graph evidence inspection, safe profile export, and migration
-  compatibility;
-- derived-memory invalidation for summaries, graph surfaces, cached packs,
-  outcome lessons, and graph-derived style;
-- capability and consent model for read/write/promote/inject/export/delete;
-- inspection and explainability flows for why memory was recalled or changed;
-- operational failure model for slow, unavailable, corrupted, migrated, or
-  oversized memory stores.
+Goal: make memory governance enforceable.
 
-Before v0.2 can be called full memory, these contracts must be implemented and
-tested:
+Core work:
 
-- [runtime-contract.md](runtime-contract.md): pre-call Router, post-turn Keeper,
-  and failure behavior.
-- [memory-lifecycle-contract.md](memory-lifecycle-contract.md): create,
-  correct, delete, distrust, expire, conflict, and export behavior.
-- [cross-model-context-contract.md](cross-model-context-contract.md):
-  provider-neutral prompt envelope and `MEMORY_TREE_SUPPLEMENT`.
-- [security-identity-contract.md](security-identity-contract.md): identity,
-  scopes, permissions, audit, redaction, and poisoning defense.
-- [end-to-end-vertical-slice.md](end-to-end-vertical-slice.md): executable
-  save-retrieve-ingest scenario with permission and poisoning checks.
-- [memory-contract.md](memory-contract.md): lane rules, typed memory, write
-  actions, closed-loop requirements, and deterministic acceptance gates.
+- deleted memory cannot reappear from retained evidence;
+- distrusted sources cannot influence retrieval, summaries, or derived memory;
+- personal/private lanes cannot leak into professional prompts by default;
+- derived memory invalidates after correction, deletion, distrust, expiration,
+  or supersession;
+- exports preserve provenance, tombstones, trust state, policy metadata, review
+  history, and evidence chains;
+- prompt envelopes contain selected memory only, never the full graph.
 
-Current status: the first local runtime hook slice exists through
-`before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
-`MemoryStore.after_saved_turn()`, `MemoryOrchestrator`, and optional Python
-adapter wrappers. It proves the Router/envelope/Keeper candidate loop and exposes a
-single service facade for `before_turn`, `build_prompt_context`,
-`retrieve_context`, `record_turn`, `keeper_analyze_turn`, `ingest_graph`, and
-`after_turn`. Local Python runtimes can also use `run_agent_turn()` to wrap
-Router, the main agent call, turn persistence, and Keeper in one audited call.
-The richer `slice seed/run/assert` fixture now checks corrected memory, deleted
-memory, professional/personal lane separation, prompt-injection quarantine, and
-real success/failure outcome records with active memory provenance. It is also
-documented as a provider-neutral reference loop in
-`examples/reference-loop-demo`.
-Full v0.2 now has a local stdlib HTTP API service
-through `agent-memory serve`, optional bearer-token protection, and a local
-stdio MCP server. `docs/production-rollout.md` now documents preflight, shadow
-rollout, worker supervision, local HTTP deployment, stdio MCP deployment,
-observability, and rollback. Hosted multi-user auth/RBAC, hosted remote MCP,
-and live rollout across agent runtime profiles are still backlog. Runtime
-scope allow/deny enforcement is implemented for Router retrieval.
-Baseline read-time policy and Router explainability are implemented through
-`prompt_envelope.metadata.read_time_policy`, `selection_decisions`,
-`agent-memory read-time-policy`, `agent-memory router-runs`,
-`agent-memory router-explain`, `/read-time-policy`, `/router-runs`, and
-`/router-explain`.
-Baseline prompt-budget adapters are implemented through
-`agent-memory prompt-budget`, `/prompt-budget`, MCP `memory_prompt_budget`, and
-`prompt_envelope.metadata.prompt_budget`. Known model families get deterministic
-default/max/reserve memory budgets, while unknown models preserve requested
-runtime budgets.
-Baseline Router usefulness feedback, quality reporting, and bounded
-usefulness-learning ranking are implemented
-through `agent-memory router-feedback`, `agent-memory memory-quality`,
-`/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
-Prior feedback is exposed as `router_feedback_signal` in selection policy
-factors and adjusts only already-retrieved candidates. `memory-quality` now
-reports a versioned quality contract with Router feedback coverage,
-helpful/harmful feedback, shadow trace eval pass rate, recent failed fixtures,
-Keeper job status, and quality gates. Live task-improvement traces and reviewed
-production golden fixtures are still backlog.
-Baseline observability and cost accounting are implemented through
-`agent-memory observability`, `/observability`, Python adapter wrappers,
-and MCP `memory_observability`. The report joins Router selected branches and
-prompt token estimates, Router/Keeper wall-clock durations, Keeper
-status/warnings, LLM usage tokens/cost, and local latency SLO alerts.
-Baseline operations dashboard is implemented through `agent-memory dashboard`,
-`/operations/dashboard`, Python adapter wrappers, and MCP
-`memory_operations_dashboard`; it aggregates operational health, observability,
-billing, worker, recovery schedule, and notification status into one report.
-Baseline provider billing reconciliation is implemented through
-`agent-memory billing-reconcile`, `/billing/reconcile`, Python adapter
-wrappers, and MCP `memory_billing_reconcile`; it compares recorded usage cost
-against expected billing amounts or imported provider invoice line items and
-flags suspicious usage rows. Baseline invoice ingestion is implemented through
-`agent-memory billing-invoice`, `/billing/invoice/*`, Python adapter wrappers,
-and MCP `memory_billing_invoice_*`. Live provider invoice fetchers, hosted
-dashboard publishing, hosted retention policy, and managed alerts are still
-backlog.
-Baseline prompt-envelope provider formatters are implemented through
-`before_model_call(..., prompt_format=...)`, `agent-memory before-model-call
---prompt-format`, `/before-model-call`, and MCP `memory_before_model_call`.
-They return the neutral envelope plus OpenAI, Anthropic, Google/Gemini, or
-local formatted prompt shapes. Baseline provider formatter certification is
-implemented through `agent-memory prompt-format-certify`,
-`/prompt-format/certify`, and MCP `memory_prompt_format_certify`; it verifies
-prompt-boundary invariants without live provider calls, including
-provider-shaped red-team fixtures for hostile memory text, tool output,
-assistant guesses, and secret-like content. Live-provider certification and
-provider SDK/API integration tests are still backlog.
-Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
-`keeper-extraction-v0.1`, local schema validation, deterministic fallback,
-candidate extraction metadata, and offline Keeper evals through
-`agent-memory keeper-eval`, `/keeper-eval/run`, Python adapter `keeper_eval()`, and MCP
-`memory_keeper_eval`. Production Keeper prompt tuning, live provider
-configuration, and real trace evals are still backlog.
-Baseline graph command normalization is implemented through
-`graph-command-v0.1`, `apply_graph_commands`, orchestrator `ingest_graph`,
-reviewable proposed commands, approval-time graph mutation, node/edge evidence,
-and idempotent graph upserts. Baseline graph consolidation is implemented
-through `agent-memory graph optimize --mode consolidate_duplicates`,
-`/graph/optimize`, Python adapter `optimize_graph()`, and MCP
-`memory_graph_optimize`; it compacts alias-like duplicate nodes, preserves
-evidence, rewires/merges edges, and records the pass in
-`graph_optimization_runs`. Baseline stale-node decay review is implemented
-through `agent-memory graph optimize --mode decay_stale`; it reports old,
-low-evidence, low-importance nodes as review candidates without mutating active
-graph state. Advanced split, semantic consistency, and scheduled maintenance
-heuristics are still backlog.
-Agent write-policy enforcement is implemented for record, auto-approve,
-approve/reject, correct/delete/distrust/expire, outcome, conflict, and
-supersession write paths.
-Agent read-policy enforcement is implemented for prompt-facing memory injection
-through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
-`prompt_envelope.metadata.read_policy`.
-Baseline capability/consent reporting is implemented through `agent-memory
-capability`, `/capability/check`, Python adapter wrappers, and MCP
-`memory_capability_check`. Baseline hosted delegation audit is implemented
-through `agent-memory identity-delegation`, `/identity/delegation`, and MCP
-`memory_identity_delegation`; it exposes tenant id, explicit allow/deny
-policies, implicit local allows, wildcard-policy risk, and recommended policy
-commands. Direct search/context/tree-pack and export surfaces can enforce
-read/export policy by actor.
-Baseline derived-memory invalidation is implemented through `agent-memory
-derived-invalidations`, `/derived-invalidations`, Python adapter wrappers,
-and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,
-expire, and supersede lifecycle actions record graph/evidence/prompt-pack/export
-surfaces that were refreshed or invalidated.
-Baseline derived-memory dependency lineage is implemented through
-`agent-memory derived-lineage`, `/derived-lineage`, Python adapter wrappers, and
-MCP `memory_derived_lineage`; it links one memory to source rows, compact
-items, graph evidence, graph edges, outcomes, audit events, and invalidation
-surface coverage.
-Baseline operational failure handling is implemented through
-`operational_status`, `/operational/status`, Python adapter wrappers, and
-MCP `memory_operational_status`. Prompt retrieval failures return a no-memory
-envelope with `metadata.operational_failure`; Keeper extraction failures keep
-saved turns and mark the Keeper job failed.
-Baseline migration and local recovery are implemented through
-`agent-memory migration-status`, `agent-memory migration-changelog`,
-`agent-memory backup`, `agent-memory restore`, `agent-memory restore-drill`,
-`agent-memory restore-drill-schedule`, `/migration/status`,
-`/migration/changelog`, `/backup`, `/restore`, `/restore/drill`,
-`/restore/drill/schedule/*`, and MCP recovery tools. Restore drills create a
-backup, restore into a drill database, check migration status, and optionally
-verify a probe query against restored active memory. The changelog reports
-pending migrations, recommended rollout gates, and recent recovery audit
-events. Restore-drill schedules track local due/last result state and create
-operator notifications on failed scheduled drills. Production SLOs, encrypted
-off-host backups, hosted migration release-note publication, platform
-scheduler recipes, worker supervision, and hosted alerting are still backlog.
-Post-turn memory-change inspection is implemented through `agent-memory
-memory-changes`, `/memory-changes`, and Python adapter wrappers. A Keeper
-job report includes saved turns, the Keeper event, candidates, promoted
-memories, affected graph/context surfaces, review or lifecycle handles, and
-audit trail.
-The baseline operator review inbox is implemented through `agent-memory review
-inbox`, `/review/inbox`, Python adapter wrappers, and MCP
-`memory_review_inbox`. It returns candidate source previews, risk flags, graph
-previews, inline possible-conflict warnings against active memory, review
-history, audit trail, and CLI/HTTP/MCP handles for approve, reject, correct,
-delete, distrust, and expire. HTTP and MCP also expose the matching lifecycle
-endpoints/tools.
-The stdlib HTTP service also exposes baseline browser operator pages at
-`/ui/review`, `/ui/graph`, and `/ui/conflicts` for local review, graph
-inspection, and conflict scan/record flows. The review page supports individual
-and batch approve/reject, dry-run batch preview, and active-memory correction
-preview/apply through the lifecycle batch API. The graph page includes node
-type/focus links, source/target edge links, and source metadata for evidence
-previews.
-The baseline operator notification queue is implemented through `agent-memory
-notifications`, `/notifications/*`, Python adapter notification wrappers, and MCP
-`memory_notifications_list` / `memory_notification_assign` /
-`memory_notification_ack` / `memory_notification_resolve` /
-`memory_notification_escalations`.
-Pending/quarantined review candidates, sensitive export approval requests, and
-expired export artifacts create open notifications that can be assigned to a
-reviewer with optional `due_at`, filtered by computed SLA status, acknowledged,
-resolved, surfaced in policy-only escalation reports, or converted into
-webhook/email/push payloads through `agent-memory notifications transport`,
-`/notifications/transport`, Python adapters, and MCP
-`memory_notifications_transport`.
-Baseline delivery outbox is implemented through `agent-memory notifications
-delivery-enqueue/list/mark`, `/notifications/delivery/*`, Python adapter
-wrappers, and MCP `memory_notification_delivery_*`; external senders can pull
-queued payloads and mark delivered or failed without storing provider secrets
-in SQLite.
-Baseline batch review is implemented through `agent-memory review batch`,
-`/review/batch`, Python adapter `review_batch()`, and MCP `memory_review_batch`.
-Approve/reject batches support dry-run and per-candidate results.
-Baseline active-memory lifecycle batch is implemented through `agent-memory
-lifecycle-batch`, `/memory/lifecycle-batch`, Python adapter
-`batch_memory_lifecycle()`, and MCP `memory_lifecycle_batch`.
-Correct/delete/distrust/expire batches support dry-run and per-item results.
-Baseline graph browser data is implemented through `agent-memory graph browser`,
-`/graph/browser`, Python adapter `graph_browser()`, and MCP `memory_graph_browser`.
-Nodes and edges include source previews for future UI navigation.
-Baseline export governance is implemented through `agent-memory export-control`,
-`/export/control`, Python adapter `export_control_report()`, and MCP
-`memory_export_control`. Export previews return matched policy, aggregate
-scope counts, sensitivity/trust breakdowns, denied scopes, and risk flags
-without returning memory content.
-Baseline export redaction profiles are implemented through
-`agent-memory export-profile`, `agent-memory export`, `/export/profile`, Python adapter `export_profile()`, and MCP `memory_export_profile`. The supported profiles are
-`full`, `safe`, and `metadata`; safe modes preserve graph/export structure while
-replacing content-bearing fields with explicit redaction markers.
-Baseline sensitive full-export approval is implemented through `agent-memory
-export-approval`, `/export/approval/*`, Python adapter export approval wrappers, and MCP
-`memory_export_approval_*`. Full exports containing personal or secret active
-memory require an approved one-time request; safe/metadata exports remain the
-default structure-sharing path.
-Baseline export retention is implemented through `agent-memory
-export-retention`, `/export/retention/*`, Python adapter retention wrappers, and MCP
-`memory_export_retention_*`. Real exports are recorded with retention days,
-expiry, purge status, and markdown manifests.
-Baseline encrypted profile export is implemented through `agent-memory
-export-encrypted-profile`, `agent-memory import-encrypted-profile`,
-`/export/encrypted-profile`, `/import/encrypted-profile`, Python adapter encrypted
-export wrappers, and MCP `memory_export_encrypted_profile` /
-`memory_import_encrypted_profile`. The local envelope is
-`encrypted-export-v0.1`.
-Baseline export custody is implemented through `agent-memory export-custody`,
-`/export/custody`, Python adapter `export_custody_report()`, and MCP
-`memory_export_custody`. The report verifies export policy, sensitive approval,
-passphrase environment configuration, off-host artifact reference, retention,
-and zero secret storage in SQLite. Hosted KMS integrations and managed
-off-host backup recipes are still backlog.
-The provider-neutral runtime loop is covered by tests and
-`examples/reference-loop-demo`. One optional adapter-specific policy/review
-path is covered by tests and `examples/hermes-e2e-demo`.
-Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
---daemon` are implemented for background post-turn processing. Daemon mode can
-poll continuously under an external supervisor and supports bounded
-`--max-iterations`/`--stop-when-idle` runs for tests and maintenance.
-Baseline worker supervision status is implemented through `agent-memory
-worker-status`, `/worker/status`, and MCP `memory_worker_status`; it reports
-queued, failed, and stale Keeper jobs with operator commands.
-Shadow rollout traces are implemented through `agent-memory shadow-turn`,
-`agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and Python
-adapter wrappers. These traces link Router selections and Keeper proposals with
-`write_policy=propose_only` so real runtime traffic can be reviewed before live
-memory writes.
-Baseline shadow evals are implemented through `agent-memory shadow-eval`,
-`agent-memory shadow-evals`, `/shadow-eval`, `/shadow-evals`, and Python
-adapter wrappers. They turn reviewed traces into stored pass/fail checks for
-branch selection, candidate text, source IDs, token budget, and access mode.
-Conflict and supersession records are implemented through `agent-memory
-conflict`, `agent-memory supersede`, `agent-memory current-best`,
-`/conflict/record`, `/conflict/list`, `/conflict/detect`, `/current-best`, and
-`/supersede`. `agent-memory conflict detect`, Python adapter wrappers, and
-MCP `memory_conflict_detect` provide a baseline active-memory conflict detector
-with report-only and record-open-conflict modes.
-Superseded memory is suppressed from active retrieval and graph export while the
-resolved relationship remains auditable. Explicit resolved conflicts also affect
-prompt-facing tree retrieval: the winner is selected, the loser is suppressed,
-and unresolved conflicts remain visible for review.
-Baseline current-best heuristics now also rank strongly-overlapping active
-memories in the same scope/kind by trust, confidence, recency, evidence,
-outcome signal, and prior Router feedback. Outcome groups and open explicit
-conflicts remain visible for review instead of being silently suppressed.
-Outcome records and outcome packs are implemented for success/failure loop
-planning.
-Delete, distrust, and expire now suppress retrieval and active graph export.
-Corrections now record `memory_revisions`; `agent-memory revisions` and
-`agent-memory rollback` expose operator-visible rollback.
-The formal contract is exposed through `agent-memory contract` and
-`/contract`; the deterministic full-memory gate is exposed through
-`agent-memory acceptance seed/run/assert` and `/acceptance/seed`,
-`/acceptance/run`, `/acceptance/assert`.
-The first public conformance suite is exposed through `agent-memory conformance
-spec/seed/run/assert/certify` and `/conformance/spec`, `/conformance/seed`,
-`/conformance/run`, `/conformance/assert`, `/conformance/certify`. It defines
-named adapter scenarios for professional memory injection, personal-lane
-isolation, current-best conflict suppression, stored read-policy denial,
-deleted-memory absence, unsafe-memory absence, and reviewable/idempotent Keeper
-writes.
-The suite also publishes and runs baseline golden traces for success/failure
-outcome planning, graph browser source previews, and safe redacted profile
-export, plus a migration compatibility check for required runtime tables,
-`user_version`, SQLite `quick_check`, and security red-team cases for
-secret-like text, tool-output prompt injection, untrusted tool claims, and
-assistant guesses, plus personal full-export approval and safe-export
-redaction.
-`conformance certify` emits the first adapter compatibility badge report for
-README and CI use. `conformance registry-entry` emits a compact public adapter
-catalog payload with badge, summary, status, and recommended registry path.
-Hosted badge publishing and hosted registry publication remain future work.
+Evidence required:
 
-## v0.3: Adapters
+- invariant tests;
+- conformance golden traces;
+- lifecycle mutation reports;
+- export/import fixtures;
+- prompt-envelope fixtures.
 
-Goal: let agent frameworks use the kernel without copy-pasting logic.
+## v0.4: Reference Loop And Explainability
 
-Implemented now:
+Goal: make the local loop boring, inspectable, and easy to operate.
 
-- one runtime provider adapter example;
-- simple HTTP API;
-- dependency-free stdio MCP server;
-- OpenAI-compatible lightweight extractor adapter;
-- local deterministic semantic reranker;
-- provider-neutral embedding contract with local fallback;
-- OpenAI-compatible embedding provider adapter;
-- embedding/rerank contract certification;
-- file-based vault adapter.
+Core work:
 
-Planned:
+- preserve raw turns before Keeper extraction;
+- keep Keeper writes reviewable by default;
+- keep Router retrieval deterministic and policy-filtered;
+- expose selected/skipped branch reasons;
+- add or strengthen human-readable memory diffs;
+- add or strengthen "why this memory exists" reports;
+- keep review, correction, delete, distrust, expire, and rollback flows
+  available through stable interfaces.
 
-- hosted or remote MCP deployment patterns;
-- provider-backed approximate-nearest-neighbor reranker for larger corpora;
-- live embedding provider certification fixtures backed by real provider keys.
+Evidence required:
 
-## v0.4: Review UI
+- `slice seed/run/assert`;
+- review inbox and lifecycle tests;
+- Router explainability tests;
+- no-memory fallback tests.
 
-Goal: make memory maintenance practical for non-technical users.
+## v0.5: Personal And Professional Packs
 
-Planned:
+Goal: make the default template valuable without domain-specific loops.
 
-- deeper graph exploration views;
-- richer browser batch editing queues;
-- richer conflict-resolution workflows beyond scan/record;
-- live push/email/web sender integrations beyond the local delivery outbox;
-- hosted KMS integrations and managed off-host backup recipes beyond the local
-  export custody report.
+Core/default work:
 
-## v1.0: Stable Memory Contract
+- personal pack: preferences, stable facts, recurring context, relationships,
+  and private defaults;
+- professional pack: projects, decisions, constraints, collaborators, working
+  rules, gotchas, and professional patterns;
+- beginner examples for remember, review, retrieve, correct, delete, distrust,
+  and export;
+- clear guidance for optional `project`, `agent`, and `session` lanes.
 
-Goal: stable interfaces for external users.
+Evidence required:
 
-Requirements:
+- personal/professional demo;
+- lane isolation tests;
+- vault template round trip.
 
-- documented migration path;
-- stable schema;
-- stable provider interface;
-- stable Memory Contract and passing acceptance harness;
-- governed retrieval and lifecycle invalidation gates;
-- reference orchestration loop with real before/after memory behavior;
-- production eval traces proving memory improves real agent behavior;
-- inspect/edit/delete/distrust/export control surface;
-- defined operational failure and migration behavior;
-- security review;
-- import/export format;
-- production examples.
+## v0.6: Adapter Contracts
+
+Goal: let external systems use the kernel without copying internal assumptions.
+
+Extension work:
+
+- runtime adapter contract for pre-call retrieval and post-turn Keeper work;
+- importer/exporter contract for provenance and lifecycle preservation;
+- retrieval-enhancer contract for embeddings or rerankers after policy
+  filtering;
+- local adapter certification through conformance scenarios.
+
+Examples:
+
+- provider-neutral reference loop;
+- chat agent adapter;
+- coding agent adapter;
+- optional Hermes adapter;
+- notes/vault importer.
+
+## v0.7: Domain Packs
+
+Goal: support iterative workflows without turning them into kernel assumptions.
+
+Extension work:
+
+- outcome loop pack;
+- SEO loop pack;
+- research memory pack;
+- support/CRM memory pack;
+- QA/testing memory pack.
+
+Rules:
+
+- packs must use core memory kinds and policies;
+- packs may add graph conventions and examples;
+- packs must not require hosted infrastructure;
+- packs must not bypass review or lifecycle invariants.
+
+## Later Hosted
+
+Tracked in [hosted-roadmap.md](hosted-roadmap.md).
+
+Later-hosted work includes:
+
+- hosted multi-user API/UI;
+- tenancy, RBAC, and team administration;
+- hosted dashboards, billing, and managed alerting;
+- remote MCP hosting;
+- KMS/off-host backup custody;
+- managed schedulers;
+- hosted adapter registry and badge publishing;
+- live provider certification;
+- hosted sync and collaboration.
+
+None of these are blockers for the local full-memory kernel.

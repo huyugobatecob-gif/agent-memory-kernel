@@ -14,6 +14,12 @@ loops, runtime adapters, CRM memory, SEO project memory, support memory, or
 any other domain-specific layer. Bundled adapter examples are optional, not a
 requirement of the kernel.
 
+The project boundary is defined in
+[docs/kernel-charter.md](docs/kernel-charter.md): the kernel owns local memory
+truth, lifecycle, policies, retrieval, prompt packs, provenance, and
+conformance. Runtime adapters, domain packs, hosted services, vector search,
+and provider integrations are optional extensions.
+
 ## Why this exists
 
 Most agent memory is either too opaque or too thin:
@@ -872,13 +878,23 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 The detailed build plan is in
 [docs/implementation-plan.md](docs/implementation-plan.md). It is written so a
 future agent or contributor can continue from this template without needing the
-original planning conversation.
+original planning conversation. The plan is governed by
+[docs/kernel-charter.md](docs/kernel-charter.md) and the
+[docs/backlog-cutover.md](docs/backlog-cutover.md) classification:
+
+- `core`: local kernel behavior required for trustworthy memory;
+- `extension`: optional adapters, packs, retrieval enhancers, and local UI
+  workflows;
+- `later-hosted`: hosted/team/platform work that must not block local full
+  memory.
 
 The gap plan for the full automatic memory system is in
 [docs/full-memory-gap-plan.md](docs/full-memory-gap-plan.md). It maps the
 reference-memory findings to the missing repository layers: automatic Keeper,
 Memory Router, prompt envelope, runtime adapter hooks, API/MCP service mode,
-review, and security hardening.
+review, and security hardening. Treat it as historical detail under the newer
+charter boundary: hosted, runtime-specific, and domain-specific items are not
+core requirements unless they are restated in the implementation plan.
 
 The full-memory work is split into hard contracts so contributors can implement
 it without relying on the original planning conversation:
@@ -897,6 +913,8 @@ it without relying on the original planning conversation:
   API/MCP deployment, observability, and rollback.
 - [docs/end-to-end-vertical-slice.md](docs/end-to-end-vertical-slice.md)
   defines the first executable full-memory scenario.
+- [docs/hosted-roadmap.md](docs/hosted-roadmap.md) keeps hosted/platform work
+  visible without making it a local kernel dependency.
 
 ## Safety Model
 
@@ -941,7 +959,10 @@ src/agent_memory_kernel/
   slice.py               deterministic full-memory vertical slice fixture
   extractors/            deterministic v0 extractor and extension seams
 docs/
+  kernel-charter.md      core boundary, package model, and safety invariants
+  backlog-cutover.md     core / extension / later-hosted classification
   implementation-plan.md  phased build plan
+  hosted-roadmap.md       hosted/platform items outside local v1
   full-memory-gap-plan.md  gap plan for automatic full memory
   runtime-contract.md      pre-call router and post-turn keeper contract
   observability.md         Router, Keeper, and usage telemetry report

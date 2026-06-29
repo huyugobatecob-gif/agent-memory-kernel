@@ -3,6 +3,9 @@
 This demo shows how the same kernel can support iterative project memory:
 successes, failures, attempts, and reusable lessons.
 
+Loop memory is an optional domain pack over the kernel contract, not a core
+requirement. See [`docs/kernel-charter.md`](../../docs/kernel-charter.md).
+
 Outcome records keep the loop-specific fields structured while also creating
 normal reviewable memory candidates.
 

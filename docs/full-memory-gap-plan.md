@@ -1,5 +1,12 @@
 # Full Memory System - Implementation Plan
 
+> Scope note: this is the historical deep gap analysis. The current governing
+> plan is [kernel-charter.md](kernel-charter.md),
+> [backlog-cutover.md](backlog-cutover.md), and
+> [implementation-plan.md](implementation-plan.md). Hosted, runtime-specific,
+> provider-specific, and domain-specific items in this document are not local
+> kernel blockers unless they are classified as `core` in the backlog cutover.
+
 **Goal:** turn Agent Memory Kernel into an automatic cross-model memory layer where a lightweight model maintains a graph tree and injects relevant node content into the prompt before any main agent answers.
 **Timeline:** 2-4 weeks for a usable local v0.2, 4-8 weeks for API/MCP, review UI, and production hardening.
 **Dependencies:** runtime adapter hook points, one low-cost LLM provider key, SQLite migration discipline, prompt-boundary policy, and realistic conversation transcripts for tests.
