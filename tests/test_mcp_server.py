@@ -44,6 +44,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_after_saved_turn", names)
             self.assertIn("memory_graph_nodes", names)
             self.assertIn("memory_graph_browser", names)
+            self.assertIn("memory_graph_optimize", names)
             self.assertIn("memory_conflict_detect", names)
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)

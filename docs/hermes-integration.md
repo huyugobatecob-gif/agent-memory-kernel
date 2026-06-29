@@ -381,6 +381,7 @@ Useful endpoints:
 - `POST /graph/items`
 - `POST /graph/nodes`
 - `POST /graph/edges`
+- `POST /graph/optimize`
 - `POST /write-policy/set`
 - `POST /write-policy/list`
 - `POST /read-policy/set`

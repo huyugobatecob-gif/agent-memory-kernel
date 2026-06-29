@@ -142,8 +142,13 @@ configuration, and real trace evals are still backlog.
 Baseline graph command normalization is implemented through
 `graph-command-v0.1`, `apply_graph_commands`, orchestrator `ingest_graph`,
 reviewable proposed commands, approval-time graph mutation, node/edge evidence,
-and idempotent graph upserts. Advanced merge/split/consistency heuristics are
-still backlog.
+and idempotent graph upserts. Baseline graph consolidation is implemented
+through `agent-memory graph optimize --mode consolidate_duplicates`,
+`/graph/optimize`, Python adapter `optimize_graph()`, and MCP
+`memory_graph_optimize`; it compacts alias-like duplicate nodes, preserves
+evidence, rewires/merges edges, and records the pass in
+`graph_optimization_runs`. Advanced split/decay/semantic consistency
+heuristics are still backlog.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and
 supersession write paths.

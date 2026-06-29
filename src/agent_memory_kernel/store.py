@@ -219,6 +219,14 @@ ROUTER_FEEDBACK_SCORES = {
     "missing": -0.5,
     "harmful": -1.0,
 }
+GRAPH_CONSOLIDATION_SUFFIXES = {
+    "project": {"project", "projects", "client", "clients", "workspace", "repo", "repository", "domain"},
+    "tool": {"tool", "tools", "app", "apps", "service", "services", "platform"},
+    "document": {"document", "documents", "doc", "docs", "file", "files"},
+    "person": {"person", "user", "actor"},
+}
+
+
 def canonical_key(label: str) -> str:
     """Normalize a graph label for deterministic dedupe."""
     tokens = query_tokens(label)
@@ -3305,6 +3313,8 @@ class MemoryStore:
         findings: list[dict[str, Any]] = []
         if optimization_type == "record_linkage":
             findings = self._find_duplicate_graph_nodes(scope)
+        elif optimization_type == "consolidate_duplicates":
+            findings = self._consolidate_duplicate_graph_nodes(scope)
         elif optimization_type == "knowledge_consistency":
             findings = self._find_graph_conflicts(scope)
         elif optimization_type == "llm_check":
@@ -8209,17 +8219,304 @@ class MemoryStore:
         }
 
     def _find_duplicate_graph_nodes(self, scope: str) -> list[dict[str, Any]]:
+        findings = []
+        for group in self._consolidatable_graph_node_groups(scope):
+            findings.append(
+                {
+                    "node_type": group[0]["node_type"],
+                    "alias_key": group[0]["consolidation_key"],
+                    "count": len(group),
+                    "canonical_keys": sorted({item["canonical_key"] for item in group}),
+                    "labels": [item["label"] for item in group],
+                    "graph_node_ids": [item["graph_node_id"] for item in group],
+                }
+            )
+        return findings
+
+    def _consolidate_duplicate_graph_nodes(self, scope: str) -> list[dict[str, Any]]:
+        findings = []
+        for group in self._consolidatable_graph_node_groups(scope):
+            findings.append(self._merge_graph_node_group(scope=scope, nodes=group))
+        return findings
+
+    def _consolidatable_graph_node_groups(self, scope: str) -> list[list[dict[str, Any]]]:
         rows = self.conn.execute(
             """
-            SELECT node_type, canonical_key, COUNT(*) AS count
+            SELECT graph_node_id, created_at, updated_at, node_type, label,
+                   canonical_key, scope, group_label, blob, summary, importance,
+                   confidence, aliases_json, topics_json, metadata_json
             FROM memory_graph_nodes
             WHERE status = 'active' AND scope = ?
-            GROUP BY node_type, canonical_key
-            HAVING COUNT(*) > 1
+            ORDER BY node_type ASC, canonical_key ASC, updated_at ASC
             """,
             (scope,),
         ).fetchall()
-        return [dict(row) for row in rows]
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for row in rows:
+            node = dict(row)
+            alias_key = self._graph_consolidation_key(
+                str(node["node_type"]),
+                str(node["label"]),
+                str(node["canonical_key"]),
+            )
+            if not alias_key:
+                continue
+            node["consolidation_key"] = alias_key
+            groups.setdefault((str(node["node_type"]), alias_key), []).append(node)
+        return [
+            group
+            for group in groups.values()
+            if len(group) > 1
+            and len({str(item["canonical_key"]) for item in group}) > 1
+        ]
+
+    @staticmethod
+    def _graph_consolidation_key(node_type: str, label: str, key: str) -> str:
+        tokens = [token for token in (key or canonical_key(label)).split("-") if token]
+        if len(tokens) <= 1:
+            return "-".join(tokens)
+        suffixes = GRAPH_CONSOLIDATION_SUFFIXES.get(node_type, set())
+        while len(tokens) > 1 and tokens[-1] in suffixes:
+            tokens.pop()
+        return "-".join(tokens)
+
+    def _merge_graph_node_group(
+        self,
+        *,
+        scope: str,
+        nodes: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        alias_key = str(nodes[0]["consolidation_key"])
+        scored_nodes = []
+        for node in nodes:
+            evidence_count = int(
+                self.conn.execute(
+                    "SELECT COUNT(*) AS count FROM node_evidence WHERE graph_node_id = ?",
+                    (node["graph_node_id"],),
+                ).fetchone()["count"]
+                or 0
+            )
+            scored_nodes.append({**node, "node_evidence_count": evidence_count})
+        winner = sorted(
+            scored_nodes,
+            key=lambda item: (
+                str(item["canonical_key"]) == alias_key,
+                int(item["node_evidence_count"]),
+                float(item["importance"] or 0),
+                -len(str(item["label"] or "")),
+            ),
+            reverse=True,
+        )[0]
+        losers = [item for item in scored_nodes if item["graph_node_id"] != winner["graph_node_id"]]
+        ts = now_iso()
+        aliases = self._ordered_text_union(
+            self._loads_json(winner["aliases_json"], []),
+            [winner["label"]],
+        )
+        topics = self._ordered_text_union(self._loads_json(winner["topics_json"], []), [])
+        blob = str(winner["blob"] or "")
+        summary = str(winner["summary"] or "")
+        metadata = self._loads_json(winner["metadata_json"], {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        history = list(metadata.get("consolidated_duplicate_nodes", []))
+        moved_node_evidence = 0
+        rewired_edges = 0
+        merged_edges = 0
+        removed_self_edges = 0
+
+        for loser in losers:
+            loser_id = str(loser["graph_node_id"])
+            aliases = self._ordered_text_union(
+                aliases,
+                [loser["label"], *self._loads_json(loser["aliases_json"], [])],
+            )
+            topics = self._ordered_text_union(topics, self._loads_json(loser["topics_json"], []))
+            blob = self._merge_blob(blob, str(loser["blob"] or ""))
+            if not summary and loser["summary"]:
+                summary = str(loser["summary"])
+            history.append(
+                {
+                    "graph_node_id": loser_id,
+                    "label": loser["label"],
+                    "canonical_key": loser["canonical_key"],
+                    "merged_at": ts,
+                }
+            )
+            moved_node_evidence += max(
+                int(
+                    self.conn.execute(
+                        "UPDATE node_evidence SET graph_node_id = ? WHERE graph_node_id = ?",
+                        (winner["graph_node_id"], loser_id),
+                    ).rowcount
+                    or 0
+                ),
+                0,
+            )
+            edge_result = self._rewire_graph_edges_for_merged_node(
+                old_node_id=loser_id,
+                new_node_id=str(winner["graph_node_id"]),
+                ts=ts,
+            )
+            rewired_edges += edge_result["rewired_edges"]
+            merged_edges += edge_result["merged_edges"]
+            removed_self_edges += edge_result["removed_self_edges"]
+            released_key = f"merged-{loser['canonical_key']}-{loser_id}"
+            self.conn.execute(
+                """
+                UPDATE memory_graph_nodes
+                SET status = 'inactive', updated_at = ?, canonical_key = ?,
+                    metadata_json = ?
+                WHERE graph_node_id = ?
+                """,
+                (
+                    ts,
+                    released_key,
+                    json.dumps(
+                        {
+                            **self._loads_json(loser["metadata_json"], {}),
+                            "merged_into_graph_node_id": winner["graph_node_id"],
+                            "merged_at": ts,
+                            "previous_canonical_key": loser["canonical_key"],
+                        },
+                        sort_keys=True,
+                    ),
+                    loser_id,
+                ),
+            )
+
+        metadata["consolidated_duplicate_nodes"] = history[-100:]
+        winner_importance = min(
+            1.0,
+            max(float(item["importance"] or 0) for item in scored_nodes) + 0.05 * len(losers),
+        )
+        self.conn.execute(
+            """
+            UPDATE memory_graph_nodes
+            SET updated_at = ?, blob = ?, summary = ?, importance = ?,
+                aliases_json = ?, topics_json = ?, metadata_json = ?
+            WHERE graph_node_id = ?
+            """,
+            (
+                ts,
+                blob,
+                summary,
+                winner_importance,
+                json.dumps(aliases, sort_keys=True),
+                json.dumps(topics, sort_keys=True),
+                json.dumps(metadata, sort_keys=True),
+                winner["graph_node_id"],
+            ),
+        )
+        return {
+            "status": "merged",
+            "node_type": winner["node_type"],
+            "alias_key": alias_key,
+            "winner_graph_node_id": winner["graph_node_id"],
+            "winner_label": winner["label"],
+            "merged_graph_node_ids": [item["graph_node_id"] for item in losers],
+            "merged_labels": [item["label"] for item in losers],
+            "moved_node_evidence": moved_node_evidence,
+            "rewired_edges": rewired_edges,
+            "merged_edges": merged_edges,
+            "removed_self_edges": removed_self_edges,
+        }
+
+    def _rewire_graph_edges_for_merged_node(
+        self,
+        *,
+        old_node_id: str,
+        new_node_id: str,
+        ts: str,
+    ) -> dict[str, int]:
+        rows = self.conn.execute(
+            """
+            SELECT graph_edge_id, source_graph_node_id, target_graph_node_id,
+                   edge_type, weight, evidence_count
+            FROM memory_graph_edges
+            WHERE source_graph_node_id = ? OR target_graph_node_id = ?
+            """,
+            (old_node_id, old_node_id),
+        ).fetchall()
+        rewired_edges = 0
+        merged_edges = 0
+        removed_self_edges = 0
+        for row in rows:
+            edge_id = str(row["graph_edge_id"])
+            new_source = new_node_id if row["source_graph_node_id"] == old_node_id else row["source_graph_node_id"]
+            new_target = new_node_id if row["target_graph_node_id"] == old_node_id else row["target_graph_node_id"]
+            if new_source == new_target:
+                self.conn.execute(
+                    "UPDATE memory_graph_edges SET status = 'inactive', updated_at = ? WHERE graph_edge_id = ?",
+                    (ts, edge_id),
+                )
+                removed_self_edges += 1
+                continue
+            existing = self.conn.execute(
+                """
+                SELECT graph_edge_id, weight, evidence_count
+                FROM memory_graph_edges
+                WHERE source_graph_node_id = ?
+                  AND target_graph_node_id = ?
+                  AND edge_type = ?
+                  AND graph_edge_id != ?
+                LIMIT 1
+                """,
+                (new_source, new_target, row["edge_type"], edge_id),
+            ).fetchone()
+            if existing:
+                self.conn.execute(
+                    "UPDATE edge_evidence SET graph_edge_id = ? WHERE graph_edge_id = ?",
+                    (existing["graph_edge_id"], edge_id),
+                )
+                self.conn.execute(
+                    """
+                    UPDATE memory_graph_edges
+                    SET updated_at = ?, status = 'active', weight = ?,
+                        evidence_count = ?
+                    WHERE graph_edge_id = ?
+                    """,
+                    (
+                        ts,
+                        min(10.0, float(existing["weight"] or 0) + float(row["weight"] or 0)),
+                        int(existing["evidence_count"] or 0) + int(row["evidence_count"] or 0),
+                        existing["graph_edge_id"],
+                    ),
+                )
+                self.conn.execute(
+                    "UPDATE memory_graph_edges SET status = 'inactive', updated_at = ? WHERE graph_edge_id = ?",
+                    (ts, edge_id),
+                )
+                merged_edges += 1
+                continue
+            self.conn.execute(
+                """
+                UPDATE memory_graph_edges
+                SET updated_at = ?, source_graph_node_id = ?, target_graph_node_id = ?,
+                    status = 'active'
+                WHERE graph_edge_id = ?
+                """,
+                (ts, new_source, new_target, edge_id),
+            )
+            rewired_edges += 1
+        return {
+            "rewired_edges": rewired_edges,
+            "merged_edges": merged_edges,
+            "removed_self_edges": removed_self_edges,
+        }
+
+    @staticmethod
+    def _ordered_text_union(*groups: Any) -> list[str]:
+        result: list[str] = []
+        for group in groups:
+            if group is None:
+                continue
+            values = group if isinstance(group, (list, tuple, set)) else [group]
+            for value in values:
+                text = str(value or "").strip()
+                if text and text not in result:
+                    result.append(text)
+        return result
 
     def _find_graph_conflicts(self, scope: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(

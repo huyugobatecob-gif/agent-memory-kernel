@@ -293,6 +293,11 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             limit=int(payload.get("limit", 50) or 50),
             evidence_limit=int(payload.get("evidence_limit", 3) or 3),
         )
+    if path == "/graph/optimize":
+        return store.optimize_graph(
+            str(payload.get("mode", payload.get("optimization_type", "record_linkage"))),
+            scope=str(payload.get("scope", "professional")),
+        )
     if path == "/write-policy/set":
         return store.set_write_policy(**payload)
     if path == "/write-policy/list":

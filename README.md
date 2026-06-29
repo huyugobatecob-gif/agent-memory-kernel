@@ -328,6 +328,7 @@ agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xx
 agent-memory memory-quality --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --scope professional
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
+agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates --scope professional
 ```
 
 Inspect the formal memory contract and run the deterministic full-memory gate:

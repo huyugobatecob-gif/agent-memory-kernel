@@ -1980,6 +1980,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="record_linkage",
         choices=[
             "record_linkage",
+            "consolidate_duplicates",
             "knowledge_consistency",
             "llm_check",
             "interests_reconnect",

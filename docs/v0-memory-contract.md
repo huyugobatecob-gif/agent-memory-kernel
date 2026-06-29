@@ -379,11 +379,16 @@ state into raw chat logs.
 Supported v0 modes:
 
 - `record_linkage`
+- `consolidate_duplicates`
 - `knowledge_consistency`
 - `llm_check`
 - `interests_reconnect`
 - `hemisphere_markup`
 - `brain_calibration`
+
+`consolidate_duplicates` safely compacts alias-like active graph nodes within
+one scope and node type. It preserves node evidence, rewires or merges edges,
+marks duplicate nodes inactive, and records the merge in `findings_json`.
 
 Each run stores `before_json`, `after_json`, and `findings_json`.
 

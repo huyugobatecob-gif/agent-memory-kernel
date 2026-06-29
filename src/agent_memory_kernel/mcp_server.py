@@ -792,6 +792,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_graph_optimize": {
+        "endpoint": "/graph/optimize",
+        "description": "Run a graph maintenance pass such as duplicate consolidation.",
+        "inputSchema": _schema(
+            {
+                "mode": _string(
+                    "Optimization mode: record_linkage, consolidate_duplicates, knowledge_consistency, llm_check, interests_reconnect, hemisphere_markup, or brain_calibration.",
+                    "record_linkage",
+                ),
+                "scope": _string("Memory scope/lane.", "professional"),
+            }
+        ),
+    },
     "memory_current_best": {
         "endpoint": "/current-best",
         "description": "Explain current-best retrieval and conflict suppression for a query.",

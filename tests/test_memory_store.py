@@ -1150,6 +1150,108 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(keeper_count, 1)
             store.close()
 
+    def test_graph_consolidation_merges_alias_nodes_and_edges(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.apply_graph_commands(
+                [
+                    {
+                        "command": "upsert_edge",
+                        "source": {"type": "project", "label": "demo-site"},
+                        "target": {"type": "tool", "label": "WordPress"},
+                        "edge_type": "uses",
+                        "evidence": "demo-site uses WordPress.",
+                    },
+                    {
+                        "command": "upsert_edge",
+                        "source": {"type": "project", "label": "demo-site project"},
+                        "target": {"type": "tool", "label": "WordPress"},
+                        "edge_type": "uses",
+                        "evidence": "demo-site project uses WordPress.",
+                    },
+                ],
+                scope="professional",
+                actor="keeper",
+                source_type="system",
+                auto_approve=True,
+            )
+
+            project_labels = [
+                node["label"]
+                for node in store.list_graph_nodes(scope="professional", node_type="project")
+            ]
+            self.assertIn("demo-site", project_labels)
+            self.assertIn("demo-site project", project_labels)
+
+            linked = handle_api_request(
+                store,
+                "/graph/optimize",
+                {"mode": "record_linkage", "scope": "professional"},
+            )
+            self.assertEqual(linked["findings"][0]["alias_key"], "demo-site")
+
+            consolidated = handle_api_request(
+                store,
+                "/graph/optimize",
+                {"mode": "consolidate_duplicates", "scope": "professional"},
+            )
+            self.assertEqual(consolidated["optimization_type"], "consolidate_duplicates")
+            self.assertEqual(len(consolidated["findings"]), 1)
+            finding = consolidated["findings"][0]
+            self.assertEqual(finding["status"], "merged")
+            self.assertEqual(finding["alias_key"], "demo-site")
+            self.assertEqual(finding["winner_label"], "demo-site")
+            self.assertEqual(finding["merged_labels"], ["demo-site project"])
+            self.assertGreaterEqual(finding["moved_node_evidence"], 1)
+            self.assertGreaterEqual(finding["merged_edges"], 1)
+            self.assertEqual(consolidated["after"]["nodes"], consolidated["before"]["nodes"] - 1)
+            self.assertEqual(
+                consolidated["after"]["edges"],
+                consolidated["before"]["edges"]
+                - finding["merged_edges"]
+                - finding["removed_self_edges"],
+            )
+
+            active_projects = store.list_graph_nodes(scope="professional", node_type="project")
+            active_project_labels = [node["label"] for node in active_projects]
+            self.assertIn("demo-site", active_project_labels)
+            self.assertNotIn("demo-site project", active_project_labels)
+            winner = next(node for node in active_projects if node["label"] == "demo-site")
+            aliases = json.loads(winner["aliases_json"])
+            self.assertIn("demo-site project", aliases)
+
+            uses_edges = [
+                edge
+                for edge in store.list_graph_edges(scope="professional")
+                if edge["edge_type"] == "uses"
+                and edge["source_label"] == "demo-site"
+                and edge["target_label"] == "WordPress"
+            ]
+            self.assertEqual(len(uses_edges), 1)
+            self.assertGreaterEqual(uses_edges[0]["evidence_count"], 2)
+
+            inactive = store.conn.execute(
+                """
+                SELECT status, canonical_key, metadata_json
+                FROM memory_graph_nodes
+                WHERE label = 'demo-site project'
+                """
+            ).fetchone()
+            self.assertEqual(inactive["status"], "inactive")
+            self.assertTrue(str(inactive["canonical_key"]).startswith("merged-demo-site-project-"))
+            self.assertEqual(
+                json.loads(inactive["metadata_json"])["merged_into_graph_node_id"],
+                winner["graph_node_id"],
+            )
+            runs = store.list_graph_optimization_runs(scope="professional", limit=5)
+            self.assertIn(
+                "consolidate_duplicates",
+                {run["optimization_type"] for run in runs},
+            )
+            store.close()
+
     def test_memory_tree_pack_returns_branches_and_raw_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

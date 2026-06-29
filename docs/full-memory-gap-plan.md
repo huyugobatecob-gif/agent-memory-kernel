@@ -278,6 +278,11 @@ Already present:
   `build_prompt_context`, `retrieve_context`, `record_turn`,
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`, exposed through the
   Python adapter layer plus HTTP/MCP aliases.
+- Baseline graph consolidation through `agent-memory graph optimize --mode
+  consolidate_duplicates`, `/graph/optimize`, Python adapter
+  `optimize_graph()`, and MCP `memory_graph_optimize`; alias-like duplicate
+  graph nodes are compacted with evidence preservation, edge rewiring/merging,
+  inactive duplicate nodes, and auditable `graph_optimization_runs`.
 - Provider-neutral prompt envelope via `before_model_call`.
 - Post-turn Keeper candidate path via `after_saved_turn`.
 - Queued Keeper jobs and worker processing for post-turn analysis.
@@ -334,8 +339,9 @@ Remaining for full memory:
   and export retention endpoints.
 - Broader runnable reference loops across real external runtimes and hosted
   deployments beyond the baseline provider-neutral local loop.
-- Graph consolidation/compaction behavior beyond the baseline idempotent
-  post-turn Keeper retry guard and graph command upserts.
+- Advanced graph consolidation/compaction behavior beyond the baseline
+  alias-node merge pass, including split, decay, semantic consistency, and
+  scheduled maintenance policies.
 - Production LLM-backed Keeper eval suite, managed model configuration,
   provider-specific adapters, and reviewed extraction prompts for
   natural-language graph updates beyond the baseline schema contract.
@@ -538,8 +544,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 `graph-command-v0.1` commands. Pending commands are reviewable and do not mutate
 the graph; approved commands apply through the normal memory lifecycle, create
 or update graph nodes and edges, attach evidence, record `graph_commands`, and
-dedupe repeated node/edge writes. Remaining work is richer merge/split
-heuristics, destructive command review UX, and broader graph consistency evals.
+dedupe repeated node/edge writes. Baseline graph consolidation is implemented
+through `consolidate_duplicates`: alias-like duplicate nodes are merged,
+evidence is preserved, edges are rewired or merged, and the pass is auditable.
+Remaining work is richer split/decay heuristics, destructive command review UX,
+and broader graph consistency evals.
 
 ### Step 6: Build The Memory Router
 
