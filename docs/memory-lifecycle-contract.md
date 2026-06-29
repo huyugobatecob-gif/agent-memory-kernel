@@ -83,6 +83,8 @@ Required propagation:
 
 - update active memory text;
 - record before/after text in `memory_revisions`;
+- return a `memory-diff-v0.1` summary with before/after excerpts and unified
+  diff lines for operator review;
 - record a `derived_invalidations` entry with refreshed graph/evidence and
   prompt-pack surfaces;
 - add correction audit event;
@@ -102,6 +104,7 @@ Required propagation:
 
 - select an explicit revision or the latest revision for that memory;
 - restore the revision's `previous_text`;
+- return a `memory-diff-v0.1` summary showing corrected text -> restored text;
 - record a new rollback revision with `rollback_of_revision_id`;
 - record a `derived_invalidations` entry with refreshed graph/evidence and
   prompt-pack surfaces;

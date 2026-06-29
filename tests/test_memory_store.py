@@ -1199,16 +1199,23 @@ class MemoryStoreTests(unittest.TestCase):
             )
             memory_id = result["candidates"][0]["memory_id"]
 
-            store.correct_memory(
+            correction = store.correct_memory(
                 memory_id,
                 "Decision: project rollback-site target market is B2B SaaS.",
                 actor="reviewer",
                 reason="user corrected target market",
             )
+            self.assertEqual(correction["status"], "corrected")
+            self.assertEqual(correction["diff"]["version"], "memory-diff-v0.1")
+            self.assertTrue(correction["diff"]["changed"])
+            self.assertIn("-Decision: project rollback-site target market is ecommerce.", correction["diff"]["unified_diff"])
+            self.assertIn("+Decision: project rollback-site target market is B2B SaaS.", correction["diff"]["unified_diff"])
             revisions = store.list_memory_revisions(memory_id)
             self.assertEqual(len(revisions), 1)
             self.assertIn("ecommerce", revisions[0]["previous_text"])
             self.assertIn("B2B SaaS", revisions[0]["new_text"])
+            self.assertEqual(revisions[0]["diff"]["version"], "memory-diff-v0.1")
+            self.assertIn("B2B SaaS", revisions[0]["diff"]["new_excerpt"])
             self.assertEqual(revisions[0]["reason"], "user corrected target market")
             self.assertEqual(store.search("ecommerce", scope="professional"), [])
             self.assertTrue(store.search("B2B SaaS", scope="professional"))
@@ -1220,6 +1227,8 @@ class MemoryStoreTests(unittest.TestCase):
                 reason="restore original market",
             )
             self.assertEqual(rollback["status"], "rolled_back")
+            self.assertEqual(rollback["diff"]["version"], "memory-diff-v0.1")
+            self.assertIn("ecommerce", rollback["diff"]["new_excerpt"])
             self.assertEqual(store.search("B2B SaaS", scope="professional"), [])
             self.assertTrue(store.search("ecommerce", scope="professional"))
             rollback_revisions = store.list_memory_revisions(memory_id)
@@ -1272,6 +1281,8 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(preview["dry_run"])
             self.assertEqual(preview["planned_count"], 2)
             self.assertEqual(preview["changed_count"], 0)
+            self.assertEqual(preview["results"][0]["diff"]["version"], "memory-diff-v0.1")
+            self.assertIn("Statamic", preview["results"][0]["diff"]["new_excerpt"])
             self.assertTrue(store.search("WordPress", scope="professional"))
             self.assertTrue(store.search("OldSEO", scope="professional"))
 
@@ -1304,6 +1315,8 @@ class MemoryStoreTests(unittest.TestCase):
                 [item["status"] for item in applied["results"]],
                 ["corrected", "deleted"],
             )
+            self.assertEqual(applied["results"][0]["diff"]["version"], "memory-diff-v0.1")
+            self.assertTrue(applied["results"][0]["revision_id"].startswith("revn_"))
             self.assertTrue(store.search("Statamic", scope="professional"))
             self.assertEqual(store.search("WordPress", scope="professional"), [])
             self.assertEqual(store.search("OldSEO", scope="professional"), [])
@@ -3809,10 +3822,14 @@ class MemoryStoreTests(unittest.TestCase):
                     "auto_approve": True,
                 },
             )["candidates"][0]["memory_id"]
-            store.correct_memory(
-                rollback_memory,
-                "Decision: project api-rollback owner is Bob.",
-                actor="api-reviewer",
+            corrected = handle_api_request(
+                store,
+                "/memory/correct",
+                {
+                    "memory_id": rollback_memory,
+                    "text": "Decision: project api-rollback owner is Bob.",
+                    "actor": "api-reviewer",
+                },
             )
             revisions = handle_api_request(
                 store,
@@ -3898,8 +3915,12 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(conflict["status"], "open")
             self.assertEqual(supersede["status"], "superseded")
             self.assertTrue(conflicts["conflicts"])
+            self.assertEqual(corrected["diff"]["version"], "memory-diff-v0.1")
+            self.assertTrue(corrected["revision_id"].startswith("revn_"))
             self.assertEqual(len(revisions["revisions"]), 1)
+            self.assertEqual(revisions["revisions"][0]["diff"]["version"], "memory-diff-v0.1")
             self.assertEqual(rollback["status"], "rolled_back")
+            self.assertEqual(rollback["diff"]["version"], "memory-diff-v0.1")
             self.assertTrue(store.search("Alice", scope="professional"))
             self.assertEqual(outcome["status"], "active")
             self.assertEqual(len(outcomes["outcomes"]), 1)

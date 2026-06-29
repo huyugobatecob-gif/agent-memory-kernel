@@ -675,8 +675,7 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/memory/correct":
         memory_id = str(payload.pop("memory_id"))
         text = str(payload.pop("text"))
-        store.correct_memory(memory_id, text, **payload)
-        return {"memory_id": memory_id, "status": "corrected"}
+        return store.correct_memory(memory_id, text, **payload)
     if path == "/memory/lifecycle-batch":
         return store.batch_memory_lifecycle(
             payload.get("operations", []),

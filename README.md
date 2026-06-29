@@ -271,9 +271,11 @@ agent-memory rollback --db .memory/demo.db mem_xxxxxxxxxxxxxxxx \
   --reason "restore previous wording"
 ```
 
-Corrections store before/after text in `memory_revisions`. Rollback restores
-the prior text, propagates the change to memory items and graph summaries, and
-records a new rollback revision plus audit event.
+Corrections return a `memory-diff-v0.1` summary with before/after excerpts and
+unified diff lines, then store the same before/after text in
+`memory_revisions`. Rollback restores the prior text, returns the same diff
+shape, propagates the change to memory items and graph summaries, and records a
+new rollback revision plus audit event.
 
 Record a loop outcome:
 

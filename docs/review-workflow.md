@@ -91,6 +91,11 @@ agent-memory distrust --db .memory/demo.db mem_xxxxxxxxxxxxxxxx --actor reviewer
 agent-memory expire --db .memory/demo.db mem_xxxxxxxxxxxxxxxx --actor reviewer
 ```
 
+Correction responses, rollback responses, revision history, and
+`lifecycle-batch` correct operations include a `memory-diff-v0.1` summary with
+before/after excerpts and unified diff lines. Use `--dry-run` on
+`lifecycle-batch` to inspect the diff before mutating active memory.
+
 HTTP endpoints:
 
 - `POST /review/inbox`

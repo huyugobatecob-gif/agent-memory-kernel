@@ -294,6 +294,7 @@ KERNEL_INVARIANTS = [
         "code_paths": [
             "MemoryStore.correct_memory",
             "MemoryStore.rollback_memory",
+            "MemoryStore.list_memory_revisions",
             "MemoryStore.delete_memory",
             "MemoryStore.distrust_memory",
             "MemoryStore.expire_memory",
@@ -301,6 +302,7 @@ KERNEL_INVARIANTS = [
             "MemoryStore.derived_invalidations",
         ],
         "verifiers": [
+            "memory_lifecycle_diff_is_human_readable",
             "derived_invalidation_is_auditable",
             "golden_trace_import_restores_lifecycle_tombstones",
             "golden_trace_import_preserves_policy_metadata",

@@ -246,6 +246,15 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "memory_lifecycle_diff_is_human_readable",
+                "requires": [
+                    "correction returns a memory-diff version with before/after excerpts",
+                    "revision history includes the same human-readable diff shape",
+                    "rollback returns a diff showing corrected text restored to prior text",
+                    "lifecycle batch dry-run exposes the diff before mutating memory",
+                ],
+            },
+            {
                 "id": "prompt_envelope_contains_selected_content_only",
                 "requires": [
                     "MEMORY_TREE_SUPPLEMENT contains expanded selected memory content",
@@ -2373,6 +2382,73 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         },
     )
 
+    diff_store = MemoryStore(":memory:")
+    try:
+        diff_store.init_db()
+        diff_memory = diff_store.remember(
+            "Decision: conformance diff fixture checksum is red.",
+            scope=CONFORMANCE_SCOPE,
+            source_ref="conformance://diff-fixture",
+            auto_approve=True,
+        )["candidates"][0]["memory_id"]
+        correction = diff_store.correct_memory(
+            diff_memory,
+            "Decision: conformance diff fixture checksum is blue.",
+            actor="conformance-reviewer",
+            reason="exercise human-readable diff",
+        )
+        diff_revisions = diff_store.list_memory_revisions(diff_memory, limit=1)
+        rollback = diff_store.rollback_memory(
+            diff_memory,
+            revision_id=str(diff_revisions[0]["revision_id"]) if diff_revisions else "",
+            actor="conformance-reviewer",
+            reason="restore diff fixture",
+        )
+        dry_run_memory = diff_store.remember(
+            "Decision: conformance dry-run fixture CMS is WordPress.",
+            scope=CONFORMANCE_SCOPE,
+            source_ref="conformance://diff-dry-run",
+            auto_approve=True,
+        )["candidates"][0]["memory_id"]
+        dry_run = diff_store.batch_memory_lifecycle(
+            [
+                {
+                    "action": "correct",
+                    "memory_id": dry_run_memory,
+                    "text": "Decision: conformance dry-run fixture CMS is Statamic.",
+                }
+            ],
+            actor="conformance-reviewer",
+            reason="preview human-readable diff",
+            dry_run=True,
+        )
+        correction_diff = correction.get("diff", {})
+        revision_diff = diff_revisions[0].get("diff", {}) if diff_revisions else {}
+        rollback_diff = rollback.get("diff", {})
+        dry_run_diff = dry_run.get("results", [{}])[0].get("diff", {})
+    finally:
+        diff_store.close()
+    _append_result(
+        results,
+        "memory_lifecycle_diff_is_human_readable",
+        correction_diff.get("version") == "memory-diff-v0.1"
+        and revision_diff.get("version") == "memory-diff-v0.1"
+        and rollback_diff.get("version") == "memory-diff-v0.1"
+        and dry_run_diff.get("version") == "memory-diff-v0.1"
+        and "red" in correction_diff.get("previous_excerpt", "")
+        and "blue" in correction_diff.get("new_excerpt", "")
+        and "red" in rollback_diff.get("new_excerpt", "")
+        and "Statamic" in dry_run_diff.get("new_excerpt", "")
+        and bool(correction_diff.get("unified_diff"))
+        and dry_run.get("dry_run") is True,
+        {
+            "correction_diff": correction_diff,
+            "revision_diff": revision_diff,
+            "rollback_diff": rollback_diff,
+            "dry_run_diff": dry_run_diff,
+        },
+    )
+
     audit_store = MemoryStore(":memory:")
     try:
         audit_store.init_db()
@@ -2593,6 +2669,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "adapter_contract_is_published",
         "professional_memory_injected_with_provenance",
         "memory_explain_shows_why_remembered",
+        "memory_lifecycle_diff_is_human_readable",
         "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",
         "personal_lane_absent_from_derived_surfaces",

@@ -1554,9 +1554,9 @@ def cmd_vault_import(args: argparse.Namespace) -> int:
 def cmd_correct(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
-    store.correct_memory(args.memory_id, args.text, actor=args.actor, reason=args.reason)
+    result = store.correct_memory(args.memory_id, args.text, actor=args.actor, reason=args.reason)
     store.close()
-    print_json({"memory_id": args.memory_id, "status": "corrected"})
+    print_json(result)
     return 0
 
 

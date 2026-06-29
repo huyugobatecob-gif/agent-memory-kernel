@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import difflib
 import hashlib
 import hmac
 import json
@@ -109,6 +110,7 @@ READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
 MEMORY_QUALITY_VERSION = "memory-quality-v0.2"
 MEMORY_EXPLAIN_VERSION = "memory-explain-v0.1"
+MEMORY_DIFF_VERSION = "memory-diff-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 IDENTITY_DELEGATION_VERSION = "identity-delegation-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
@@ -9363,6 +9365,7 @@ class MemoryStore:
                 "actor": revision["actor"],
                 "previous_text_excerpt": self._excerpt(revision["previous_text"], 500),
                 "new_text_excerpt": self._excerpt(revision["new_text"], 500),
+                "diff": self._memory_text_diff(revision["previous_text"], revision["new_text"]),
                 "reason": revision["reason"],
                 "rollback_of_revision_id": revision["rollback_of_revision_id"],
                 "metadata": self._loads_json(revision["metadata_json"], {}),
@@ -10275,7 +10278,7 @@ class MemoryStore:
         *,
         actor: str = "user",
         reason: str = "",
-    ) -> None:
+    ) -> dict[str, Any]:
         text = (text or "").strip()
         if not text:
             raise ValueError("text must not be empty")
@@ -10286,7 +10289,12 @@ class MemoryStore:
             raise KeyError(f"memory not found: {memory_id}")
         self._enforce_write_policy(actor, row["scope"], "correct")
         if text == row["text"]:
-            return
+            return {
+                "memory_id": memory_id,
+                "status": "unchanged",
+                "diff": self._memory_text_diff(row["text"], text),
+            }
+        diff = self._memory_text_diff(row["text"], text)
         revision_id = self._record_memory_revision(
             memory_id,
             previous_text=row["text"],
@@ -10315,6 +10323,13 @@ class MemoryStore:
         )
         self._audit("correct", "memory", memory_id, actor=actor, details={"revision_id": revision_id})
         self.conn.commit()
+        return {
+            "memory_id": memory_id,
+            "status": "corrected",
+            "revision_id": revision_id,
+            "diff": diff,
+            "affected": surfaces,
+        }
 
     def rollback_memory(
         self,
@@ -10339,7 +10354,9 @@ class MemoryStore:
                 "memory_id": memory_id,
                 "status": "unchanged",
                 "revision_id": revision["revision_id"],
+                "diff": self._memory_text_diff(row["text"], restored_text),
             }
+        diff = self._memory_text_diff(row["text"], restored_text)
         rollback_revision_id = self._record_memory_revision(
             memory_id,
             previous_text=row["text"],
@@ -10388,6 +10405,8 @@ class MemoryStore:
             "status": "rolled_back",
             "revision_id": revision["revision_id"],
             "rollback_revision_id": rollback_revision_id,
+            "diff": diff,
+            "affected": surfaces,
         }
 
     def list_memory_revisions(self, memory_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
@@ -10410,6 +10429,7 @@ class MemoryStore:
                 "actor": row["actor"],
                 "previous_text": row["previous_text"],
                 "new_text": row["new_text"],
+                "diff": self._memory_text_diff(row["previous_text"], row["new_text"]),
                 "reason": row["reason"],
                 "rollback_of_revision_id": row["rollback_of_revision_id"],
                 "metadata": self._loads_json(row["metadata_json"], {}),
@@ -10522,14 +10542,17 @@ class MemoryStore:
             if not text:
                 raise ValueError("text must not be empty for correct action")
             result["text"] = text
+            result["diff"] = self._memory_text_diff(row["text"], text)
             if text == row["text"]:
                 result["status"] = "would_skip_unchanged" if dry_run else "unchanged"
                 return result
             if dry_run:
                 result["status"] = "would_correct"
                 return result
-            self.correct_memory(memory_id, text, actor=actor, reason=reason)
+            correction = self.correct_memory(memory_id, text, actor=actor, reason=reason)
             result["status"] = "corrected"
+            result["revision_id"] = correction.get("revision_id", "")
+            result["diff"] = correction.get("diff", result["diff"])
             result["new_status"] = self._memory_row(memory_id)["status"]
             return result
         target_status_by_action = {
@@ -15834,6 +15857,51 @@ class MemoryStore:
                 "confidence": candidate["confidence"],
             }
         ]
+
+    def _memory_text_diff(
+        self,
+        previous_text: str,
+        new_text: str,
+        *,
+        context_lines: int = 2,
+    ) -> dict[str, Any]:
+        previous_text = str(previous_text or "")
+        new_text = str(new_text or "")
+        previous_lines = previous_text.splitlines() or ([previous_text] if previous_text else [])
+        new_lines = new_text.splitlines() or ([new_text] if new_text else [])
+        diff_lines = list(
+            difflib.unified_diff(
+                previous_lines,
+                new_lines,
+                fromfile="previous",
+                tofile="current",
+                lineterm="",
+                n=max(0, min(int(context_lines), 5)),
+            )
+        )
+        removed = sum(1 for line in diff_lines if line.startswith("-") and not line.startswith("---"))
+        added = sum(1 for line in diff_lines if line.startswith("+") and not line.startswith("+++"))
+        changed = previous_text != new_text
+        if not changed:
+            summary = "unchanged"
+        elif added and removed:
+            summary = f"changed {removed} removed line(s), {added} added line(s)"
+        elif added:
+            summary = f"added {added} line(s)"
+        else:
+            summary = f"removed {removed} line(s)"
+        return {
+            "version": MEMORY_DIFF_VERSION,
+            "changed": changed,
+            "summary": summary,
+            "previous_excerpt": self._excerpt(previous_text, 700),
+            "new_excerpt": self._excerpt(new_text, 700),
+            "previous_length": len(previous_text),
+            "new_length": len(new_text),
+            "removed_line_count": removed,
+            "added_line_count": added,
+            "unified_diff": diff_lines,
+        }
 
     def _memory_explain_why_exists(
         self,

@@ -136,9 +136,11 @@ Operator and graph tools:
   operator.
 - `memory_notification_ack`: acknowledge a notification without resolving it.
 - `memory_notification_resolve`: resolve a notification after action is done.
-- `memory_correct`: correct active memory text.
+- `memory_correct`: correct active memory text and return a
+  `memory-diff-v0.1` before/after summary.
 - `memory_lifecycle_batch`: dry-run or apply batch correct/delete/distrust/expire
-  operations for active memories.
+  operations for active memories; correct operations include the same diff
+  summary in dry-run and apply results.
 - `memory_delete`: soft-delete active memory and suppress retrieval.
 - `memory_distrust`: keep memory for audit but suppress retrieval.
 - `memory_expire`: expire active memory and suppress retrieval.
