@@ -120,6 +120,7 @@ BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
 BRAIN_STYLE_CERTIFICATION_VERSION = "brain-style-certification-v0.1"
 RESTORE_DRILL_VERSION = "database-restore-drill-v0.1"
 MIGRATION_CHANGELOG_VERSION = "migration-changelog-v0.1"
+RESTORE_DRILL_SCHEDULE_VERSION = "restore-drill-schedule-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -2205,6 +2206,16 @@ class MemoryStore:
                 "expires_at",
                 "status",
             ],
+            "restore_drill_schedules": [
+                "schedule_id",
+                "name",
+                "status",
+                "scope",
+                "probe_query",
+                "interval_hours",
+                "next_due_at",
+                "last_status",
+            ],
         }
         checks: list[dict[str, Any]] = []
 
@@ -2331,6 +2342,13 @@ class MemoryStore:
                 "cli": "agent-memory restore-drill --db <db>",
                 "http": "/restore/drill",
                 "mcp": "memory_restore_drill",
+            },
+            {
+                "name": "restore-drill-schedule-run-due",
+                "purpose": "run due recurring restore drills under an external supervisor",
+                "cli": "agent-memory restore-drill-schedule --db <db> run-due --limit 5",
+                "http": "/restore/drill/schedule/run-due",
+                "mcp": "memory_restore_drill_schedule_run_due",
             },
             {
                 "name": "conformance-certify",
@@ -2590,6 +2608,288 @@ class MemoryStore:
         finally:
             if temp_dir is not None:
                 temp_dir.cleanup()
+
+    def set_restore_drill_schedule(
+        self,
+        *,
+        name: str,
+        interval_hours: int = 24,
+        scope: str | None = None,
+        probe_query: str = "",
+        start_at: str = "",
+        artifact_dir: str | Path = "",
+        retain_artifacts: bool = False,
+        status: str = "active",
+        actor: str = "system",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a local restore-drill schedule."""
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("restore drill schedule name is required")
+        status = (status or "active").strip().lower()
+        if status not in {"active", "paused"}:
+            raise ValueError("restore drill schedule status must be active or paused")
+        interval = int(interval_hours or 0)
+        if interval < 1 or interval > 24 * 365:
+            raise ValueError("interval_hours must be between 1 and 8760")
+        normalized_scope = normalize_scope(scope) if scope and scope != "all" else "all"
+        due_at = self._normalize_restore_drill_schedule_due_at(start_at or now_iso())
+        artifact_dir_text = str(artifact_dir or "")
+        existing = self.conn.execute(
+            """
+            SELECT schedule_id
+            FROM restore_drill_schedules
+            WHERE name = ?
+            """,
+            (name,),
+        ).fetchone()
+        ts = now_iso()
+        if existing:
+            schedule_id = str(existing["schedule_id"])
+            self.conn.execute(
+                """
+                UPDATE restore_drill_schedules
+                SET updated_at = ?, status = ?, scope = ?, probe_query = ?,
+                    interval_hours = ?, artifact_dir = ?, retain_artifacts = ?,
+                    next_due_at = ?, actor = ?, metadata_json = ?
+                WHERE schedule_id = ?
+                """,
+                (
+                    ts,
+                    status,
+                    normalized_scope,
+                    probe_query or "",
+                    interval,
+                    artifact_dir_text,
+                    1 if retain_artifacts else 0,
+                    due_at,
+                    actor,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    schedule_id,
+                ),
+            )
+        else:
+            schedule_id = new_id("rds")
+            self.conn.execute(
+                """
+                INSERT INTO restore_drill_schedules
+                  (schedule_id, created_at, updated_at, name, status, scope,
+                   probe_query, interval_hours, artifact_dir, retain_artifacts,
+                   next_due_at, actor, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    schedule_id,
+                    ts,
+                    ts,
+                    name,
+                    status,
+                    normalized_scope,
+                    probe_query or "",
+                    interval,
+                    artifact_dir_text,
+                    1 if retain_artifacts else 0,
+                    due_at,
+                    actor,
+                    json.dumps(metadata or {}, sort_keys=True),
+                ),
+            )
+        self._audit(
+            "restore_drill_schedule_set",
+            "restore_drill_schedule",
+            schedule_id,
+            actor=actor,
+            details={
+                "name": name,
+                "status": status,
+                "scope": normalized_scope,
+                "interval_hours": interval,
+                "next_due_at": due_at,
+            },
+        )
+        self.conn.commit()
+        return self._restore_drill_schedule_to_dict(
+            self._restore_drill_schedule_row(schedule_id)
+        )
+
+    def list_restore_drill_schedules(
+        self,
+        *,
+        status: str = "active",
+        due_only: bool = False,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """List local restore-drill schedules and due status."""
+        status = (status or "active").strip().lower()
+        if status not in {"active", "paused", "all"}:
+            raise ValueError("restore drill schedule status must be active, paused, or all")
+        row_limit = max(1, min(int(limit or 50), 200))
+        if status == "all":
+            rows = self.conn.execute(
+                """
+                SELECT *
+                FROM restore_drill_schedules
+                ORDER BY next_due_at ASC, updated_at DESC
+                LIMIT ?
+                """,
+                (row_limit,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """
+                SELECT *
+                FROM restore_drill_schedules
+                WHERE status = ?
+                ORDER BY next_due_at ASC, updated_at DESC
+                LIMIT ?
+                """,
+                (status, row_limit),
+            ).fetchall()
+        schedules = [self._restore_drill_schedule_to_dict(row) for row in rows]
+        if due_only:
+            schedules = [item for item in schedules if item["due"]["due"]]
+        due_count = sum(1 for item in schedules if item["due"]["due"])
+        overdue_count = sum(1 for item in schedules if item["due"]["overdue"])
+        return {
+            "version": RESTORE_DRILL_SCHEDULE_VERSION,
+            "status": "warn" if overdue_count else "pass",
+            "filter": {"status": status, "due_only": bool(due_only)},
+            "count": len(schedules),
+            "due_count": due_count,
+            "overdue_count": overdue_count,
+            "schedules": schedules,
+            "recommended_commands": {
+                "set": "agent-memory restore-drill-schedule set --name nightly --interval-hours 24",
+                "run_due": "agent-memory restore-drill-schedule run-due --limit 5",
+                "inspect": "agent-memory restore-drill-schedule list --status all",
+            },
+        }
+
+    def run_due_restore_drill_schedules(
+        self,
+        *,
+        limit: int = 5,
+        actor: str = "scheduler",
+        include_not_due: bool = False,
+    ) -> dict[str, Any]:
+        """Run active restore-drill schedules that are due."""
+        row_limit = max(1, min(int(limit or 5), 50))
+        listed = self.list_restore_drill_schedules(
+            status="active",
+            due_only=not include_not_due,
+            limit=row_limit,
+        )
+        runs: list[dict[str, Any]] = []
+        for schedule in listed["schedules"][:row_limit]:
+            row = self._restore_drill_schedule_row(str(schedule["schedule_id"]))
+            run_started = datetime.now(timezone.utc).replace(microsecond=0)
+            backup_path, target_path = self._restore_drill_schedule_artifact_paths(
+                row,
+                run_started=run_started,
+            )
+            result: dict[str, Any]
+            error = ""
+            try:
+                result = self.restore_drill(
+                    backup_path=backup_path,
+                    target_path=target_path,
+                    scope=None if row["scope"] == "all" else str(row["scope"]),
+                    probe_query=str(row["probe_query"] or ""),
+                    actor=actor,
+                    overwrite=False,
+                )
+                run_status = str(result.get("status", "fail"))
+            except Exception as exc:
+                self.conn.rollback()
+                run_status = "fail"
+                error = f"{type(exc).__name__}: {exc}"
+                result = {
+                    "version": RESTORE_DRILL_VERSION,
+                    "status": "fail",
+                    "error": error,
+                    "schedule_id": row["schedule_id"],
+                    "schedule_name": row["name"],
+                }
+            next_due_at = (
+                run_started + timedelta(hours=int(row["interval_hours"]))
+            ).replace(microsecond=0).isoformat()
+            self.conn.execute(
+                """
+                UPDATE restore_drill_schedules
+                SET updated_at = ?, last_run_at = ?, last_status = ?,
+                    last_result_json = ?, last_error = ?, next_due_at = ?
+                WHERE schedule_id = ?
+                """,
+                (
+                    now_iso(),
+                    run_started.isoformat(),
+                    run_status,
+                    json.dumps(result, sort_keys=True),
+                    error,
+                    next_due_at,
+                    row["schedule_id"],
+                ),
+            )
+            self._audit(
+                "restore_drill_schedule_run",
+                "restore_drill_schedule",
+                str(row["schedule_id"]),
+                actor=actor,
+                details={
+                    "name": row["name"],
+                    "status": run_status,
+                    "next_due_at": next_due_at,
+                    "error": error,
+                },
+            )
+            if run_status != "pass":
+                self._create_notification(
+                    topic="restore_drill",
+                    target_type="restore_drill_schedule",
+                    target_id=str(row["schedule_id"]),
+                    title="Restore drill schedule failed",
+                    message=f"Schedule {row['name']} finished with status {run_status}.",
+                    severity="high",
+                    scope=str(row["scope"] or "all"),
+                    actor=actor,
+                    action_path="/restore/drill/schedules",
+                    dedupe_key=f"restore_drill_schedule:{row['schedule_id']}",
+                    metadata={
+                        "schedule_id": row["schedule_id"],
+                        "name": row["name"],
+                        "status": run_status,
+                        "error": error,
+                    },
+                )
+            else:
+                self._resolve_notifications_for_target(
+                    target_type="restore_drill_schedule",
+                    target_id=str(row["schedule_id"]),
+                    actor=actor,
+                    reason="restore drill schedule passed",
+                )
+            self.conn.commit()
+            updated = self._restore_drill_schedule_to_dict(
+                self._restore_drill_schedule_row(str(row["schedule_id"]))
+            )
+            runs.append(
+                {
+                    "schedule": updated,
+                    "result": result,
+                    "status": run_status,
+                    "error": error,
+                }
+            )
+        failures = [item for item in runs if item["status"] != "pass"]
+        return {
+            "version": RESTORE_DRILL_SCHEDULE_VERSION,
+            "status": "fail" if failures else "pass",
+            "processed": len(runs),
+            "failed": len(failures),
+            "include_not_due": bool(include_not_due),
+            "runs": runs,
+        }
 
     def approve_candidate(self, candidate_id: str, *, actor: str = "user", reason: str = "") -> str:
         candidate = self._candidate(candidate_id)
@@ -14295,6 +14595,108 @@ class MemoryStore:
                 "source_trust": source_trust,
                 "sensitivity": sensitivity,
             },
+        )
+
+    @staticmethod
+    def _normalize_restore_drill_schedule_due_at(value: str) -> str:
+        parsed = MemoryStore._parse_notification_due_at(value)
+        if parsed is None:
+            raise ValueError("restore drill schedule start_at must be an ISO timestamp")
+        return parsed.replace(microsecond=0).isoformat()
+
+    def _restore_drill_schedule_row(self, schedule_id: str) -> sqlite3.Row:
+        row = self.conn.execute(
+            "SELECT * FROM restore_drill_schedules WHERE schedule_id = ?",
+            ((schedule_id or "").strip(),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"restore drill schedule not found: {schedule_id}")
+        return row
+
+    def _restore_drill_schedule_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "version": RESTORE_DRILL_SCHEDULE_VERSION,
+            "schedule_id": row["schedule_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "name": row["name"],
+            "status": row["status"],
+            "scope": row["scope"],
+            "probe_query": row["probe_query"],
+            "interval_hours": int(row["interval_hours"]),
+            "artifact_dir": row["artifact_dir"],
+            "retain_artifacts": bool(row["retain_artifacts"]),
+            "next_due_at": row["next_due_at"],
+            "last_run_at": row["last_run_at"] or "",
+            "last_status": row["last_status"],
+            "last_result": self._loads_json(row["last_result_json"], {}),
+            "last_error": row["last_error"],
+            "actor": row["actor"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+            "due": self._restore_drill_schedule_due(row),
+            "operator_handles": {
+                "run_due": {
+                    "cli": "agent-memory restore-drill-schedule run-due --limit 5",
+                    "http": {"path": "/restore/drill/schedule/run-due"},
+                    "mcp": {"tool": "memory_restore_drill_schedule_run_due"},
+                },
+                "list": {
+                    "cli": "agent-memory restore-drill-schedule list --status all",
+                    "http": {"path": "/restore/drill/schedules"},
+                    "mcp": {"tool": "memory_restore_drill_schedules"},
+                },
+            },
+        }
+
+    @staticmethod
+    def _restore_drill_schedule_due(row: sqlite3.Row) -> dict[str, Any]:
+        if row["status"] != "active":
+            return {
+                "status": row["status"],
+                "due": False,
+                "overdue": False,
+                "seconds_until_due": None,
+            }
+        due_at = str(row["next_due_at"] or "")
+        parsed = MemoryStore._parse_notification_due_at(due_at)
+        if parsed is None:
+            return {
+                "status": "invalid_due_at",
+                "due": True,
+                "overdue": True,
+                "seconds_until_due": 0,
+            }
+        seconds_until_due = int(
+            (parsed - datetime.now(timezone.utc).replace(microsecond=0)).total_seconds()
+        )
+        due = seconds_until_due <= 0
+        return {
+            "status": "due" if due else "scheduled",
+            "due": due,
+            "overdue": seconds_until_due < 0,
+            "seconds_until_due": seconds_until_due,
+        }
+
+    def _restore_drill_schedule_artifact_paths(
+        self,
+        row: sqlite3.Row,
+        *,
+        run_started: datetime,
+    ) -> tuple[Path | None, Path | None]:
+        if not bool(row["retain_artifacts"]):
+            return None, None
+        artifact_root = (
+            Path(str(row["artifact_dir"])).expanduser()
+            if str(row["artifact_dir"] or "").strip()
+            else self.db_path.parent / "restore-drills"
+        )
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(row["name"])).strip(".-")
+        if not safe_name:
+            safe_name = str(row["schedule_id"])
+        stamp = run_started.strftime("%Y%m%dT%H%M%SZ")
+        return (
+            artifact_root / f"{safe_name}-{stamp}-backup.db",
+            artifact_root / f"{safe_name}-{stamp}-restored.db",
         )
 
     def _create_notification(

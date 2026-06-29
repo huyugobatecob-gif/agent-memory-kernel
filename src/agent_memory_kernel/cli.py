@@ -597,6 +597,54 @@ def cmd_restore_drill(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore_drill_schedule_set(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.set_restore_drill_schedule(
+            name=args.name,
+            interval_hours=args.interval_hours,
+            scope=args.scope,
+            probe_query=args.probe_query,
+            start_at=args.start_at,
+            artifact_dir=args.artifact_dir,
+            retain_artifacts=args.retain_artifacts,
+            status=args.status,
+            actor=args.actor,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_restore_drill_schedule_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_restore_drill_schedules(
+            status=args.status,
+            due_only=args.due_only,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_restore_drill_schedule_run_due(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.run_due_restore_drill_schedules(
+            limit=args.limit,
+            actor=args.actor,
+            include_not_due=args.include_not_due,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_current_best(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2018,6 +2066,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="operator")
     p.add_argument("--overwrite", action="store_true")
     p.set_defaults(func=cmd_restore_drill)
+
+    p = sub.add_parser("restore-drill-schedule", help="Manage local restore-drill schedules")
+    add_common_db(p)
+    schedule_sub = p.add_subparsers(dest="restore_drill_schedule_command", required=True)
+
+    sp = schedule_sub.add_parser("set", help="Create or update a restore-drill schedule")
+    sp.add_argument("--name", required=True)
+    sp.add_argument("--interval-hours", type=int, default=24)
+    sp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    sp.add_argument("--probe-query", default="")
+    sp.add_argument("--start-at", default="", help="ISO timestamp for the next due time")
+    sp.add_argument("--artifact-dir", default="", help="Directory for retained drill artifacts")
+    sp.add_argument("--retain-artifacts", action="store_true")
+    sp.add_argument("--status", choices=["active", "paused"], default="active")
+    sp.add_argument("--actor", default="operator")
+    sp.set_defaults(func=cmd_restore_drill_schedule_set)
+
+    sp = schedule_sub.add_parser("list", help="List restore-drill schedules")
+    sp.add_argument("--status", choices=["active", "paused", "all"], default="active")
+    sp.add_argument("--due-only", action="store_true")
+    sp.add_argument("--limit", type=int, default=50)
+    sp.set_defaults(func=cmd_restore_drill_schedule_list)
+
+    sp = schedule_sub.add_parser("run-due", help="Run due restore-drill schedules")
+    sp.add_argument("--limit", type=int, default=5)
+    sp.add_argument("--actor", default="scheduler")
+    sp.add_argument("--include-not-due", action="store_true")
+    sp.set_defaults(func=cmd_restore_drill_schedule_run_due)
 
     p = sub.add_parser("current-best", help="Resolve current-best memory for a query or scope")
     add_common_db(p)

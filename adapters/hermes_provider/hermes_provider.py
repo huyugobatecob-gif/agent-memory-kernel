@@ -406,6 +406,59 @@ class HermesMemoryProvider:
     def migration_changelog(self, *, limit: int = 20) -> dict[str, Any]:
         return self.store.migration_changelog(limit=limit)
 
+    def set_restore_drill_schedule(
+        self,
+        *,
+        name: str,
+        interval_hours: int = 24,
+        scope: str | None = None,
+        probe_query: str = "",
+        start_at: str = "",
+        artifact_dir: str | Path = "",
+        retain_artifacts: bool = False,
+        status: str = "active",
+        actor: str = "provider",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.set_restore_drill_schedule(
+            name=name,
+            interval_hours=interval_hours,
+            scope=scope,
+            probe_query=probe_query,
+            start_at=start_at,
+            artifact_dir=artifact_dir,
+            retain_artifacts=retain_artifacts,
+            status=status,
+            actor=actor,
+            metadata=metadata,
+        )
+
+    def restore_drill_schedules(
+        self,
+        *,
+        status: str = "active",
+        due_only: bool = False,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.list_restore_drill_schedules(
+            status=status,
+            due_only=due_only,
+            limit=limit,
+        )
+
+    def run_due_restore_drill_schedules(
+        self,
+        *,
+        limit: int = 5,
+        actor: str = "provider-scheduler",
+        include_not_due: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.run_due_restore_drill_schedules(
+            limit=limit,
+            actor=actor,
+            include_not_due=include_not_due,
+        )
+
     def backup_database(
         self,
         out_path: str | Path,

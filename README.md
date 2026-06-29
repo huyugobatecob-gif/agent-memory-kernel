@@ -65,7 +65,8 @@ Included now:
   distrust, expire, and supersede lifecycle actions.
 - Operational status checks and no-memory/failed-Keeper fallbacks for local
   runtime failures.
-- SQLite migration status plus backup/restore commands for local recovery.
+- SQLite migration status, migration changelog, backup/restore commands, and
+  local restore-drill schedules for recovery supervision.
 - Conflict and supersession records for truth maintenance.
 - Current-best conflict resolution for prompt-facing tree retrieval.
 - First-class outcome records for success/failure loop memory.
@@ -415,6 +416,8 @@ agent-memory migration-changelog --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "SEO projects"
+agent-memory restore-drill-schedule --db .memory/demo.db set --name nightly --interval-hours 24 --scope professional --probe-query "SEO projects"
+agent-memory restore-drill-schedule --db .memory/demo.db run-due --limit 5
 agent-memory export-control --db .memory/demo.db --scope professional --actor writer --redaction-profile safe
 agent-memory export-custody --db .memory/demo.db --scope professional --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo/exported-profile.encrypted.json
 agent-memory export-profile --db .memory/demo.db --scope professional --redaction-profile safe
@@ -847,7 +850,9 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_billing_reconcile`,
 `memory_embedding_certify`,
 `memory_migration_status`, `memory_migration_changelog`, `memory_backup_database`,
-`memory_restore_database`, `memory_restore_drill`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_restore_database`, `memory_restore_drill`,
+`memory_restore_drill_schedule_set`, `memory_restore_drill_schedules`,
+`memory_restore_drill_schedule_run_due`, `memory_graph_nodes`, `memory_graph_edges`, and
 `memory_worker_run`, `memory_worker_status`.
 
 ## Implementation Plan

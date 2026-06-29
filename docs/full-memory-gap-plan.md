@@ -199,10 +199,12 @@ Already present:
   `migration_changelog`, `backup_database`, `restore_database`,
   `restore_drill`, `agent-memory migration-status`,
   `agent-memory migration-changelog`, `agent-memory backup`,
-  `agent-memory restore`, `agent-memory restore-drill`, `/migration/status`,
-  `/migration/changelog`, `/backup`, `/restore`, `/restore/drill`, and MCP
-  recovery tools; backup/restore use the SQLite backup API, restore drills
-  verify migration status plus optional restored-memory probe queries, and the
+  `agent-memory restore`, `agent-memory restore-drill`,
+  `agent-memory restore-drill-schedule`, `/migration/status`,
+  `/migration/changelog`, `/backup`, `/restore`, `/restore/drill`,
+  `/restore/drill/schedule/*`, and MCP recovery tools; backup/restore use the
+  SQLite backup API, restore drills verify migration status plus optional
+  restored-memory probe queries, schedules track due/last result state, and the
   changelog reports pending migrations, rollout gates, and recent recovery
   audit events.
 - Memory Tree Pack and full context builder output.
@@ -426,8 +428,8 @@ Remaining for full memory:
 - Production operational failure behavior beyond the local baseline for slow,
   unavailable, corrupted, partially migrated, or oversized memory stores,
   including latency budgets, encrypted off-host backups, hosted migration
-  release-note publication, worker supervision, hosted alerting, and managed
-  restore-drill schedules.
+  release-note publication, platform scheduler recipes, hosted alerting, and
+  managed restore-drill execution.
 - Real production acceptance traces proving behavior improvement on live agent
   tasks beyond the deterministic local fixture.
 

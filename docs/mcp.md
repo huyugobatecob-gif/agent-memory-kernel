@@ -79,6 +79,12 @@ Runtime tools:
   path.
 - `memory_restore_drill`: run a backup/restore drill, migration checks, and
   optional restored-memory probe query.
+- `memory_restore_drill_schedule_set`: create or update a local recurring
+  restore-drill schedule.
+- `memory_restore_drill_schedules`: list schedules, due status, and operator
+  handles.
+- `memory_restore_drill_schedule_run_due`: run active schedules that are due
+  and record last result/failure notification state.
 
 Retrieval tools:
 

@@ -419,6 +419,46 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_restore_drill_schedule_set": {
+        "endpoint": "/restore/drill/schedule/set",
+        "description": "Create or update a local restore-drill schedule.",
+        "inputSchema": _schema(
+            {
+                "name": _string("Schedule name."),
+                "interval_hours": _integer("Hours between due restore drills.", 24),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "probe_query": _string("Optional query that must be found after restore.", ""),
+                "start_at": _string("ISO timestamp for the next due time.", ""),
+                "artifact_dir": _string("Directory for retained drill artifacts.", ""),
+                "retain_artifacts": _boolean("Retain backup/restored drill artifacts.", False),
+                "status": _string("Schedule status: active or paused.", "active"),
+                "actor": _string("Actor setting the schedule.", "mcp"),
+            },
+            ["name"],
+        ),
+    },
+    "memory_restore_drill_schedules": {
+        "endpoint": "/restore/drill/schedules",
+        "description": "List local restore-drill schedules and due status.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Schedule status filter: active, paused, or all.", "active"),
+                "due_only": _boolean("Only return due schedules.", False),
+                "limit": _integer("Maximum schedules to return.", 50),
+            }
+        ),
+    },
+    "memory_restore_drill_schedule_run_due": {
+        "endpoint": "/restore/drill/schedule/run-due",
+        "description": "Run active restore-drill schedules that are due.",
+        "inputSchema": _schema(
+            {
+                "limit": _integer("Maximum due schedules to run.", 5),
+                "actor": _string("Actor running due schedules.", "mcp-scheduler"),
+                "include_not_due": _boolean("Run listed active schedules even if not due.", False),
+            }
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

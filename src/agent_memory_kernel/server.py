@@ -221,6 +221,31 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "api")),
             overwrite=bool(payload.get("overwrite", False)),
         )
+    if path in {"/restore/drill/schedule/set", "/restore-drill-schedule/set"}:
+        return store.set_restore_drill_schedule(
+            name=str(payload.get("name", "")),
+            interval_hours=int(payload.get("interval_hours", 24) or 24),
+            scope=payload.get("scope"),
+            probe_query=str(payload.get("probe_query", "")),
+            start_at=str(payload.get("start_at", "")),
+            artifact_dir=str(payload.get("artifact_dir", "")),
+            retain_artifacts=bool(payload.get("retain_artifacts", False)),
+            status=str(payload.get("status", "active") or "active"),
+            actor=str(payload.get("actor", "api")),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+        )
+    if path in {"/restore/drill/schedules", "/restore-drill-schedules"}:
+        return store.list_restore_drill_schedules(
+            status=str(payload.get("status", "active") or "active"),
+            due_only=bool(payload.get("due_only", False)),
+            limit=int(payload.get("limit", 50) or 50),
+        )
+    if path in {"/restore/drill/schedule/run-due", "/restore-drill-schedule/run-due"}:
+        return store.run_due_restore_drill_schedules(
+            limit=int(payload.get("limit", 5) or 5),
+            actor=str(payload.get("actor", "api-scheduler")),
+            include_not_due=bool(payload.get("include_not_due", False)),
+        )
     if path == "/current-best":
         return store.current_best_report(
             str(payload.get("query", "")),

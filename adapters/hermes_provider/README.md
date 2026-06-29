@@ -70,6 +70,9 @@ The adapter should:
 - expose `migration_status()`, `migration_changelog()`, `backup_database()`,
   and `restore_database()` for local SQLite recovery and migration
   compatibility checks;
+- expose `set_restore_drill_schedule()`, `restore_drill_schedules()`, and
+  `run_due_restore_drill_schedules()` so any runtime can supervise recurring
+  local recovery drills without embedding scheduler logic in the kernel;
 - record Router usefulness feedback and inspect `memory_quality_report()`;
 - inspect `observability_report()` for Router token estimates, Keeper job
   health, and LLM usage tokens/cost;

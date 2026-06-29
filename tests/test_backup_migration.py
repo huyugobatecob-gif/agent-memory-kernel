@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from agent_memory_kernel.cli import build_parser
@@ -87,6 +88,56 @@ class BackupMigrationTests(unittest.TestCase):
                 {event["action"] for event in restored_changelog["recent_recovery_events"]},
             )
             restored_again.close()
+
+            past_due = (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).replace(microsecond=0).isoformat()
+            schedule = store.set_restore_drill_schedule(
+                name="nightly-recovery",
+                interval_hours=24,
+                scope="professional",
+                probe_query="backup-site",
+                start_at=past_due,
+                artifact_dir=Path(tmp) / "scheduled-artifacts",
+                retain_artifacts=True,
+                actor="tester",
+            )
+            self.assertEqual(schedule["version"], "restore-drill-schedule-v0.1")
+            self.assertTrue(schedule["due"]["due"])
+
+            schedules = store.list_restore_drill_schedules(due_only=True)
+            self.assertEqual(schedules["due_count"], 1)
+            scheduled_run = store.run_due_restore_drill_schedules(
+                limit=1,
+                actor="tester",
+            )
+            self.assertEqual(scheduled_run["status"], "pass")
+            self.assertEqual(scheduled_run["processed"], 1)
+            self.assertEqual(scheduled_run["runs"][0]["result"]["probe_result_count"], 1)
+            self.assertEqual(
+                scheduled_run["runs"][0]["schedule"]["last_status"],
+                "pass",
+            )
+            self.assertTrue(any((Path(tmp) / "scheduled-artifacts").glob("*backup.db")))
+            self.assertEqual(store.list_restore_drill_schedules(due_only=True)["count"], 0)
+
+            store.set_restore_drill_schedule(
+                name="bad-probe",
+                interval_hours=24,
+                scope="professional",
+                probe_query="definitely-missing-probe",
+                start_at=past_due,
+                actor="tester",
+            )
+            failed_schedule = store.run_due_restore_drill_schedules(
+                limit=1,
+                actor="tester",
+            )
+            self.assertEqual(failed_schedule["status"], "fail")
+            self.assertEqual(
+                store.list_notifications(topic="restore_drill")["count"],
+                1,
+            )
             store.close()
 
     def test_backup_restore_api_mcp_and_cli_surfaces(self) -> None:
@@ -145,12 +196,46 @@ class BackupMigrationTests(unittest.TestCase):
             self.assertEqual(changelog["status"], "pass")
             self.assertIn("migration-status", {gate["name"] for gate in changelog["recommended_gates"]})
 
+            past_due = (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).replace(microsecond=0).isoformat()
+            api_schedule = handle_api_request(
+                store,
+                "/restore/drill/schedule/set",
+                {
+                    "name": "api-nightly",
+                    "interval_hours": 24,
+                    "scope": "professional",
+                    "probe_query": "migration status",
+                    "start_at": past_due,
+                    "actor": "api",
+                },
+            )
+            self.assertEqual(api_schedule["version"], "restore-drill-schedule-v0.1")
+            self.assertTrue(api_schedule["due"]["due"])
+            api_schedules = handle_api_request(
+                store,
+                "/restore/drill/schedules",
+                {"status": "active", "due_only": True},
+            )
+            self.assertEqual(api_schedules["count"], 1)
+            api_run_due = handle_api_request(
+                store,
+                "/restore/drill/schedule/run-due",
+                {"limit": 1, "actor": "api"},
+            )
+            self.assertEqual(api_run_due["status"], "pass")
+            self.assertEqual(api_run_due["processed"], 1)
+
             names = {tool["name"] for tool in list_mcp_tools()}
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_migration_changelog", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
             self.assertIn("memory_restore_drill", names)
+            self.assertIn("memory_restore_drill_schedule_set", names)
+            self.assertIn("memory_restore_drill_schedules", names)
+            self.assertIn("memory_restore_drill_schedule_run_due", names)
 
             parser = build_parser()
             args = parser.parse_args(["migration-status", "--db", str(db)])
@@ -166,6 +251,48 @@ class BackupMigrationTests(unittest.TestCase):
                 code = args.func(args)
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(stdout.getvalue())["version"], "migration-changelog-v0.1")
+
+            args = parser.parse_args(
+                [
+                    "restore-drill-schedule",
+                    "--db",
+                    str(db),
+                    "set",
+                    "--name",
+                    "cli-nightly",
+                    "--interval-hours",
+                    "24",
+                    "--scope",
+                    "professional",
+                    "--probe-query",
+                    "migration status",
+                    "--start-at",
+                    past_due,
+                ]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["name"], "cli-nightly")
+
+            args = parser.parse_args(
+                ["restore-drill-schedule", "--db", str(db), "list", "--due-only"]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["count"], 1)
+
+            args = parser.parse_args(
+                ["restore-drill-schedule", "--db", str(db), "run-due", "--limit", "1"]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["status"], "pass")
 
             args = parser.parse_args(["backup", "--db", str(db), "--out", str(cli_backup)])
             stdout = io.StringIO()

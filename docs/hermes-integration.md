@@ -274,6 +274,15 @@ class HermesMemoryProvider:
 
     def restore_database(self, backup_path: str, target_path: str) -> dict:
         ...
+
+    def set_restore_drill_schedule(self, name: str, interval_hours: int = 24) -> dict:
+        ...
+
+    def restore_drill_schedules(self, status: str = "active") -> dict:
+        ...
+
+    def run_due_restore_drill_schedules(self, limit: int = 5) -> dict:
+        ...
 ```
 
 The provider should call `MemoryOrchestrator`/`MemoryStore`, not duplicate
@@ -327,8 +336,10 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_derived_invalidations`, `memory_operational_status`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
 `memory_migration_changelog`, `memory_restore_database`,
-`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`,
-`memory_graph_browser`, `memory_export_control`, `memory_export_profile`,
+`memory_restore_drill_schedule_set`, `memory_restore_drill_schedules`,
+`memory_restore_drill_schedule_run_due`, `memory_review_list`,
+`memory_graph_nodes`, `memory_graph_edges`, `memory_graph_browser`,
+`memory_export_control`, `memory_export_profile`,
 `memory_export_custody`, `memory_export_encrypted_profile`,
 `memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,

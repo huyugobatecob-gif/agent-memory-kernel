@@ -399,11 +399,14 @@ Baseline implementation:
   `agent-memory restore-drill` provide local SQLite schema checks, migration
   changelog reporting, backup/restore recovery using the SQLite backup API,
   and drill verification against a restored database.
+- `agent-memory restore-drill-schedule` provides local recurring drill
+  schedule state, due checks, `run-due` execution, last-result recording, and
+  failure notifications without requiring a hidden scheduler inside the
+  kernel.
 
-Still production work: encrypted off-host backups, managed restore-drill
-schedules, hosted migration release-note publication, hosted health checks,
-deployment supervisor recipes, restart policies, dashboards, and managed alert
-delivery.
+Still production work: encrypted off-host backups, platform scheduler
+deployment recipes, hosted migration release-note publication, hosted health
+checks, restart policies, dashboards, and managed alert delivery.
 
 ## End State
 

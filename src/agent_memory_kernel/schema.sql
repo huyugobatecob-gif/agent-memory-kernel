@@ -420,6 +420,26 @@ CREATE TABLE IF NOT EXISTS memory_notifications (
     resolve_reason  TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS restore_drill_schedules (
+    schedule_id       TEXT PRIMARY KEY,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    name              TEXT NOT NULL UNIQUE,
+    status            TEXT NOT NULL DEFAULT 'active',
+    scope             TEXT NOT NULL DEFAULT 'all',
+    probe_query       TEXT NOT NULL DEFAULT '',
+    interval_hours    INTEGER NOT NULL DEFAULT 24,
+    artifact_dir      TEXT NOT NULL DEFAULT '',
+    retain_artifacts  INTEGER NOT NULL DEFAULT 0,
+    next_due_at       TEXT NOT NULL DEFAULT '',
+    last_run_at       TEXT,
+    last_status       TEXT NOT NULL DEFAULT '',
+    last_result_json  TEXT NOT NULL DEFAULT '{}',
+    last_error        TEXT NOT NULL DEFAULT '',
+    actor             TEXT NOT NULL DEFAULT 'system',
+    metadata_json     TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS router_runs (
     router_run_id            TEXT PRIMARY KEY,
     created_at               TEXT NOT NULL,
@@ -590,6 +610,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_export_records_status ON memory_export_rec
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_status ON memory_notifications(status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_scope ON memory_notifications(scope, status);
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_target ON memory_notifications(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_restore_drill_schedules_due ON restore_drill_schedules(status, next_due_at);
+CREATE INDEX IF NOT EXISTS idx_restore_drill_schedules_scope ON restore_drill_schedules(scope, status);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);
 CREATE INDEX IF NOT EXISTS idx_sources_memory ON sources(memory_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_turns_thread ON conversation_turns(thread_id);
