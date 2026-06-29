@@ -128,6 +128,7 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_export_preserves_lifecycle_tombstones",
                     "golden_trace_import_restores_lifecycle_tombstones",
                     "golden_trace_import_preserves_policy_metadata",
+                    "golden_trace_import_preserves_review_history",
                     "golden_trace_import_preserves_graph_evidence_chains",
                     "golden_trace_portable_bundle_manifest_roundtrip",
                 ],
@@ -445,6 +446,14 @@ def conformance_spec() -> dict[str, Any]:
                     "profile export includes applicable read and write policies",
                     "profile import restores policy decisions and policy ids",
                     "restored read/write denials still fail closed",
+                ],
+            },
+            {
+                "id": "golden_trace_import_preserves_review_history",
+                "requires": [
+                    "profile export includes review actions for memory-linked candidates",
+                    "profile import restores review actor, action, reason, and candidate linkage",
+                    "restored exports expose the same review history for operator audit",
                 ],
             },
             {
@@ -1706,6 +1715,17 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "export_id": retention["export_id"],
         },
     )
+    reviewed_candidate_id = store.remember(
+        "Decision: conformance-site review history survives profile import.",
+        scope=CONFORMANCE_SCOPE,
+        source_ref="conformance://review-history",
+        auto_approve=False,
+    )["candidates"][0]["candidate_id"]
+    store.approve_candidate(
+        reviewed_candidate_id,
+        actor="reviewer",
+        reason="portable review history",
+    )
     full_export = store.export_profile(
         scope=CONFORMANCE_SCOPE,
         actor="conformance",
@@ -1804,6 +1824,42 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "restored_status_counts": restored_lifecycle.get("status_counts", {}),
                 "active_result_count": len(restored_active),
                 "deleted_result_count": len(restored_deleted),
+            },
+        )
+        exported_reviews = lifecycle.get("review_actions", [])
+        restored_reviews = restored_lifecycle.get("review_actions", [])
+        exported_review_keys = {
+            (
+                str(item.get("candidate_id", "")),
+                str(item.get("action", "")),
+                str(item.get("actor", "")),
+                str(item.get("reason", "")),
+            )
+            for item in exported_reviews
+        }
+        restored_review_keys = {
+            (
+                str(item.get("candidate_id", "")),
+                str(item.get("action", "")),
+                str(item.get("actor", "")),
+                str(item.get("reason", "")),
+            )
+            for item in restored_reviews
+        }
+        _append_result(
+            results,
+            "golden_trace_import_preserves_review_history",
+            bool(exported_review_keys)
+            and exported_review_keys.issubset(restored_review_keys)
+            and import_counts.get("review_actions", 0) >= len(exported_review_keys)
+            and restored_lifecycle.get("counts", {}).get("review_actions", 0)
+            >= len(exported_review_keys),
+            {
+                "exported_review_count": len(exported_reviews),
+                "restored_review_count": len(restored_reviews),
+                "imported_review_actions": import_counts.get("review_actions", 0),
+                "exported_review_keys": sorted(exported_review_keys),
+                "restored_review_keys": sorted(restored_review_keys),
             },
         )
         exported_tree = full_export.get("memory_tree", {})
@@ -2355,6 +2411,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_large_history_prompt_is_bounded",
         "golden_trace_safe_export_redacts_memory_content",
         "golden_trace_import_preserves_graph_evidence_chains",
+        "golden_trace_import_preserves_review_history",
         "migration_status_is_compatible",
         "kernel_status_reports_compatible_versions",
         "secret_like_memory_is_quarantined",

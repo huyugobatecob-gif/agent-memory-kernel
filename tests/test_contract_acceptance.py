@@ -81,6 +81,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             "golden_trace_interrupted_import_rolls_back_partial_writes",
             str(contract["threat_model"]),
         )
+        self.assertIn("golden_trace_import_preserves_review_history", str(contract))
         self.assertIn("audit_log_integrity_detects_tampering", str(contract["threat_model"]))
 
     def test_acceptance_suite_passes_seeded_full_memory_fixture(self) -> None:
@@ -130,6 +131,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("golden_trace_safe_export_redacts_memory_content", scenario_ids)
         self.assertIn("golden_trace_export_preserves_lifecycle_tombstones", scenario_ids)
         self.assertIn("golden_trace_import_restores_lifecycle_tombstones", scenario_ids)
+        self.assertIn("golden_trace_import_preserves_review_history", scenario_ids)
         self.assertIn("golden_trace_import_preserves_policy_metadata", scenario_ids)
         self.assertIn("golden_trace_import_preserves_graph_evidence_chains", scenario_ids)
         self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", scenario_ids)
@@ -191,6 +193,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("golden_trace_safe_export_redacts_memory_content", passed)
             self.assertIn("golden_trace_export_preserves_lifecycle_tombstones", passed)
             self.assertIn("golden_trace_import_restores_lifecycle_tombstones", passed)
+            self.assertIn("golden_trace_import_preserves_review_history", passed)
             self.assertIn("golden_trace_import_preserves_policy_metadata", passed)
             self.assertIn("golden_trace_import_preserves_graph_evidence_chains", passed)
             self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", passed)

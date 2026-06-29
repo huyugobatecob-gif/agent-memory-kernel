@@ -866,6 +866,15 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertGreaterEqual(import_counts["memory_revisions"], 1)
             self.assertGreaterEqual(import_counts["derived_invalidations"], 3)
             self.assertGreaterEqual(import_counts["audit_log"], 3)
+            restored_lifecycle_for_review = imported.export_profile(
+                scope="professional"
+            )["memory_lifecycle"]
+            restored_reviews = restored_lifecycle_for_review["review_actions"]
+            self.assertEqual(len(restored_reviews), 1)
+            self.assertEqual(restored_reviews[0]["candidate_id"], reviewed_candidate_id)
+            self.assertEqual(restored_reviews[0]["action"], "approve")
+            self.assertEqual(restored_reviews[0]["actor"], "reviewer")
+            self.assertEqual(restored_reviews[0]["reason"], "portable memory review")
 
             restored_results = imported.search("DuckDB", scope="professional")
             self.assertEqual(len(restored_results), 1)
