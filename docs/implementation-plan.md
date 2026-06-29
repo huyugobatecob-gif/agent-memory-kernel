@@ -11,9 +11,10 @@ must consume the kernel contract instead of defining it.
 The governing documents are [what-is-amk.md](what-is-amk.md),
 [../SPEC.md](../SPEC.md), [kernel-charter.md](kernel-charter.md),
 [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md),
-[backlog-cutover.md](backlog-cutover.md), [threat-model.md](threat-model.md),
-and [invariant-verifier-map.md](invariant-verifier-map.md). Current evidence is
-tracked in [core-status-audit.md](core-status-audit.md).
+[backlog-cutover.md](backlog-cutover.md), [adapter-contract.md](adapter-contract.md),
+[threat-model.md](threat-model.md), and
+[invariant-verifier-map.md](invariant-verifier-map.md). Current evidence is tracked
+in [core-status-audit.md](core-status-audit.md).
 
 ## V1 Acceptance Test
 
@@ -339,7 +340,7 @@ Tasks:
    migration compatibility status.
 3. Document adapter capability levels: read-only, write-capable,
    lifecycle-capable, graph-capable, export-capable, and prompt-injection
-   capable.
+   capable. See [adapter-contract.md](adapter-contract.md).
 4. Treat HTTP/MCP as optional adapters over the same contract, not separate
    truth paths.
 5. Keep provider prompt formatters and embeddings as optional extension checks

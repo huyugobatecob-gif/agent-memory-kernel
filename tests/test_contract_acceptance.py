@@ -41,6 +41,24 @@ class ContractAcceptanceTests(unittest.TestCase):
             contract["default_packs"]["professional"]["prompt_boundary"],
         )
         self.assertIn("personal", contract["default_packs"]["professional"]["excludes"][0])
+        adapter_contract = contract["adapter_contract"]
+        adapter_levels = {
+            item["id"] for item in adapter_contract["capability_levels"]
+        }
+        self.assertTrue(
+            {
+                "read-only",
+                "write-capable",
+                "lifecycle-capable",
+                "graph-capable",
+                "export-capable",
+                "prompt-injection-capable",
+            }.issubset(adapter_levels)
+        )
+        self.assertIn("runtime", adapter_contract["adapter_types"])
+        self.assertIn("importer_exporter", adapter_contract["adapter_types"])
+        self.assertIn("retrieval_enhancer", adapter_contract["adapter_types"])
+        self.assertFalse(adapter_contract["certification"]["requires_live_provider"])
         self.assertIn("project", contract["extension_lanes"])
         self.assertIn("before_model_call runs before a non-incognito main model call", str(contract))
         self.assertIn("revise_or_forget", contract["closed_loop"])
@@ -121,6 +139,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertEqual(spec_result["status"], "pass")
         scenario_ids = {item["id"] for item in spec["scenarios"]}
         self.assertIn("default_packs_are_published", scenario_ids)
+        self.assertIn("adapter_contract_is_published", scenario_ids)
         self.assertIn("prompt_envelope_contains_selected_content_only", scenario_ids)
         self.assertIn("stored_read_policy_denies_injection", scenario_ids)
         self.assertIn("personal_lane_absent_from_derived_surfaces", scenario_ids)
@@ -181,6 +200,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertEqual(result["status"], "pass")
             passed = {item["scenario"] for item in result["results"] if item["passed"]}
             self.assertIn("default_packs_are_published", passed)
+            self.assertIn("adapter_contract_is_published", passed)
             self.assertIn("professional_memory_injected_with_provenance", passed)
             self.assertIn("prompt_envelope_contains_selected_content_only", passed)
             self.assertIn("personal_lane_is_withheld", passed)

@@ -162,6 +162,83 @@ DERIVED_PROMPT_SURFACES = {
     }
 }
 
+ADAPTER_CONTRACT: dict[str, Any] = {
+    "version": "adapter-contract-v0.1",
+    "principle": "Adapters consume the kernel contract; they do not define memory truth.",
+    "capability_levels": [
+        {
+            "id": "read-only",
+            "allows": ["contract", "status", "search", "retrieve", "explain"],
+            "must_not": ["write", "promote", "mutate_lifecycle", "export_without_policy"],
+        },
+        {
+            "id": "write-capable",
+            "allows": ["record_source_event", "propose_candidate", "queue_keeper"],
+            "must_not": ["auto_promote_untrusted_claims", "bypass_review_policy"],
+        },
+        {
+            "id": "lifecycle-capable",
+            "allows": ["approve", "reject", "correct", "delete", "distrust", "expire", "rollback"],
+            "must_not": ["mutate_without_actor_policy", "drop_audit_or_review_history"],
+        },
+        {
+            "id": "graph-capable",
+            "allows": ["read_graph", "propose_graph_commands", "show_evidence"],
+            "must_not": ["show_cross_scope_evidence", "revive_inactive_memory"],
+        },
+        {
+            "id": "export-capable",
+            "allows": ["export_profile", "import_profile", "export_bundle", "import_bundle"],
+            "must_not": ["restore_redacted_content", "activate_pending_or_rejected_memory"],
+        },
+        {
+            "id": "prompt-injection-capable",
+            "allows": ["before_model_call", "build_prompt_envelope", "format_provider_prompt"],
+            "must_not": ["inject_full_graph", "place_memory_in_unsafe_system_surface"],
+        },
+    ],
+    "adapter_types": {
+        "runtime": {
+            "required_hooks": ["before_model_call", "after_saved_turn"],
+            "required_invariants": [
+                "prompt_envelope_selected_budgeted_content_only",
+                "scope_lane_namespace_isolation",
+                "auditable_memory_actions",
+            ],
+        },
+        "importer_exporter": {
+            "required_hooks": ["export_profile", "import_profile"],
+            "required_invariants": [
+                "import_export_preserves_provenance_and_lifecycle",
+                "distrusted_sources_do_not_influence_outputs",
+            ],
+        },
+        "retrieval_enhancer": {
+            "required_hooks": ["rank_after_policy_filtering"],
+            "required_invariants": [
+                "deterministic_retrieval_without_embeddings",
+                "prompt_envelope_selected_budgeted_content_only",
+            ],
+        },
+        "provider_formatter": {
+            "required_hooks": ["format_prompt_envelope"],
+            "required_invariants": [
+                "prompt_envelope_selected_budgeted_content_only",
+            ],
+        },
+    },
+    "certification": {
+        "local_only": True,
+        "requires_live_provider": False,
+        "commands": [
+            "agent-memory conformance spec",
+            "agent-memory conformance seed --db <db>",
+            "agent-memory conformance run --db <db>",
+            "agent-memory conformance certify --db <db> --adapter-name <name>",
+        ],
+    },
+}
+
 KERNEL_INVARIANTS = [
     {
         "id": "deleted_memory_absent_from_retained_evidence",
@@ -564,6 +641,7 @@ def memory_contract() -> dict[str, Any]:
         "trust_levels": TRUST_LEVELS,
         "sensitivity_levels": SENSITIVITY_LEVELS,
         "derived_prompt_surfaces": DERIVED_PROMPT_SURFACES,
+        "adapter_contract": ADAPTER_CONTRACT,
         "kernel_invariants": KERNEL_INVARIANTS,
         "threat_model": THREAT_MODEL,
         "acceptance_gates": ACCEPTANCE_GATES,
@@ -607,6 +685,24 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "operational_failure_model_present": "operational_failure_model" in gate_names,
         "closed_loop_present": len(data.get("closed_loop", [])) >= 6,
         "brain_style_surface_present": "brain_style" in data.get("derived_prompt_surfaces", {}),
+        "adapter_contract_present": bool(data.get("adapter_contract", {}).get("version")),
+        "adapter_capability_levels_present": {
+            "read-only",
+            "write-capable",
+            "lifecycle-capable",
+            "graph-capable",
+            "export-capable",
+            "prompt-injection-capable",
+        }.issubset(
+            {
+                str(item.get("id"))
+                for item in data.get("adapter_contract", {}).get("capability_levels", [])
+            }
+        ),
+        "adapter_types_have_invariants": all(
+            item.get("required_hooks") and item.get("required_invariants")
+            for item in data.get("adapter_contract", {}).get("adapter_types", {}).values()
+        ),
         "kernel_invariants_present": len(data.get("kernel_invariants", [])) >= 10,
         "kernel_invariants_have_verifiers": all(
             item.get("id")

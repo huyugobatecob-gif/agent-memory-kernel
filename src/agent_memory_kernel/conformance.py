@@ -221,6 +221,14 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "adapter_contract_is_published",
+                "requires": [
+                    "memory contract exposes adapter capability levels",
+                    "runtime, importer/exporter, retrieval-enhancer, and provider-formatter adapter types name required invariants",
+                    "adapter certification is local and does not require a live provider",
+                ],
+            },
+            {
                 "id": "professional_memory_injected_with_provenance",
                 "requires": [
                     "pre-turn retrieval selects relevant professional memory",
@@ -856,6 +864,46 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "extension_lanes": sorted(extension_lanes),
             "personal_retrieval_default": personal_pack.get("retrieval_default", ""),
             "professional_prompt_boundary": professional_pack.get("prompt_boundary", ""),
+        },
+    )
+    adapter_contract = contract.get("adapter_contract", {})
+    adapter_levels = {
+        str(item.get("id", ""))
+        for item in adapter_contract.get("capability_levels", [])
+        if str(item.get("id", ""))
+    }
+    adapter_types = adapter_contract.get("adapter_types", {})
+    _append_result(
+        results,
+        "adapter_contract_is_published",
+        {
+            "read-only",
+            "write-capable",
+            "lifecycle-capable",
+            "graph-capable",
+            "export-capable",
+            "prompt-injection-capable",
+        }.issubset(adapter_levels)
+        and {
+            "runtime",
+            "importer_exporter",
+            "retrieval_enhancer",
+            "provider_formatter",
+        }.issubset(set(adapter_types.keys()))
+        and all(
+            item.get("required_hooks") and item.get("required_invariants")
+            for item in adapter_types.values()
+        )
+        and not bool(
+            adapter_contract.get("certification", {}).get(
+                "requires_live_provider",
+                True,
+            )
+        ),
+        {
+            "capability_levels": sorted(adapter_levels),
+            "adapter_types": sorted(adapter_types.keys()),
+            "certification": adapter_contract.get("certification", {}),
         },
     )
 
@@ -2487,6 +2535,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
     scenario_ids = {str(item.get("id")) for item in data.get("scenarios", [])}
     required = {
         "default_packs_are_published",
+        "adapter_contract_is_published",
         "professional_memory_injected_with_provenance",
         "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",

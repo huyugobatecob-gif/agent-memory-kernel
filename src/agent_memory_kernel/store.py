@@ -2483,12 +2483,12 @@ class MemoryStore:
                 "mcp": ["memory_kernel_status"],
             },
             "capability_levels": [
-                "read-only",
-                "write-capable",
-                "lifecycle-capable",
-                "graph-capable",
-                "export-capable",
-                "prompt-injection-capable",
+                str(item.get("id", ""))
+                for item in contract.get("adapter_contract", {}).get(
+                    "capability_levels",
+                    [],
+                )
+                if str(item.get("id", ""))
             ],
             "migration": migration,
             "contract_shape": contract_shape,

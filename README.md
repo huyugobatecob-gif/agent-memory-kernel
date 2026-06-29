@@ -940,6 +940,9 @@ The full-memory work is split into hard contracts so contributors can implement
 it without relying on the original planning conversation:
 
 - [SPEC.md](SPEC.md) defines the public memory kernel behavior.
+- [docs/adapter-contract.md](docs/adapter-contract.md) defines how runtime,
+  importer/exporter, retrieval-enhancer, and provider-formatter adapters consume
+  the kernel contract.
 - [docs/amk-000-kernel-invariants.md](docs/amk-000-kernel-invariants.md)
   defines the executable kernel invariants and conformance gate.
 - [docs/core-status-audit.md](docs/core-status-audit.md) tracks what is
