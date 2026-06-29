@@ -103,6 +103,7 @@ CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
+PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
@@ -126,6 +127,40 @@ EXPORT_RETENTION_DEFAULT_DAYS = {
     "safe": 30,
     "metadata": 90,
 }
+MODEL_PROMPT_BUDGET_PROFILES = [
+    {
+        "provider": "openai",
+        "matches": ["gpt-4.1", "gpt-4o", "o3", "o4"],
+        "context_window": 128000,
+        "default_memory_tokens": 16000,
+        "max_memory_tokens": 32000,
+        "reserve_tokens": 8000,
+    },
+    {
+        "provider": "anthropic",
+        "matches": ["claude"],
+        "context_window": 200000,
+        "default_memory_tokens": 24000,
+        "max_memory_tokens": 48000,
+        "reserve_tokens": 12000,
+    },
+    {
+        "provider": "google",
+        "matches": ["gemini"],
+        "context_window": 1000000,
+        "default_memory_tokens": 32000,
+        "max_memory_tokens": 64000,
+        "reserve_tokens": 16000,
+    },
+    {
+        "provider": "local",
+        "matches": ["llama", "mistral", "qwen", "local"],
+        "context_window": 8192,
+        "default_memory_tokens": 2500,
+        "max_memory_tokens": 4000,
+        "reserve_tokens": 1500,
+    },
+]
 ENCRYPTED_EXPORT_KDF_ITERATIONS = 210_000
 EXPORT_SAFE_REDACT_KEYS = {
     "blob",
@@ -2231,16 +2266,81 @@ class MemoryStore:
         *,
         scope: str | None = None,
         token_budget: int | None = None,
+        model_id: str = "",
         limit: int | None = None,
     ) -> dict[str, Any]:
         """Return the Router policy that governs prompt-facing memory reads."""
         policy = json.loads(json.dumps(READ_TIME_POLICY))
+        budget = self.prompt_budget_profile(
+            model_id=model_id,
+            requested_token_budget=token_budget,
+        )
         policy["runtime"] = {
             "scope": normalize_scope(scope) if scope else "all",
-            "token_budget": int(token_budget or 0),
+            "token_budget": budget["effective_token_budget"],
+            "requested_token_budget": budget["requested_token_budget"],
+            "model_id": model_id or "",
+            "prompt_budget": budget,
             "branch_limit": int(limit or 0),
         }
         return policy
+
+    def prompt_budget_profile(
+        self,
+        *,
+        model_id: str = "",
+        requested_token_budget: int | None = None,
+    ) -> dict[str, Any]:
+        """Resolve a provider-neutral memory budget for a main model."""
+        requested = max(0, int(requested_token_budget or 0))
+        normalized_model = (model_id or "").strip().lower()
+        profile = self._prompt_budget_profile_for_model(normalized_model)
+        if profile:
+            default_budget = int(profile["default_memory_tokens"])
+            max_budget = int(profile["max_memory_tokens"])
+            effective = requested or default_budget
+            reason = "requested_budget_used" if requested else "model_default_budget"
+            if effective > max_budget:
+                effective = max_budget
+                reason = "clamped_to_model_memory_max"
+            return {
+                "version": PROMPT_BUDGET_ADAPTER_VERSION,
+                "model_id": model_id or "",
+                "provider": profile["provider"],
+                "matched": True,
+                "matched_family": profile["matches"][0],
+                "context_window": int(profile["context_window"]),
+                "reserve_tokens": int(profile["reserve_tokens"]),
+                "requested_token_budget": requested,
+                "default_token_budget": default_budget,
+                "max_token_budget": max_budget,
+                "effective_token_budget": effective,
+                "reason": reason,
+            }
+        effective = requested or 12000
+        return {
+            "version": PROMPT_BUDGET_ADAPTER_VERSION,
+            "model_id": model_id or "",
+            "provider": "unknown",
+            "matched": False,
+            "matched_family": "",
+            "context_window": 0,
+            "reserve_tokens": 2000,
+            "requested_token_budget": requested,
+            "default_token_budget": 12000,
+            "max_token_budget": 0,
+            "effective_token_budget": effective,
+            "reason": "unknown_model_requested_budget" if requested else "unknown_model_default_budget",
+        }
+
+    @staticmethod
+    def _prompt_budget_profile_for_model(model_id: str) -> dict[str, Any] | None:
+        if not model_id:
+            return None
+        for profile in MODEL_PROMPT_BUDGET_PROFILES:
+            if any(match in model_id for match in profile["matches"]):
+                return profile
+        return None
 
     def retrieve_tree(
         self,
@@ -4276,6 +4376,11 @@ class MemoryStore:
         if not query:
             raise ValueError("query must not be empty")
         scope = normalize_scope(scope)
+        prompt_budget = self.prompt_budget_profile(
+            model_id=model_id,
+            requested_token_budget=token_budget,
+        )
+        effective_token_budget = int(prompt_budget["effective_token_budget"])
         memory_allowed, access_decisions, warnings = resolve_scope_access(
             scope,
             requested_lanes=requested_lanes,
@@ -4332,7 +4437,8 @@ class MemoryStore:
             current_best = dict(tree.get("retrieval", {}).get("current_best", {}))
             read_time_policy = self.read_time_policy(
                 scope=scope,
-                token_budget=token_budget,
+                token_budget=effective_token_budget,
+                model_id=model_id,
                 limit=limit,
             )
             memory_context = self._memory_tree_supplement(tree)
@@ -4376,7 +4482,7 @@ class MemoryStore:
                         "role": "user",
                         "content": self._trim_for_budget(
                             self._without_memory_tree_supplement(context_pack),
-                            token_budget,
+                            effective_token_budget,
                             reserve=2000,
                         ),
                     },
@@ -4397,6 +4503,7 @@ class MemoryStore:
                     "allowed_scopes": allowed_scopes or [scope],
                     "denied_scopes": denied_scopes or [],
                     "read_policy": read_policy,
+                    "prompt_budget": prompt_budget,
                     "selected_branch_ids": selected_branch_ids,
                     "selection_decisions": selection_decisions,
                     "truncated_branch_count": int(
@@ -4430,7 +4537,8 @@ class MemoryStore:
                 agent_id=agent_id,
                 model_id=model_id,
                 mode=mode,
-                token_budget=token_budget,
+                token_budget=effective_token_budget,
+                prompt_budget=prompt_budget,
                 allowed_scopes=allowed_scopes,
                 denied_scopes=denied_scopes,
                 access_decisions=access_decisions,
@@ -4461,7 +4569,7 @@ class MemoryStore:
                 model_id,
                 mode,
                 query,
-                int(token_budget or 0),
+                effective_token_budget,
                 json.dumps(selected_branch_ids, sort_keys=True),
                 json.dumps(access_decisions, sort_keys=True),
                 json.dumps(warnings, sort_keys=True),
@@ -4500,6 +4608,7 @@ class MemoryStore:
         model_id: str,
         mode: str,
         token_budget: int,
+        prompt_budget: dict[str, Any],
         allowed_scopes: list[str] | None,
         denied_scopes: list[str] | None,
         access_decisions: list[dict[str, Any]],
@@ -4563,6 +4672,7 @@ class MemoryStore:
                 "allowed_scopes": allowed_scopes or [scope],
                 "denied_scopes": denied_scopes or [],
                 "read_policy": read_policy,
+                "prompt_budget": prompt_budget,
                 "selected_branch_ids": [],
                 "selection_decisions": [],
                 "truncated_branch_count": 0,

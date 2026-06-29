@@ -37,6 +37,7 @@ class MCPServerTests(unittest.TestCase):
             )
             names = {tool["name"] for tool in listed["result"]["tools"]}
             self.assertIn("memory_before_model_call", names)
+            self.assertIn("memory_prompt_budget", names)
             self.assertIn("memory_before_turn", names)
             self.assertIn("memory_after_turn", names)
             self.assertIn("memory_retrieve_context", names)
@@ -98,6 +99,23 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("structuredContent", result)
             self.assertIn("results", result["structuredContent"])
             self.assertIn("Hermes SEO agents", json.dumps(result["structuredContent"]))
+
+            prompt_budget = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 30,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_prompt_budget",
+                        "arguments": {"model_id": "llama-3.1-8b", "token_budget": 12000},
+                    },
+                }
+            )
+            self.assertFalse(prompt_budget["result"]["isError"])
+            self.assertEqual(
+                prompt_budget["result"]["structuredContent"]["effective_token_budget"],
+                4000,
+            )
 
             conflict_detect = server.handle_message(
                 {

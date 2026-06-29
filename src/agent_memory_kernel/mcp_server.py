@@ -77,6 +77,16 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             ["query"],
         ),
     },
+    "memory_prompt_budget": {
+        "endpoint": "/prompt-budget",
+        "description": "Resolve the effective memory prompt budget for a main model.",
+        "inputSchema": _schema(
+            {
+                "model_id": _string("Main model id, such as gpt-4.1-mini or claude-sonnet.", ""),
+                "token_budget": _integer("Requested memory token budget. Zero uses model default.", 0),
+            }
+        ),
+    },
     "memory_before_turn": {
         "endpoint": "/before-turn",
         "description": "Orchestrator hook: retrieve memory and build prompt context before an agent turn.",

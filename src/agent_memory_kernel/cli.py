@@ -372,7 +372,21 @@ def cmd_read_time_policy(args: argparse.Namespace) -> int:
         store.read_time_policy(
             scope=args.scope,
             token_budget=args.token_budget,
+            model_id=args.model_id,
             limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_prompt_budget(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.prompt_budget_profile(
+            model_id=args.model_id,
+            requested_token_budget=args.token_budget,
         )
     )
     store.close()
@@ -1710,9 +1724,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("read-time-policy", help="Show the Router read-time decision policy")
     add_common_db(p)
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--model-id", default="")
     p.add_argument("--token-budget", type=int, default=0)
     p.add_argument("--limit", type=int, default=0)
     p.set_defaults(func=cmd_read_time_policy)
+
+    p = sub.add_parser("prompt-budget", help="Resolve the effective memory prompt budget for a model")
+    add_common_db(p)
+    p.add_argument("--model-id", default="", help="Main model id, such as gpt-4.1-mini or claude-sonnet")
+    p.add_argument("--token-budget", type=int, default=0, help="Requested memory token budget")
+    p.set_defaults(func=cmd_prompt_budget)
 
     p = sub.add_parser("router-runs", help="List Router runs and prompt-facing memory reads")
     add_common_db(p)

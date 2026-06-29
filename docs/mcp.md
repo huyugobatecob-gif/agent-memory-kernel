@@ -41,6 +41,8 @@ Runtime tools:
   prompt context before an agent turn.
 - `memory_build_prompt_context`: return the final agent-ready prompt envelope.
 - `memory_before_model_call`: build the prompt envelope before the main model.
+- `memory_prompt_budget`: resolve the effective memory token budget for a
+  model/provider family before building the prompt.
 - `memory_after_turn`: orchestrator hook that saves the exchange and runs or
   queues Keeper after an agent turn.
 - `memory_after_saved_turn`: save the exchange and run or queue Keeper.

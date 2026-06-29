@@ -57,6 +57,16 @@ The envelope should be assembled in this order:
 
 Safety, permission, and redaction notes must never be dropped for token budget.
 
+Adapters should resolve an effective memory budget before retrieval. The
+baseline kernel exposes this through `agent-memory prompt-budget`,
+`POST /prompt-budget`, and MCP `memory_prompt_budget`. Known model families
+such as OpenAI, Claude, Gemini, and local Llama/Mistral/Qwen-style models get a
+deterministic context-window profile with default, maximum, reserve, requested,
+and effective memory token counts. Unknown models keep the requested budget or
+the kernel default. `before_model_call` stores the resolved profile in
+`prompt_envelope.metadata.prompt_budget` and uses the effective budget for
+read-time policy and trimming.
+
 ## Memory Tree Supplement
 
 The supplement is a user-role context block because it is retrieved context, not

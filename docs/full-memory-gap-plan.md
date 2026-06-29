@@ -207,6 +207,11 @@ Already present:
   upserts.
 - Baseline read-time policy and Router explainability through prompt metadata,
   `router_runs`, `/router-explain`, and `agent-memory router-explain`.
+- Baseline prompt-budget adapters through `agent-memory prompt-budget`,
+  `/prompt-budget`, MCP `memory_prompt_budget`, and
+  `prompt_envelope.metadata.prompt_budget`; known model families get
+  deterministic default/max/reserve memory budgets and unknown models preserve
+  requested runtime budgets.
 - Baseline Router usefulness feedback through `router_feedback`,
   `/router-feedback/record`, `/memory-quality`, and `agent-memory memory-quality`.
 - Baseline observability and cost accounting through `memory_observability_report`,
@@ -347,7 +352,9 @@ Remaining for full memory:
   provider-specific adapters, and reviewed extraction prompts for
   natural-language graph updates beyond the baseline schema contract.
 - Advanced Memory Router ranking beyond deterministic lexical/graph retrieval.
-- Deeper prompt budget adapters per model provider.
+- Deeper prompt budget adapters beyond the baseline deterministic model-family
+  profiles, including live provider context-window discovery and provider
+  formatter certification.
 - Production evals for guarded brain/style append across real prompt adapters.
 - Production runtime adapter hooks that call memory before and after agent work.
 - Production Router/Keeper eval suites built from reviewed real shadow traces.

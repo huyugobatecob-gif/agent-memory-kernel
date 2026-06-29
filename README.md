@@ -85,6 +85,8 @@ Included now:
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report with token, cost, and
   wall-clock duration telemetry for memory operations.
+- Prompt-budget adapter for model-family memory budgets across OpenAI, Claude,
+  Gemini, and local model families.
 - Operator review inbox with source previews, risk flags, inline
   possible-conflict warnings, graph previews, audit trail, and CLI/HTTP/MCP
   action handles.
@@ -328,6 +330,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --scope professional
+agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
 agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates --scope professional
 ```

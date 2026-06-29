@@ -361,6 +361,7 @@ Useful endpoints:
 - `POST /shadow-eval`
 - `POST /shadow-evals`
 - `POST /read-time-policy`
+- `POST /prompt-budget`
 - `POST /router-runs`
 - `POST /router-explain`
 - `POST /router-feedback/record`

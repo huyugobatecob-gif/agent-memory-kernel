@@ -124,6 +124,11 @@ Baseline read-time policy and Router explainability are implemented through
 `agent-memory read-time-policy`, `agent-memory router-runs`,
 `agent-memory router-explain`, `/read-time-policy`, `/router-runs`, and
 `/router-explain`.
+Baseline prompt-budget adapters are implemented through
+`agent-memory prompt-budget`, `/prompt-budget`, MCP `memory_prompt_budget`, and
+`prompt_envelope.metadata.prompt_budget`. Known model families get deterministic
+default/max/reserve memory budgets, while unknown models preserve requested
+runtime budgets.
 Baseline Router usefulness feedback and quality reporting are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.

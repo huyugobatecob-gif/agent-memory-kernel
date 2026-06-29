@@ -97,7 +97,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return store.read_time_policy(
             scope=payload.get("scope"),
             token_budget=int(payload.get("token_budget", 0) or 0),
+            model_id=str(payload.get("model_id", "")),
             limit=int(payload.get("limit", 0) or 0),
+        )
+    if path == "/prompt-budget":
+        return store.prompt_budget_profile(
+            model_id=str(payload.get("model_id", "")),
+            requested_token_budget=int(payload.get("token_budget", 0) or 0),
         )
     if path == "/router-runs":
         return {

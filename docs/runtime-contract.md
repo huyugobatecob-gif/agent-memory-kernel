@@ -69,7 +69,9 @@ Required behavior:
 - allow orchestration policy to suppress graph-derived style influence while
   still retrieving allowed memory;
 - return expanded node content, not only tags;
-- fit the output to token budget;
+- resolve the requested token budget against the target model profile and store
+  the requested/effective values in prompt metadata;
+- fit the output to the effective token budget;
 - record why each branch was selected or skipped;
 - fail closed for permission, secret, and quarantine violations;
 - degrade to no-memory mode when retrieval fails, unless the task explicitly

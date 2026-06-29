@@ -1648,6 +1648,63 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(api_changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             store.close()
 
+    def test_prompt_budget_adapter_clamps_known_model_families(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: project budget-site keeps compact memory for local models.",
+                scope="professional",
+                auto_approve=True,
+            )
+            direct = store.prompt_budget_profile(
+                model_id="llama-3.1-8b",
+                requested_token_budget=12000,
+            )
+            self.assertEqual(direct["version"], "prompt-budget-adapter-v0.1")
+            self.assertEqual(direct["provider"], "local")
+            self.assertTrue(direct["matched"])
+            self.assertEqual(direct["effective_token_budget"], 4000)
+            self.assertEqual(direct["reason"], "clamped_to_model_memory_max")
+
+            before = store.before_model_call(
+                "Plan budget-site memory usage.",
+                scope="professional",
+                model_id="llama-3.1-8b",
+                token_budget=12000,
+            )
+            metadata = before["prompt_envelope"]["metadata"]
+            self.assertEqual(metadata["prompt_budget"]["effective_token_budget"], 4000)
+            self.assertEqual(metadata["prompt_budget"]["requested_token_budget"], 12000)
+            self.assertEqual(metadata["read_time_policy"]["runtime"]["token_budget"], 4000)
+
+            runs = store.list_router_runs(scope="professional")
+            self.assertEqual(runs[0]["token_budget"], 4000)
+            self.assertEqual(runs[0]["metadata"]["prompt_budget"]["provider"], "local")
+
+            policy = handle_api_request(
+                store,
+                "/read-time-policy",
+                {
+                    "scope": "professional",
+                    "model_id": "gpt-4.1-mini",
+                    "token_budget": 999999,
+                    "limit": 8,
+                },
+            )
+            self.assertEqual(policy["runtime"]["prompt_budget"]["provider"], "openai")
+            self.assertEqual(policy["runtime"]["token_budget"], 32000)
+
+            endpoint = handle_api_request(
+                store,
+                "/prompt-budget",
+                {"model_id": "unknown-model", "token_budget": 7000},
+            )
+            self.assertFalse(endpoint["matched"])
+            self.assertEqual(endpoint["effective_token_budget"], 7000)
+            store.close()
+
     def test_before_model_call_adds_guarded_brain_style_when_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
