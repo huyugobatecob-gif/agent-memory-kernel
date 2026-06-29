@@ -281,7 +281,9 @@ writes.
 The suite also publishes and runs baseline golden traces for success/failure
 outcome planning, graph browser source previews, and safe redacted profile
 export, plus a migration compatibility check for required runtime tables,
-`user_version`, and SQLite `quick_check`.
+`user_version`, SQLite `quick_check`, and security red-team cases for
+secret-like text, tool-output prompt injection, untrusted tool claims, and
+assistant guesses.
 `conformance certify` emits the first adapter compatibility badge report for
 README and CI use. Hosted badge publishing and public adapter registry entries
 remain future work.

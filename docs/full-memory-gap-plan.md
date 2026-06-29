@@ -94,9 +94,11 @@ Must-have before claiming full memory:
     and `/conformance/spec`, `/conformance/seed`, `/conformance/run`,
     `/conformance/assert`. The suite now includes public golden traces for
     outcome planning, graph evidence inspection, safe profile export, and
-    migration compatibility, plus a local adapter certification badge report;
-    remaining work is hosted badge publishing, public adapter registry entries,
-    and broader real-world behavior traces.
+    migration compatibility, plus security red-team cases for secrets,
+    tool-output injection, untrusted tool claims, and assistant guesses. It also
+    includes a local adapter certification badge report; remaining work is
+    hosted badge publishing, public adapter registry entries, provider-specific
+    prompt-boundary fixtures, and broader real-world behavior traces.
 
 ## Additional Runtime Architecture Notes
 
@@ -358,7 +360,8 @@ Remaining for full memory:
 - Production current-best-answer resolution beyond the baseline explicit
   conflict resolver and active-memory conflict detector.
 - Broader provider adapters for the prompt envelope.
-- Broader prompt-injection, source trust, and secret red-team fixtures.
+- Broader provider-specific prompt-injection, source trust, and secret
+  red-team fixtures beyond the baseline public conformance cases.
 - Production observability beyond the baseline report, including wall-clock
   latency, provider billing reconciliation, retention policies, dashboards, and
   alerts.

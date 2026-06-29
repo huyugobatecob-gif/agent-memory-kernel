@@ -353,8 +353,9 @@ The conformance suite is the public compatibility layer. It checks named
 scenarios for professional memory injection, stored read-policy denial,
 personal-lane isolation, resolved conflict suppression, deleted-memory absence,
 unsafe-memory absence, reviewable/idempotent Keeper writes, and golden traces
-for outcome planning, graph evidence inspection, safe profile export, and
-migration compatibility.
+for outcome planning, graph evidence inspection, safe profile export,
+migration compatibility, and security red-team cases for secrets, tool output,
+and assistant guesses.
 Adapters can use it as the first "does this behave like Agent Memory Kernel?"
 gate. `conformance certify` wraps the same suite in an adapter certification
 report with pass/fail status, scenario counts, golden trace coverage, and a

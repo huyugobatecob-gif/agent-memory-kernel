@@ -71,6 +71,10 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("golden_trace_graph_browser_shows_source_previews", scenario_ids)
         self.assertIn("golden_trace_safe_export_redacts_memory_content", scenario_ids)
         self.assertIn("migration_status_is_compatible", scenario_ids)
+        self.assertIn("secret_like_memory_is_quarantined", scenario_ids)
+        self.assertIn("tool_prompt_injection_is_quarantined", scenario_ids)
+        self.assertIn("untrusted_tool_claim_stays_reviewable", scenario_ids)
+        self.assertIn("assistant_guess_stays_reviewable", scenario_ids)
         self.assertTrue(spec["golden_traces"])
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -80,6 +84,10 @@ class ContractAcceptanceTests(unittest.TestCase):
             seeded = seed_conformance_fixture(store)
             self.assertEqual(seeded["status"], "seeded")
             self.assertEqual(seeded["ids"]["unsafe_status"], "quarantined")
+            self.assertEqual(seeded["ids"]["secret_status"], "quarantined")
+            self.assertEqual(seeded["ids"]["tool_injection_status"], "quarantined")
+            self.assertEqual(seeded["ids"]["tool_claim_status"], "pending")
+            self.assertEqual(seeded["ids"]["assistant_guess_status"], "pending")
 
             result = run_conformance_suite(store)
             self.assertEqual(result["status"], "pass")
@@ -99,6 +107,10 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("golden_trace_graph_browser_shows_source_previews", passed)
             self.assertIn("golden_trace_safe_export_redacts_memory_content", passed)
             self.assertIn("migration_status_is_compatible", passed)
+            self.assertIn("secret_like_memory_is_quarantined", passed)
+            self.assertIn("tool_prompt_injection_is_quarantined", passed)
+            self.assertIn("untrusted_tool_claim_stays_reviewable", passed)
+            self.assertIn("assistant_guess_stays_reviewable", passed)
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")
@@ -112,6 +124,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertEqual(certification["adapter"]["name"], "unit-test-adapter")
             self.assertEqual(certification["badge"]["message"], "compatible")
             self.assertIn("migration_compatibility_trace", certification["summary"]["golden_trace_ids"])
+            self.assertIn("security_red_team_trace", certification["summary"]["golden_trace_ids"])
             self.assertEqual(certification["summary"]["scenario_failed"], 0)
             store.close()
 

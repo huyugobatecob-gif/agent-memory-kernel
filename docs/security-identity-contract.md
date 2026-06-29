@@ -208,6 +208,13 @@ Full memory requires tests for:
 - stale memory after correction;
 - cached context pack invalidation;
 - provider-specific prompt boundary failure;
+
+The public conformance suite now includes baseline red-team fixtures for
+secret-like user text, prompt-injection-like tool output, untrusted tool claims,
+and assistant guesses. These prove unsafe content is quarantined or left
+reviewable and absent from prompt-facing retrieval. Provider-specific prompt
+boundary failures, cache invalidation under hosted prompt stores, and broader
+web-document poisoning traces remain production fixtures.
 - malicious evidence quoted in a prompt.
 
 ## End State
