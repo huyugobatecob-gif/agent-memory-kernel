@@ -13,6 +13,7 @@ from agent_memory_kernel.acceptance import (
 from agent_memory_kernel.conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
+    conformance_certification_report,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -101,6 +102,32 @@ class ContractAcceptanceTests(unittest.TestCase):
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")
+
+            certification = conformance_certification_report(
+                store,
+                adapter_name="unit-test-adapter",
+                adapter_version="0.1",
+            )
+            self.assertEqual(certification["status"], "pass")
+            self.assertEqual(certification["adapter"]["name"], "unit-test-adapter")
+            self.assertEqual(certification["badge"]["message"], "compatible")
+            self.assertIn("migration_compatibility_trace", certification["summary"]["golden_trace_ids"])
+            self.assertEqual(certification["summary"]["scenario_failed"], 0)
+            store.close()
+
+    def test_conformance_certification_fails_cleanly_without_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            certification = conformance_certification_report(
+                store,
+                adapter_name="empty-adapter",
+            )
+            self.assertEqual(certification["status"], "fail")
+            self.assertEqual(certification["badge"]["message"], "failing")
+            self.assertIn("conformance_suite_execution", certification["failed"])
+            self.assertEqual(certification["summary"]["scenario_failed"], 1)
             store.close()
 
     def test_http_contract_and_acceptance_endpoints(self) -> None:
@@ -133,4 +160,12 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertEqual(seeded["status"], "seeded")
             result = handle_api_request(store, "/conformance/assert", {})
             self.assertEqual(result["status"], "pass")
+            certification = handle_api_request(
+                store,
+                "/conformance/certify",
+                {"adapter_name": "http-test-adapter", "adapter_version": "0.1"},
+            )
+            self.assertEqual(certification["status"], "pass")
+            self.assertEqual(certification["adapter"]["name"], "http-test-adapter")
+            self.assertEqual(certification["badge"]["color"], "brightgreen")
             store.close()

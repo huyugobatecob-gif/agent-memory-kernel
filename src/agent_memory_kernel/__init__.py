@@ -7,6 +7,7 @@ from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acce
 from .conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
+    conformance_certification_report,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -22,6 +23,7 @@ __all__ = [
     "assert_conformance_spec_shape",
     "assert_conformance_suite",
     "assert_contract_shape",
+    "conformance_certification_report",
     "conformance_spec",
     "memory_contract",
     "run_acceptance_suite",

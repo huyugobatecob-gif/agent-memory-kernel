@@ -64,6 +64,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_derived_invalidations", names)
             self.assertIn("memory_observability", names)
             self.assertIn("memory_migration_status", names)
+            self.assertIn("memory_conformance_certify", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
             self.assertIn("memory_review_inbox", names)
@@ -130,6 +131,28 @@ class MCPServerTests(unittest.TestCase):
                 capability["result"]["structuredContent"]["version"],
                 "capability-consent-v0.1",
             )
+
+            certification = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 41,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_conformance_certify",
+                        "arguments": {
+                            "adapter_name": "mcp-test-adapter",
+                            "adapter_version": "0.1",
+                            "seed_fixture": True,
+                        },
+                    },
+                }
+            )
+            self.assertFalse(certification["result"]["isError"])
+            self.assertEqual(
+                certification["result"]["structuredContent"]["version"],
+                "agent-memory-adapter-certification-v0.1",
+            )
+            self.assertEqual(certification["result"]["structuredContent"]["status"], "pass")
 
             export_control = server.handle_message(
                 {

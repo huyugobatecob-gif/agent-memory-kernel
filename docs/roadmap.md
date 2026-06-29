@@ -272,15 +272,19 @@ The formal contract is exposed through `agent-memory contract` and
 `agent-memory acceptance seed/run/assert` and `/acceptance/seed`,
 `/acceptance/run`, `/acceptance/assert`.
 The first public conformance suite is exposed through `agent-memory conformance
-spec/seed/run/assert` and `/conformance/spec`, `/conformance/seed`,
-`/conformance/run`, `/conformance/assert`. It defines named adapter scenarios
-for professional memory injection, personal-lane isolation, current-best
-conflict suppression, stored read-policy denial, deleted-memory absence,
-unsafe-memory absence, and reviewable/idempotent Keeper writes.
+spec/seed/run/assert/certify` and `/conformance/spec`, `/conformance/seed`,
+`/conformance/run`, `/conformance/assert`, `/conformance/certify`. It defines
+named adapter scenarios for professional memory injection, personal-lane
+isolation, current-best conflict suppression, stored read-policy denial,
+deleted-memory absence, unsafe-memory absence, and reviewable/idempotent Keeper
+writes.
 The suite also publishes and runs baseline golden traces for success/failure
 outcome planning, graph browser source previews, and safe redacted profile
 export, plus a migration compatibility check for required runtime tables,
 `user_version`, and SQLite `quick_check`.
+`conformance certify` emits the first adapter compatibility badge report for
+README and CI use. Hosted badge publishing and public adapter registry entries
+remain future work.
 
 ## v0.3: Adapters
 

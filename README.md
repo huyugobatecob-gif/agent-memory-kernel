@@ -340,6 +340,7 @@ agent-memory acceptance assert --db .memory/acceptance.db
 agent-memory conformance spec
 agent-memory conformance seed --db .memory/conformance.db
 agent-memory conformance assert --db .memory/conformance.db
+agent-memory conformance certify --db .memory/conformance.db --adapter-name my-runtime
 ```
 
 The acceptance harness checks the minimum closed-loop behavior: selected memory
@@ -355,7 +356,9 @@ unsafe-memory absence, reviewable/idempotent Keeper writes, and golden traces
 for outcome planning, graph evidence inspection, safe profile export, and
 migration compatibility.
 Adapters can use it as the first "does this behave like Agent Memory Kernel?"
-gate.
+gate. `conformance certify` wraps the same suite in an adapter certification
+report with pass/fail status, scenario counts, golden trace coverage, and a
+local badge URL/Markdown snippet suitable for README or CI output.
 
 Record profile and usage metadata:
 

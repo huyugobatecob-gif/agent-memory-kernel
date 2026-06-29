@@ -239,6 +239,17 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_conformance_certify": {
+        "endpoint": "/conformance/certify",
+        "description": "Run public conformance scenarios and return an adapter compatibility badge report.",
+        "inputSchema": _schema(
+            {
+                "adapter_name": _string("Adapter or runtime name.", "mcp-runtime"),
+                "adapter_version": _string("Adapter or runtime version.", ""),
+                "seed_fixture": _boolean("Seed the public conformance fixture before certifying.", False),
+            }
+        ),
+    },
     "memory_backup_database": {
         "endpoint": "/backup",
         "description": "Create a SQLite backup of the memory database.",

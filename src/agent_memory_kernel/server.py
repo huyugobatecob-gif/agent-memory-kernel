@@ -16,6 +16,7 @@ from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acce
 from .conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
+    conformance_certification_report,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -56,6 +57,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return conformance_spec()
     if path == "/conformance/spec/assert":
         return assert_conformance_spec_shape()
+    if path == "/conformance/certify":
+        if payload.get("seed_fixture"):
+            seed_conformance_fixture(store)
+        return conformance_certification_report(
+            store,
+            adapter_name=str(payload.get("adapter_name", "local-runtime")),
+            adapter_version=str(payload.get("adapter_version", "")),
+        )
     if path == "/keeper-eval/spec":
         return keeper_eval_spec()
     if path == "/keeper-eval/run":

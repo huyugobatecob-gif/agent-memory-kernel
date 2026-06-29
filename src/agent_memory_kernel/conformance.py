@@ -8,12 +8,14 @@ compatibility with the memory behavior contract.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from .contract import assert_contract_shape, memory_contract
-from .store import MemoryStore
+from .store import MemoryStore, now_iso
 
 
 CONFORMANCE_VERSION = "agent-memory-conformance-v0"
+CERTIFICATION_VERSION = "agent-memory-adapter-certification-v0.1"
 CONFORMANCE_SCOPE = "professional"
 CONFORMANCE_THREAD_ID = "conformance-thread"
 CONFORMANCE_PROJECT = "conformance-site"
@@ -692,6 +694,92 @@ def assert_conformance_suite(store: MemoryStore) -> dict[str, Any]:
     if result["status"] != "pass":
         raise AssertionError("conformance suite failed: " + ", ".join(result["failed"]))
     return result
+
+
+def conformance_certification_report(
+    store: MemoryStore,
+    *,
+    adapter_name: str = "local-runtime",
+    adapter_version: str = "",
+    seed_fixture: bool = False,
+) -> dict[str, Any]:
+    """Run conformance and return an adapter-facing certification badge report."""
+    seeded = seed_conformance_fixture(store) if seed_fixture else None
+    try:
+        suite = run_conformance_suite(store)
+    except Exception as exc:
+        suite = {
+            "status": "fail",
+            "version": CONFORMANCE_VERSION,
+            "spec": conformance_spec(),
+            "results": [
+                {
+                    "scenario": "conformance_suite_execution",
+                    "passed": False,
+                    "evidence": {
+                        "error_type": type(exc).__name__,
+                        "message": str(exc),
+                    },
+                }
+            ],
+            "failed": ["conformance_suite_execution"],
+        }
+    spec = suite["spec"]
+    scenario_results = suite.get("results", [])
+    scenario_total = len(scenario_results)
+    scenario_passed = sum(1 for item in scenario_results if item.get("passed"))
+    scenario_failed = scenario_total - scenario_passed
+    golden_ids = [str(item.get("id", "")) for item in spec.get("golden_traces", [])]
+    golden_scenarios = {
+        scenario
+        for trace in spec.get("golden_traces", [])
+        for scenario in trace.get("expected_scenarios", [])
+    }
+    passed_scenarios = {
+        str(item.get("scenario", ""))
+        for item in scenario_results
+        if item.get("passed")
+    }
+    golden_passed = sorted(golden_scenarios & passed_scenarios)
+    golden_failed = sorted(golden_scenarios - passed_scenarios)
+    status = "pass" if suite["status"] == "pass" else "fail"
+    badge_message = "compatible" if status == "pass" else "failing"
+    badge_color = "brightgreen" if status == "pass" else "red"
+    badge_url = (
+        "https://img.shields.io/badge/"
+        f"{quote('Agent Memory')}-{quote(badge_message)}-{quote(badge_color)}"
+    )
+    adapter = {
+        "name": (adapter_name or "local-runtime").strip() or "local-runtime",
+        "version": (adapter_version or "").strip(),
+    }
+    return {
+        "version": CERTIFICATION_VERSION,
+        "status": status,
+        "issued_at": now_iso(),
+        "adapter": adapter,
+        "contract_version": memory_contract()["version"],
+        "conformance_version": CONFORMANCE_VERSION,
+        "seeded_fixture": seeded,
+        "badge": {
+            "label": "Agent Memory",
+            "message": badge_message,
+            "color": badge_color,
+            "url": badge_url,
+            "markdown": f"![Agent Memory compatibility]({badge_url})",
+        },
+        "summary": {
+            "scenario_total": scenario_total,
+            "scenario_passed": scenario_passed,
+            "scenario_failed": scenario_failed,
+            "golden_trace_total": len(golden_ids),
+            "golden_trace_ids": golden_ids,
+            "golden_scenarios_passed": golden_passed,
+            "golden_scenarios_failed": golden_failed,
+        },
+        "failed": suite.get("failed", []),
+        "suite": suite,
+    }
 
 
 def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[str, Any]:

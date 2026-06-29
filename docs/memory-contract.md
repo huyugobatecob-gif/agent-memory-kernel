@@ -159,6 +159,10 @@ These traces prove that a compatible adapter can retrieve both success and
 failure outcome evidence, inspect graph nodes with source previews, share
 profile shape without leaking content-bearing memory fields, and verify the
 local SQLite schema before rollout.
+`agent-memory conformance certify` and `POST /conformance/certify` wrap those
+checks in an adapter certification report with pass/fail status, scenario
+counts, golden trace coverage, and a local Markdown badge for README or CI
+output.
 
 The machine-readable contract also names the completion gates for governed
 read-time policy, inspection and operator control, derived-memory invalidation,

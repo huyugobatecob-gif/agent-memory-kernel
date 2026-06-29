@@ -13,6 +13,7 @@ from .acceptance import assert_acceptance_suite, run_acceptance_suite, seed_acce
 from .conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
+    conformance_certification_report,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -1414,6 +1415,20 @@ def cmd_conformance_assert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_conformance_certify(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = conformance_certification_report(
+        store,
+        adapter_name=args.adapter_name,
+        adapter_version=args.adapter_version,
+        seed_fixture=args.seed,
+    )
+    store.close()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
 def cmd_keeper_eval(args: argparse.Namespace) -> int:
     if args.spec:
         print_json(keeper_eval_spec())
@@ -2332,6 +2347,13 @@ def build_parser() -> argparse.ArgumentParser:
     cp = conformance_sub.add_parser("assert", help="Run conformance and fail the command on any failed scenario")
     add_common_db(cp)
     cp.set_defaults(func=cmd_conformance_assert)
+
+    cp = conformance_sub.add_parser("certify", help="Run conformance and emit an adapter badge report")
+    add_common_db(cp)
+    cp.add_argument("--adapter-name", default="local-runtime")
+    cp.add_argument("--adapter-version", default="")
+    cp.add_argument("--seed", action="store_true", help="Seed the public conformance fixture before certifying")
+    cp.set_defaults(func=cmd_conformance_certify)
 
     p = sub.add_parser("keeper-eval", help="Run offline Keeper extraction evals")
     p.add_argument("--spec", action="store_true")

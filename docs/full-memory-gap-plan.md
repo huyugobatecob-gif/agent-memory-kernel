@@ -94,8 +94,9 @@ Must-have before claiming full memory:
     and `/conformance/spec`, `/conformance/seed`, `/conformance/run`,
     `/conformance/assert`. The suite now includes public golden traces for
     outcome planning, graph evidence inspection, safe profile export, and
-    migration compatibility; remaining work is external adapter badges and
-    broader real-world behavior traces.
+    migration compatibility, plus a local adapter certification badge report;
+    remaining work is hosted badge publishing, public adapter registry entries,
+    and broader real-world behavior traces.
 
 ## Additional Runtime Architecture Notes
 

@@ -17,6 +17,7 @@ from agent_memory_kernel import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
     assert_contract_shape,
+    conformance_certification_report,
     conformance_spec,
     memory_contract,
     run_acceptance_suite,
@@ -64,6 +65,20 @@ class HermesMemoryProvider:
 
     def assert_conformance(self) -> dict[str, Any]:
         return assert_conformance_suite(self.store)
+
+    def conformance_certification(
+        self,
+        *,
+        adapter_name: str = "hermes-provider",
+        adapter_version: str = "",
+        seed_fixture: bool = False,
+    ) -> dict[str, Any]:
+        return conformance_certification_report(
+            self.store,
+            adapter_name=adapter_name,
+            adapter_version=adapter_version,
+            seed_fixture=seed_fixture,
+        )
 
     def context_pack(
         self,

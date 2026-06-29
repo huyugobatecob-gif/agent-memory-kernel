@@ -104,6 +104,8 @@ Operator and graph tools:
 - `memory_delete`: soft-delete active memory and suppress retrieval.
 - `memory_distrust`: keep memory for audit but suppress retrieval.
 - `memory_expire`: expire active memory and suppress retrieval.
+- `memory_conformance_certify`: run public conformance scenarios and return an
+  adapter compatibility badge report for CI or README output.
 - `memory_export_control`: preview export policy, aggregate scope counts, and
   risk flags before memory leaves the store. Accepts `redaction_profile`
   (`full`, `safe`, or `metadata`) so operators can preview the intended export
