@@ -338,8 +338,9 @@ Remaining for full memory:
 - Production derived-memory invalidation beyond the baseline ledger, including
   richer summary dependency tracking, provider embeddings, cached prompt stores,
   and outcome lesson lineage.
-- Production current-best heuristics for stale, conflicting, superseded, or
-  equal-trust claims beyond explicit resolved conflicts.
+- Production current-best workflows beyond the baseline explicit conflict
+  resolver and conservative near-duplicate heuristics, including richer
+  operator approval flows for equal-trust or ambiguous claims.
 - Production hosted identity and delegation flows beyond the baseline local
   capability/consent and identity-delegation reports for
   read/write/promote/inject/export/delete.
@@ -383,7 +384,8 @@ Remaining for full memory:
   agent/scope/action capability, read/write policy, and identity-delegation
   audit reports.
 - Production current-best-answer resolution beyond the baseline explicit
-  conflict resolver and active-memory conflict detector.
+  conflict resolver, active-memory conflict detector, and conservative
+  near-duplicate heuristics.
 - Broader live-provider certification and provider-specific prompt envelope
   tests beyond the baseline OpenAI/Anthropic/Google/local prompt formatter
   certification.

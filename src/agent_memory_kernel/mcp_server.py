@@ -883,7 +883,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
     },
     "memory_current_best": {
         "endpoint": "/current-best",
-        "description": "Explain current-best retrieval and conflict suppression for a query.",
+        "description": "Explain current-best retrieval, conflict suppression, and near-duplicate heuristics.",
         "inputSchema": _schema(
             {
                 "query": _string("Question or topic."),

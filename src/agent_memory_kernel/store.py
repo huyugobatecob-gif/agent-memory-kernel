@@ -120,6 +120,7 @@ MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
 OUTCOME_COMPARISON_VERSION = "outcome-comparison-v0.1"
+CURRENT_BEST_HEURISTICS_VERSION = "current-best-heuristics-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -12586,11 +12587,25 @@ class MemoryStore:
     ) -> dict[str, Any]:
         candidate_ids = list(seed_scores)
         result: dict[str, Any] = {
-            "policy": "resolved winner suppresses loser at retrieval; open conflict is marked unresolved",
+            "policy": (
+                "resolved winner suppresses loser at retrieval; open conflict is "
+                "marked unresolved; near-duplicate heuristics prefer fresher, "
+                "trusted, higher-confidence, better-evidenced memory"
+            ),
             "resolved": [],
             "unresolved": [],
             "suppressed": [],
             "suppressed_decisions": [],
+            "heuristics": {
+                "version": CURRENT_BEST_HEURISTICS_VERSION,
+                "applied": [],
+                "unresolved": [],
+                "policy": (
+                    "only strongly-overlapping active memories in the same "
+                    "scope/kind are eligible; outcome groups and open conflicts "
+                    "remain visible for review"
+                ),
+            },
         }
         if not candidate_ids:
             return result
@@ -12679,7 +12694,311 @@ class MemoryStore:
                         "reason": row["reason"] or "open conflict",
                     }
                 )
+        heuristic_result = self._apply_current_best_heuristics(
+            seed_scores,
+            reasons,
+            scope=scope,
+        )
+        result["heuristics"] = heuristic_result
+        result["suppressed"].extend(heuristic_result.get("suppressed", []))
+        result["suppressed_decisions"].extend(heuristic_result.get("suppressed_decisions", []))
         return result
+
+    def _apply_current_best_heuristics(
+        self,
+        seed_scores: dict[str, float],
+        reasons: dict[str, set[str]],
+        *,
+        scope: str | None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "version": CURRENT_BEST_HEURISTICS_VERSION,
+            "policy": (
+                "strongly-overlapping active memories in the same scope/kind are "
+                "ranked by trust, confidence, recency, evidence, outcome signal, "
+                "and prior Router feedback; outcome groups and open conflicts are "
+                "not automatically suppressed"
+            ),
+            "applied": [],
+            "unresolved": [],
+            "suppressed": [],
+            "suppressed_decisions": [],
+        }
+        candidate_ids = [memory_id for memory_id in seed_scores if memory_id]
+        if len(candidate_ids) < 2:
+            return result
+
+        memory_rows = self._memories_by_id(candidate_ids)
+        if len(memory_rows) < 2:
+            return result
+
+        explicit_pairs = self._memory_conflict_pair_keys()
+        parents = {memory_id: memory_id for memory_id in memory_rows}
+        pair_metrics: dict[tuple[str, str], dict[str, Any]] = {}
+        token_cache: dict[str, set[str]] = {}
+
+        def find(memory_id: str) -> str:
+            parent = parents[memory_id]
+            if parent != memory_id:
+                parents[memory_id] = find(parent)
+            return parents[memory_id]
+
+        def union(left: str, right: str) -> None:
+            left_root = find(left)
+            right_root = find(right)
+            if left_root != right_root:
+                parents[right_root] = left_root
+
+        def tokens_for(memory_id: str) -> set[str]:
+            if memory_id not in token_cache:
+                token_cache[memory_id] = set(query_tokens(str(memory_rows[memory_id]["text"] or "")))
+            return token_cache[memory_id]
+
+        ids = list(memory_rows)
+        for left_index, left_id in enumerate(ids):
+            left = memory_rows[left_id]
+            left_tokens = tokens_for(left_id)
+            if len(left_tokens) < 3:
+                continue
+            for right_id in ids[left_index + 1 :]:
+                pair_key = tuple(sorted((left_id, right_id)))
+                if pair_key in explicit_pairs:
+                    continue
+                right = memory_rows[right_id]
+                if left["scope"] != right["scope"] or left["kind"] != right["kind"]:
+                    continue
+                right_tokens = tokens_for(right_id)
+                if len(right_tokens) < 3:
+                    continue
+                common_tokens = left_tokens & right_tokens
+                overlap_ratio = len(common_tokens) / max(
+                    1,
+                    min(len(left_tokens), len(right_tokens)),
+                )
+                jaccard = len(common_tokens) / max(1, len(left_tokens | right_tokens))
+                if len(common_tokens) < 4 or (overlap_ratio < 0.6 and jaccard < 0.45):
+                    continue
+                union(left_id, right_id)
+                pair_metrics[pair_key] = {
+                    "overlap_tokens": sorted(common_tokens)[:12],
+                    "overlap_ratio": round(overlap_ratio, 4),
+                    "jaccard": round(jaccard, 4),
+                }
+
+        groups: dict[str, list[str]] = defaultdict(list)
+        for memory_id in memory_rows:
+            groups[find(memory_id)].append(memory_id)
+
+        sources = self._sources_for_memories(list(memory_rows))
+        graph_nodes = self._graph_nodes_for_memories(list(memory_rows))
+        for group_ids in groups.values():
+            if len(group_ids) < 2:
+                continue
+            group_rows = [memory_rows[memory_id] for memory_id in group_ids]
+            group_kinds = {str(row["kind"] or "") for row in group_rows}
+            if "outcome" in group_kinds:
+                result["unresolved"].append(
+                    {
+                        "reason": "outcome memories stay visible even when similar",
+                        "memory_ids": sorted(group_ids),
+                    }
+                )
+                continue
+
+            open_conflict_ids = []
+            for memory_id in group_ids:
+                conflict_status = self._memory_conflict_status(memory_id)
+                if conflict_status.get("status") == "open":
+                    open_conflict_ids.extend(conflict_status.get("conflict_ids", []))
+            if open_conflict_ids:
+                result["unresolved"].append(
+                    {
+                        "reason": "open explicit conflict requires review",
+                        "memory_ids": sorted(group_ids),
+                        "conflict_ids": sorted(set(open_conflict_ids)),
+                    }
+                )
+                continue
+
+            recency_order = {
+                memory_id: index
+                for index, memory_id in enumerate(
+                    sorted(
+                        group_ids,
+                        key=lambda item: str(memory_rows[item]["updated_at"] or ""),
+                        reverse=True,
+                    )
+                )
+            }
+            scored = []
+            for memory_id in group_ids:
+                score_item = self._current_best_heuristic_score(
+                    memory_id,
+                    memory_rows[memory_id],
+                    seed_scores=seed_scores,
+                    sources=sources,
+                    graph_nodes=graph_nodes,
+                    recency_rank=recency_order.get(memory_id, len(group_ids)),
+                )
+                scored.append(score_item)
+            scored.sort(
+                key=lambda item: (
+                    item["score"],
+                    item["updated_at"],
+                    float(seed_scores.get(item["memory_id"], 0.0)),
+                    item["memory_id"],
+                ),
+                reverse=True,
+            )
+            winner = scored[0]
+            runner_up = scored[1]
+            if float(winner["score"]) - float(runner_up["score"]) < 3.0:
+                result["unresolved"].append(
+                    {
+                        "reason": "heuristic scores too close for automatic current-best",
+                        "memory_ids": sorted(group_ids),
+                        "scores": [
+                            {
+                                "memory_id": item["memory_id"],
+                                "score": item["score"],
+                                "factors": item["factors"],
+                            }
+                            for item in scored
+                        ],
+                    }
+                )
+                continue
+
+            winner_id = str(winner["memory_id"])
+            losers = [item for item in scored[1:] if item["memory_id"] in seed_scores]
+            for loser in losers:
+                loser_id = str(loser["memory_id"])
+                loser_score = float(seed_scores.get(loser_id, 0.0))
+                seed_scores[winner_id] = max(float(seed_scores.get(winner_id, 0.0)), loser_score + 3)
+                seed_scores.pop(loser_id, None)
+                reasons[winner_id].add(
+                    "current-best heuristic preferred over near-duplicate memory"
+                )
+                pair_key = tuple(sorted((winner_id, loser_id)))
+                overlap = pair_metrics.get(pair_key, {})
+                applied = {
+                    "decision": "heuristic_current_best",
+                    "winner_memory_id": winner_id,
+                    "suppressed_memory_id": loser_id,
+                    "winner_score": winner["score"],
+                    "suppressed_score": loser["score"],
+                    "winner_factors": winner["factors"],
+                    "suppressed_factors": loser["factors"],
+                    "overlap": overlap,
+                    "reason": (
+                        "near-duplicate active memory ranked lower by trust, "
+                        "confidence, recency, evidence, outcome, and feedback heuristics"
+                    ),
+                }
+                suppressed = {
+                    "decision": "suppressed_current_best_heuristic_loser",
+                    "memory_id": loser_id,
+                    "winner_memory_id": winner_id,
+                    "score": round(loser_score, 4),
+                    "reason": applied["reason"],
+                    "policy_version": READ_TIME_POLICY_VERSION,
+                    "heuristic_version": CURRENT_BEST_HEURISTICS_VERSION,
+                    "policy_factors": self._memory_policy_factors(
+                        loser_id,
+                        self._memory_row_any_status(loser_id),
+                    ),
+                }
+                result["applied"].append(applied)
+                result["suppressed"].append(suppressed)
+                result["suppressed_decisions"].append(suppressed)
+        return result
+
+    def _current_best_heuristic_score(
+        self,
+        memory_id: str,
+        row: sqlite3.Row,
+        *,
+        seed_scores: dict[str, float],
+        sources: dict[str, list[sqlite3.Row]],
+        graph_nodes: dict[str, list[sqlite3.Row]],
+        recency_rank: int,
+    ) -> dict[str, Any]:
+        trust_scores = {"trusted": 10.0, "user": 8.0, "system": 6.0, "untrusted": -12.0}
+        confidence_scores = {"confirmed": 8.0, "high": 6.0, "medium": 2.0, "low": -6.0}
+        sensitivity_scores = {"public": 2.0, "internal": 0.0, "personal": -2.0, "secret": -20.0}
+        outcome_scores = {"success": 8.0, "mixed": 3.0, "unknown": 0.0, "failure": -2.0}
+        factors: list[dict[str, Any]] = []
+        score = round(float(seed_scores.get(memory_id, 0.0)) * 0.1, 4)
+        factors.append({"name": "retrieval_score", "value": score})
+
+        trust = str(row["source_trust"] or "untrusted")
+        trust_score = trust_scores.get(trust, 0.0)
+        score += trust_score
+        factors.append({"name": "source_trust", "value": trust_score, "label": trust})
+
+        confidence = str(row["confidence"] or "medium")
+        confidence_score = confidence_scores.get(confidence, 0.0)
+        score += confidence_score
+        factors.append({"name": "confidence", "value": confidence_score, "label": confidence})
+
+        sensitivity = str(row["sensitivity"] or "internal")
+        sensitivity_score = sensitivity_scores.get(sensitivity, 0.0)
+        score += sensitivity_score
+        factors.append({"name": "sensitivity", "value": sensitivity_score, "label": sensitivity})
+
+        recency_bonus = max(0.0, 6.0 - (float(recency_rank) * 2.0))
+        score += recency_bonus
+        factors.append({"name": "recency", "value": recency_bonus, "rank": recency_rank})
+
+        source_count = len(sources.get(memory_id, []))
+        graph_node_count = len(graph_nodes.get(memory_id, []))
+        evidence_score = min(6.0, (source_count * 1.5) + (graph_node_count * 0.75))
+        score += evidence_score
+        factors.append(
+            {
+                "name": "evidence",
+                "value": round(evidence_score, 4),
+                "source_count": source_count,
+                "graph_node_count": graph_node_count,
+            }
+        )
+
+        outcome_signal = self._memory_outcome_signal(memory_id)
+        outcome_status = str(outcome_signal.get("status", "none"))
+        if outcome_status != "none":
+            outcome_score = outcome_scores.get(outcome_status, 0.0) + min(
+                6.0,
+                max(-6.0, self._safe_float(outcome_signal.get("score"), 0.0) * 6.0),
+            )
+            score += outcome_score
+            factors.append(
+                {
+                    "name": "outcome_signal",
+                    "value": round(outcome_score, 4),
+                    "status": outcome_status,
+                    "score": outcome_signal.get("score", 0),
+                }
+            )
+
+        feedback_signal = self._memory_feedback_signal(memory_id)
+        feedback_adjustment = self._safe_float(feedback_signal.get("score_adjustment"), 0.0)
+        feedback_score = max(-8.0, min(8.0, feedback_adjustment * 0.5))
+        if feedback_score:
+            score += feedback_score
+            factors.append(
+                {
+                    "name": "router_feedback",
+                    "value": round(feedback_score, 4),
+                    "summary": feedback_signal.get("summary", ""),
+                }
+            )
+
+        return {
+            "memory_id": memory_id,
+            "score": round(score, 4),
+            "updated_at": row["updated_at"],
+            "factors": factors,
+        }
 
     def _memory_policy_factors(
         self,

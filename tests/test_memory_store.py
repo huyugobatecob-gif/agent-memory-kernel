@@ -1063,6 +1063,82 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(api_report["current_best"]["resolved"][0]["winner_memory_id"], current)
             store.close()
 
+    def test_current_best_heuristics_prefer_newer_trusted_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            stale = store.remember(
+                "Decision: project heuristic-site canonical CTA is Book Demo.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            current = store.remember(
+                "Decision: project heuristic-site canonical CTA is Start Trial.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            store.conn.execute(
+                """
+                UPDATE memories
+                SET updated_at = ?, confidence = ?, source_trust = ?
+                WHERE memory_id = ?
+                """,
+                ("2026-01-01T00:00:00+00:00", "low", "untrusted", stale),
+            )
+            store.conn.execute(
+                """
+                UPDATE memories
+                SET updated_at = ?, confidence = ?, source_trust = ?
+                WHERE memory_id = ?
+                """,
+                ("2026-06-01T00:00:00+00:00", "high", "trusted", current),
+            )
+            store.conn.commit()
+
+            tree = store.retrieve_tree(
+                "heuristic-site canonical CTA",
+                scope="professional",
+                limit=3,
+            )
+            tree_text = str(tree)
+
+            self.assertIn("Start Trial", tree_text)
+            self.assertNotIn("Book Demo.", tree_text)
+            current_best = tree["retrieval"]["current_best"]
+            self.assertEqual(current_best["heuristics"]["version"], "current-best-heuristics-v0.1")
+            self.assertEqual(
+                current_best["heuristics"]["applied"][0]["winner_memory_id"],
+                current,
+            )
+            self.assertEqual(
+                current_best["heuristics"]["applied"][0]["suppressed_memory_id"],
+                stale,
+            )
+            self.assertEqual(
+                current_best["suppressed_decisions"][0]["decision"],
+                "suppressed_current_best_heuristic_loser",
+            )
+
+            report = store.current_best_report(
+                "heuristic-site canonical CTA",
+                scope="professional",
+            )
+            self.assertEqual(
+                report["current_best"]["heuristics"]["applied"][0]["winner_memory_id"],
+                current,
+            )
+            api_report = handle_api_request(
+                store,
+                "/current-best",
+                {"query": "heuristic-site canonical CTA", "scope": "professional"},
+            )
+            self.assertEqual(
+                api_report["current_best"]["heuristics"]["applied"][0]["winner_memory_id"],
+                current,
+            )
+            store.close()
+
     def test_outcome_records_create_loop_memory_pack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

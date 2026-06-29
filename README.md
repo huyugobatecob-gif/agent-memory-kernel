@@ -218,9 +218,10 @@ agent-memory current-best --db .memory/demo.db --scope professional "project rul
 conflict records with `--record`.
 `supersede` suppresses the old memory from retrieval and graph export while
 recording a resolved conflict relationship for audit.
-`current-best` shows how prompt-facing retrieval resolves explicit conflicts:
-resolved winners suppress loser memories, and open conflicts stay visible as
-unresolved review items.
+`current-best` shows how prompt-facing retrieval resolves explicit conflicts
+and near-duplicate memory: resolved winners suppress loser memories, strongly
+overlapping active memories can be ranked by trust/confidence/recency/evidence,
+and open conflicts stay visible as unresolved review items.
 
 Correct and rollback memory:
 

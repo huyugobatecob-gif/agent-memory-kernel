@@ -307,6 +307,10 @@ Superseded memory is suppressed from active retrieval and graph export while the
 resolved relationship remains auditable. Explicit resolved conflicts also affect
 prompt-facing tree retrieval: the winner is selected, the loser is suppressed,
 and unresolved conflicts remain visible for review.
+Baseline current-best heuristics now also rank strongly-overlapping active
+memories in the same scope/kind by trust, confidence, recency, evidence,
+outcome signal, and prior Router feedback. Outcome groups and open explicit
+conflicts remain visible for review instead of being silently suppressed.
 Outcome records and outcome packs are implemented for success/failure loop
 planning.
 Delete, distrust, and expire now suppress retrieval and active graph export.

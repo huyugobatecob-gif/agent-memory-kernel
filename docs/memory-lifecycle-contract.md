@@ -181,6 +181,10 @@ Implementation surface:
 - `current-best` and prompt-facing tree retrieval resolve explicit resolved
   conflicts at read time: the winner is selected and the loser is reported as a
   suppressed current-best loser.
+- `current-best` also applies conservative near-duplicate heuristics for active
+  memories in the same scope/kind, preferring fresher, trusted,
+  higher-confidence, better-evidenced memory while keeping open conflicts and
+  outcome groups visible for review.
 - `supersede` records a resolved `supersedes` relationship and marks the old
   memory and its memory item as `superseded`.
 - Superseded memory is removed from active retrieval and active graph export
