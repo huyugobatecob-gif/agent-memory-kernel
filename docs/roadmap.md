@@ -356,13 +356,14 @@ Implemented now:
 - local deterministic semantic reranker;
 - provider-neutral embedding contract with local fallback;
 - OpenAI-compatible embedding provider adapter;
+- embedding/rerank contract certification;
 - file-based vault adapter.
 
 Planned:
 
 - hosted or remote MCP deployment patterns;
 - provider-backed approximate-nearest-neighbor reranker for larger corpora;
-- live embedding provider certification fixtures.
+- live embedding provider certification fixtures backed by real provider keys.
 
 ## v0.4: Review UI
 

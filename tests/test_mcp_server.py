@@ -75,6 +75,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_conformance_certify", names)
             self.assertIn("memory_prompt_format_certify", names)
+            self.assertIn("memory_embedding_certify", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
             self.assertIn("memory_review_inbox", names)

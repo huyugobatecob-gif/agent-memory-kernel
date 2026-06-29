@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Sequence
 
+from agent_memory_kernel import MemoryStore
 from agent_memory_kernel.embeddings import (
     EmbeddedDocument,
     LocalEmbeddingProvider,
     OpenAIEmbeddingProvider,
     cosine_similarity,
+    embedding_certification_report,
     lexical_embedding,
     rank_documents,
     semantic_similarity,
 )
+from agent_memory_kernel.server import handle_api_request
 
 
 class FakeProvider:
@@ -129,6 +134,32 @@ class EmbeddingsContractTests(unittest.TestCase):
             provider=provider,
         )
         self.assertEqual(ranked[0]["document_id"], "mem_signup")
+
+    def test_embedding_certification_report_checks_local_and_provider_contract(self) -> None:
+        report = embedding_certification_report(
+            provider=FakeProvider(),
+            provider_name="fake-provider",
+            dims=16,
+        )
+
+        self.assertEqual(report["version"], "embedding-certification-v0.1")
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["dims"], 16)
+        names = {item["name"] for item in report["checks"]}
+        self.assertIn("local_embedding_deterministic", names)
+        self.assertIn("provider_ranker_contract", names)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            endpoint = handle_api_request(
+                store,
+                "/embedding/certify",
+                {"provider": "local", "dims": 16},
+            )
+            self.assertEqual(endpoint["status"], "pass")
+            self.assertEqual(endpoint["summary"]["skipped_count"], 1)
+            store.close()
 
 
 if __name__ == "__main__":

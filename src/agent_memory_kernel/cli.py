@@ -422,6 +422,19 @@ def cmd_prompt_format_certify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_embedding_certify(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.embedding_certification_report(
+            provider_name=args.provider,
+            dims=args.dims,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_router_runs(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1844,6 +1857,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--providers", default="", help="Comma-separated providers: openai, anthropic, gemini, local")
     p.add_argument("--model-id", default="", help="Optional model id for budget/profile metadata")
     p.set_defaults(func=cmd_prompt_format_certify)
+
+    p = sub.add_parser("embedding-certify", help="Certify embedding/rerank contract")
+    add_common_db(p)
+    p.add_argument("--provider", default="local", help="Provider label for the certification report")
+    p.add_argument("--dims", type=int, default=32)
+    p.set_defaults(func=cmd_embedding_certify)
 
     p = sub.add_parser("router-runs", help="List Router runs and prompt-facing memory reads")
     add_common_db(p)

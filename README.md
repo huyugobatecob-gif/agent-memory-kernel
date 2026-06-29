@@ -121,6 +121,8 @@ Included now:
   optional provider rerank hook for larger corpora.
 - OpenAI-compatible embedding provider adapter for hosted vectors without a
   hard SDK dependency.
+- Embedding/rerank contract certification for deterministic local fallback and
+  optional provider adapter checks.
 - Full context builder with rules, profile, summaries, recent messages, and tree supplement.
 - Runtime/Python production turn wrapper: `run_agent_turn()` builds the prompt
   envelope, calls a supplied main agent, saves the exchange, and runs Keeper.
@@ -360,6 +362,7 @@ agent-memory conformance seed --db .memory/conformance.db
 agent-memory conformance assert --db .memory/conformance.db
 agent-memory conformance certify --db .memory/conformance.db --adapter-name my-runtime
 agent-memory prompt-format-certify --db .memory/conformance.db --providers openai,anthropic,gemini,local
+agent-memory embedding-certify --db .memory/conformance.db --provider local --dims 32
 ```
 
 The acceptance harness checks the minimum closed-loop behavior: selected memory
@@ -823,6 +826,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_derived_lineage`,
 `memory_operational_status`, `memory_observability`,
 `memory_billing_reconcile`,
+`memory_embedding_certify`,
 `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_graph_nodes`, `memory_graph_edges`, and
 `memory_worker_run`, `memory_worker_status`.

@@ -428,6 +428,7 @@ Useful endpoints:
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
 - `POST /acceptance/seed`, `/acceptance/run`, `/acceptance/assert`
 - `POST /conformance/seed`, `/conformance/run`, `/conformance/assert`
+- `POST /embedding/certify`
 - `POST /worker/run`
 - `POST /worker/status`
 

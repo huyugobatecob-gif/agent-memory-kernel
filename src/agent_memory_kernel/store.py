@@ -18,7 +18,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .embeddings import lexical_embedding, query_tokens, semantic_similarity, semantic_terms
+from .embeddings import (
+    embedding_certification_report as build_embedding_certification_report,
+    lexical_embedding,
+    query_tokens,
+    semantic_similarity,
+    semantic_terms,
+)
 from .extractors.base import Extractor
 from .extractors.rules import RuleBasedExtractor
 from .graph_commands import (
@@ -5429,6 +5435,18 @@ class MemoryStore:
                 "provider-specific top-level shape is present",
             ],
         }
+
+    def embedding_certification_report(
+        self,
+        *,
+        provider_name: str = "local",
+        dims: int = 32,
+    ) -> dict[str, Any]:
+        """Certify the provider-neutral embedding/rerank contract."""
+        return build_embedding_certification_report(
+            provider_name=provider_name,
+            dims=dims,
+        )
 
     def _prompt_formatter_checks(
         self,

@@ -376,8 +376,9 @@ Remaining for full memory:
   health alerts and platform-specific deployment recipes.
 - Broader hosted/remote MCP deployment patterns beyond the documented local
   stdio and private HTTP/tunnel guidance.
-- Approximate-nearest-neighbor indexes, live embedding provider certification,
-  and production semantic reranking beyond the provider-neutral local contract.
+- Approximate-nearest-neighbor indexes, live embedding provider certification
+  with real provider keys, and production semantic reranking beyond the
+  provider-neutral local contract.
 - Production-grade outcome comparison beyond the baseline score summaries and
   deterministic lesson extraction, including cross-project clustering and
   LLM-reviewed lesson quality.
@@ -633,8 +634,11 @@ embedding tests can be added behind optional integration flags.
 `EmbeddingProvider` contract, deterministic `LocalEmbeddingProvider`,
 OpenAI-compatible `OpenAIEmbeddingProvider`, stored embedding reuse, and tests
 that prove optional provider ranking can be injected without a live service.
-Remaining work is approximate-nearest-neighbor indexes and provider-specific
-live integration certification for larger corpora.
+`agent-memory embedding-certify`, `/embedding/certify`, and MCP
+`memory_embedding_certify` certify the deterministic local fallback and
+provider-neutral rerank invariants without live keys. Remaining work is
+approximate-nearest-neighbor indexes and live provider certification fixtures
+for larger corpora.
 
 ### Step 8: Build The Prompt Envelope
 

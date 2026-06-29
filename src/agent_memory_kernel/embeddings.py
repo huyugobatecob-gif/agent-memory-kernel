@@ -188,6 +188,7 @@ SEMANTIC_ALIASES = {
     for group, aliases in SEMANTIC_GROUPS.items()
     for alias in aliases
 }
+EMBEDDING_CERTIFICATION_VERSION = "embedding-certification-v0.1"
 
 
 class EmbeddingProvider(Protocol):
@@ -391,3 +392,140 @@ def rank_documents(
         )
     ranked.sort(key=lambda item: (-item["score"], item["document_id"]))
     return ranked[:limit]
+
+
+def embedding_certification_report(
+    *,
+    provider: EmbeddingProvider | None = None,
+    provider_name: str = "local",
+    dims: int = 32,
+) -> dict[str, Any]:
+    """Certify the provider-neutral embedding contract without live services."""
+    provider_name = (provider_name or "local").strip() or "local"
+    dims = max(2, min(int(dims or 32), 4096))
+    checks: list[dict[str, Any]] = []
+
+    def add_check(
+        name: str,
+        passed: bool,
+        detail: str,
+        metadata: dict[str, Any] | None = None,
+        *,
+        skipped: bool = False,
+    ) -> None:
+        checks.append(
+            {
+                "name": name,
+                "passed": bool(passed),
+                "skipped": skipped,
+                "detail": detail,
+                "metadata": metadata or {},
+            }
+        )
+
+    local = LocalEmbeddingProvider(dims=dims)
+    first = local.embed(["SEO loop success"])[0]
+    second = local.embed(["SEO loop success"])[0]
+    add_check(
+        "local_embedding_deterministic",
+        first == second and cosine_similarity(first, second) > 0.99,
+        "Local fallback returns stable vectors for identical text.",
+        {"dims": len(first), "cosine": cosine_similarity(first, second)},
+    )
+    add_check(
+        "local_embedding_dimensions",
+        len(first) == dims,
+        "Local fallback respects requested dimensions.",
+        {"expected_dims": dims, "actual_dims": len(first)},
+    )
+    semantic_score = semantic_similarity(
+        "successful SEO loop",
+        "winning content iteration",
+    )
+    add_check(
+        "semantic_terms_bridge_related_language",
+        semantic_score > 0,
+        "Dependency-free semantic terms bridge related success/loop language.",
+        {"similarity": semantic_score},
+    )
+    local_ranked = rank_documents(
+        "SEO success loop",
+        [
+            EmbeddedDocument(
+                "mem_success",
+                "Decision: SEO loop success came from title refresh.",
+                embedding=lexical_embedding(
+                    "Decision: SEO loop success came from title refresh.",
+                    dims=dims,
+                ),
+            ),
+            EmbeddedDocument(
+                "mem_backup",
+                "Decision: backup before SQLite migration.",
+                embedding=lexical_embedding(
+                    "Decision: backup before SQLite migration.",
+                    dims=dims,
+                ),
+            ),
+        ],
+        dims=dims,
+        limit=2,
+    )
+    add_check(
+        "local_ranker_prefers_relevant_document",
+        bool(local_ranked) and local_ranked[0]["document_id"] == "mem_success",
+        "Local ranker returns the relevant document before unrelated memory.",
+        {"ranked": local_ranked},
+    )
+
+    if provider is None:
+        add_check(
+            "provider_embedding_optional",
+            True,
+            "No provider supplied; live/provider certification was skipped.",
+            {"provider_name": provider_name},
+            skipped=True,
+        )
+    else:
+        try:
+            provider_ranked = rank_documents(
+                "conversion lift",
+                [
+                    EmbeddedDocument("mem_signup", "Pattern: signup uplift after copy rewrite."),
+                    EmbeddedDocument("mem_backup", "Rule: backup SQLite before restore."),
+                ],
+                provider=provider,
+                limit=2,
+                min_similarity=0.1,
+            )
+            add_check(
+                "provider_ranker_contract",
+                bool(provider_ranked)
+                and provider_ranked[0]["document_id"] == "mem_signup"
+                and provider_ranked[0]["embedding_source"] == "provider",
+                "Caller-supplied provider returns one vector per text and ranks in provider space.",
+                {"provider_name": provider_name, "ranked": provider_ranked},
+            )
+        except Exception as exc:  # pragma: no cover - defensive report path
+            add_check(
+                "provider_ranker_contract",
+                False,
+                f"Provider embedding contract failed: {exc}",
+                {"provider_name": provider_name},
+            )
+
+    required = [item for item in checks if not item.get("skipped")]
+    failed = [item for item in required if not item["passed"]]
+    return {
+        "version": EMBEDDING_CERTIFICATION_VERSION,
+        "status": "fail" if failed else "pass",
+        "provider_name": provider_name,
+        "dims": dims,
+        "summary": {
+            "check_count": len(checks),
+            "required_count": len(required),
+            "failed_count": len(failed),
+            "skipped_count": sum(1 for item in checks if item.get("skipped")),
+        },
+        "checks": checks,
+    }

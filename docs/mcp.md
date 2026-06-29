@@ -120,6 +120,8 @@ Operator and graph tools:
 - `memory_prompt_format_certify`: certify provider prompt formatters against
   prompt-boundary invariants for OpenAI, Anthropic, Gemini/Google, and local
   prompt shapes.
+- `memory_embedding_certify`: certify the provider-neutral embedding/rerank
+  contract and deterministic local fallback.
 - `memory_identity_delegation`: report tenant, actor, explicit delegation,
   implicit local allow, wildcard-policy risk, and recommended policy commands.
 - `memory_export_control`: preview export policy, aggregate scope counts, and

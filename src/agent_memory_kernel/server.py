@@ -73,6 +73,11 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             providers=providers,
             model_id=str(payload.get("model_id", "")),
         )
+    if path in {"/embedding/certify", "/embedding-certify"}:
+        return store.embedding_certification_report(
+            provider_name=str(payload.get("provider", "local") or "local"),
+            dims=int(payload.get("dims", 32) or 32),
+        )
     if path == "/keeper-eval/spec":
         return keeper_eval_spec()
     if path == "/keeper-eval/run":

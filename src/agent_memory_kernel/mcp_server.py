@@ -326,6 +326,16 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_embedding_certify": {
+        "endpoint": "/embedding/certify",
+        "description": "Certify the provider-neutral embedding and rerank contract.",
+        "inputSchema": _schema(
+            {
+                "provider": _string("Provider label for the report.", "local"),
+                "dims": _integer("Local embedding dimensions to certify.", 32),
+            }
+        ),
+    },
     "memory_backup_database": {
         "endpoint": "/backup",
         "description": "Create a SQLite backup of the memory database.",
