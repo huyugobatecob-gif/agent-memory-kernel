@@ -232,7 +232,10 @@ Already present:
 - Baseline Router usefulness feedback and bounded usefulness-learning ranking
   through `router_feedback`, `/router-feedback/record`, `/memory-quality`, and
   `agent-memory memory-quality`; prior feedback adjusts only already-retrieved
-  candidates and is visible as `router_feedback_signal`.
+  candidates and is visible as `router_feedback_signal`. The quality report now
+  combines Router feedback coverage, helpful/harmful feedback, shadow trace eval
+  pass rate, recent failed golden fixtures, Keeper job health, and explicit
+  quality gates.
 - Baseline observability and cost accounting through `memory_observability_report`,
   `agent-memory observability`, `/observability`, Python adapter wrappers,
   and MCP `memory_observability`; the report joins Router selected branches and
@@ -350,8 +353,9 @@ Remaining for full memory:
 - Production rollout that wires `before_turn` and `after_turn` into each live
   external agent runtime path by default.
 - Production-grade read-time ranking beyond the baseline deterministic policy.
-- Production memory quality contract with broader behavioral metrics and golden
-  fixtures.
+- Production memory quality contract beyond the baseline Router feedback,
+  shadow-eval, and Keeper-health gates, including live task-improvement traces
+  and reviewed production golden fixtures.
 - Production derived-memory invalidation beyond the baseline ledger and
   memory-level dependency lineage, including richer summary dependency
   tracking, provider embeddings, cached prompt stores, and outcome lesson

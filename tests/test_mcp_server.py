@@ -71,6 +71,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_derived_invalidations", names)
             self.assertIn("memory_derived_lineage", names)
             self.assertIn("memory_observability", names)
+            self.assertIn("memory_quality_report", names)
             self.assertIn("memory_outcome_compare", names)
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_conformance_certify", names)
@@ -178,6 +179,24 @@ class MCPServerTests(unittest.TestCase):
                 capability["result"]["structuredContent"]["version"],
                 "capability-consent-v0.1",
             )
+
+            quality = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 40,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_quality_report",
+                        "arguments": {"scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(quality["result"]["isError"])
+            self.assertEqual(
+                quality["result"]["structuredContent"]["version"],
+                "memory-quality-v0.2",
+            )
+            self.assertIn("quality_gates", quality["result"]["structuredContent"])
 
             certification = server.handle_message(
                 {

@@ -138,7 +138,11 @@ usefulness-learning ranking are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
 Prior feedback is exposed as `router_feedback_signal` in selection policy
-factors and adjusts only already-retrieved candidates.
+factors and adjusts only already-retrieved candidates. `memory-quality` now
+reports a versioned quality contract with Router feedback coverage,
+helpful/harmful feedback, shadow trace eval pass rate, recent failed fixtures,
+Keeper job status, and quality gates. Live task-improvement traces and reviewed
+production golden fixtures are still backlog.
 Baseline observability and cost accounting are implemented through
 `agent-memory observability`, `/observability`, Python adapter wrappers,
 and MCP `memory_observability`. The report joins Router selected branches and

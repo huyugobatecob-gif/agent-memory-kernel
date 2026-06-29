@@ -355,6 +355,12 @@ agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates -
 agent-memory graph --db .memory/demo.db optimize --mode decay_stale --scope professional
 ```
 
+`memory-quality` returns a versioned quality contract report. It combines
+Router feedback coverage, helpful/harmful feedback, shadow trace eval pass
+rate, recent failed golden fixtures, Keeper job health, and pass/fail/evidence
+gates so rollout reviews can distinguish healthy, under-evaluated, and failing
+memory behavior.
+
 Inspect the formal memory contract and run the deterministic full-memory gate:
 
 ```bash

@@ -62,6 +62,8 @@ Runtime tools:
   behavior.
 - `memory_observability`: summarize Router runs, Keeper jobs, LLM usage
   tokens/cost, and local latency SLO alerts for memory operations.
+- `memory_quality_report`: report Router feedback coverage, helpful/harmful
+  feedback, shadow trace eval pass rate, Keeper job health, and quality gates.
 - `memory_billing_reconcile`: reconcile recorded memory LLM usage costs with
   expected billing and flag suspicious usage rows.
 - `memory_worker_status`: report queued, stale, and failed Keeper worker jobs

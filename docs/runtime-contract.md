@@ -242,6 +242,10 @@ Required behavior:
   found by text, graph, semantic, or neighbor retrieval;
 - expose `router_feedback_signal` in selection policy factors whenever
   feedback exists for a memory.
+- include shadow trace eval pass/fail rates and recent failed fixtures in
+  `memory-quality`;
+- include Keeper job status counts so post-turn extraction health is evaluated
+  with Router quality instead of separately.
 
 ## Router Contract
 

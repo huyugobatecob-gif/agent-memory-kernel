@@ -262,6 +262,16 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_quality_report": {
+        "endpoint": "/memory-quality",
+        "description": "Report Router feedback, shadow eval, Keeper health, and quality gates.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "limit": _integer("Maximum helpful/harmful memories and failed evals.", 10),
+            }
+        ),
+    },
     "memory_billing_reconcile": {
         "endpoint": "/billing/reconcile",
         "description": "Reconcile recorded memory LLM usage costs with expected billing.",

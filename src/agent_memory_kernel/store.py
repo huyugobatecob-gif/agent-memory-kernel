@@ -106,6 +106,7 @@ LEFT_BRAIN_STYLE_SHARE = 0.60
 RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
+MEMORY_QUALITY_VERSION = "memory-quality-v0.2"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 IDENTITY_DELEGATION_VERSION = "identity-delegation-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
@@ -6445,8 +6446,9 @@ class MemoryStore:
         scope: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        """Aggregate Router feedback into a lightweight quality report."""
+        """Aggregate Router feedback, shadow evals, and Keeper health."""
         scope = normalize_scope(scope) if scope else None
+        top_limit = max(1, min(int(limit or 10), 50))
         router_count = self.conn.execute(
             """
             SELECT COUNT(*) AS count
@@ -6473,14 +6475,120 @@ class MemoryStore:
         feedback_count = len(feedback_rows)
         avg_score = round(total_score / feedback_count, 4) if feedback_count else 0.0
         coverage = round(feedback_count / router_count, 4) if router_count else 0.0
-        top_limit = max(1, min(int(limit or 10), 50))
+        shadow_trace_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM shadow_traces
+            WHERE (? IS NULL OR scope = ?)
+            """,
+            (scope, scope),
+        ).fetchone()["count"]
+        shadow_eval_rows = self.conn.execute(
+            """
+            SELECT ste.status, ste.score
+            FROM shadow_trace_evals ste
+            JOIN shadow_traces st ON st.shadow_trace_id = ste.shadow_trace_id
+            WHERE (? IS NULL OR st.scope = ?)
+            """,
+            (scope, scope),
+        ).fetchall()
+        shadow_eval_count = len(shadow_eval_rows)
+        shadow_eval_passed = sum(1 for row in shadow_eval_rows if row["status"] == "pass")
+        shadow_eval_failed = sum(1 for row in shadow_eval_rows if row["status"] == "fail")
+        shadow_eval_score = (
+            round(sum(float(row["score"] or 0) for row in shadow_eval_rows) / shadow_eval_count, 4)
+            if shadow_eval_count
+            else 0.0
+        )
+        recent_failed_evals = self.conn.execute(
+            """
+            SELECT ste.eval_id, ste.shadow_trace_id, ste.created_at, ste.score,
+                   ste.findings_json, ste.expected_json
+            FROM shadow_trace_evals ste
+            JOIN shadow_traces st ON st.shadow_trace_id = ste.shadow_trace_id
+            WHERE ste.status = 'fail'
+              AND (? IS NULL OR st.scope = ?)
+            ORDER BY ste.created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, top_limit),
+        ).fetchall()
+        keeper_rows = self.conn.execute(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM keeper_jobs
+            WHERE (? IS NULL OR scope = ?)
+            GROUP BY status
+            """,
+            (scope, scope),
+        ).fetchall()
+        keeper_by_status = {str(row["status"]): int(row["count"]) for row in keeper_rows}
+        keeper_total = sum(keeper_by_status.values())
+        keeper_failed = int(keeper_by_status.get("failed", 0))
+
+        def gate(name: str, passed: bool, detail: str) -> dict[str, Any]:
+            return {"name": name, "passed": bool(passed), "detail": detail}
+
+        gates = [
+            gate("router_runs_present", router_count > 0, f"router_runs={router_count}"),
+            gate(
+                "feedback_coverage_present",
+                feedback_count > 0,
+                f"feedback_count={feedback_count} coverage={coverage}",
+            ),
+            gate("no_harmful_feedback", by_rating.get("harmful", 0) == 0, f"harmful={by_rating.get('harmful', 0)}"),
+            gate(
+                "shadow_eval_fixtures_present",
+                shadow_eval_count > 0,
+                f"shadow_evals={shadow_eval_count} shadow_traces={shadow_trace_count}",
+            ),
+            gate(
+                "shadow_evals_passing",
+                shadow_eval_count > 0 and shadow_eval_failed == 0,
+                f"passed={shadow_eval_passed} failed={shadow_eval_failed}",
+            ),
+            gate("keeper_failures_absent", keeper_failed == 0, f"failed_keeper_jobs={keeper_failed}"),
+        ]
+        explicit_failure = (
+            by_rating.get("harmful", 0) > 0
+            or shadow_eval_failed > 0
+            or keeper_failed > 0
+        )
+        status = "fail" if explicit_failure else "pass" if all(item["passed"] for item in gates) else "needs_evidence"
         return {
+            "version": MEMORY_QUALITY_VERSION,
+            "status": status,
             "scope": scope or "all",
             "router_runs": router_count,
             "feedback_count": feedback_count,
             "feedback_coverage": coverage,
             "average_score": avg_score,
             "by_rating": by_rating,
+            "quality_gates": gates,
+            "shadow_evals": {
+                "trace_count": shadow_trace_count,
+                "eval_count": shadow_eval_count,
+                "passed": shadow_eval_passed,
+                "failed": shadow_eval_failed,
+                "pass_rate": round(shadow_eval_passed / shadow_eval_count, 4) if shadow_eval_count else 0.0,
+                "average_score": shadow_eval_score,
+                "recent_failures": [
+                    {
+                        "eval_id": row["eval_id"],
+                        "shadow_trace_id": row["shadow_trace_id"],
+                        "created_at": row["created_at"],
+                        "score": row["score"],
+                        "findings": self._loads_json(row["findings_json"], []),
+                        "expected": self._loads_json(row["expected_json"], {}),
+                    }
+                    for row in recent_failed_evals
+                ],
+            },
+            "keeper_jobs": {
+                "total": keeper_total,
+                "by_status": keeper_by_status,
+                "failed": keeper_failed,
+            },
             "top_helpful_memories": self._memory_feedback_rollup(
                 scope=scope,
                 positive=True,
