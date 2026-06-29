@@ -46,12 +46,12 @@ To inspect the same state manually:
 
 ```bash
 PYTHONPATH=../../src python3 -m agent_memory_kernel.cli before-model-call --db "$DB" \
-  "Plan the next slice-site SEO refresh loop using successes and failures." \
+  "Plan the next reference-project iteration using successes and failures." \
   --thread-id slice-thread \
   --scope professional
 
 PYTHONPATH=../../src python3 -m agent_memory_kernel.cli outcome --db "$DB" pack \
-  --project slice-site \
+  --project reference-project \
   --scope professional
 
 PYTHONPATH=../../src python3 -m agent_memory_kernel.cli memory-changes --db "$DB" \

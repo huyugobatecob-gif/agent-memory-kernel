@@ -404,6 +404,7 @@ KERNEL_INVARIANTS = [
         "verifiers": [
             "golden_trace_large_history_prompt_is_bounded",
             "golden_trace_prompt_budget_trims_context_pack",
+            "memory_observability_reports_latency_slos",
             "kernel_status_reports_compatible_versions",
         ],
     },

@@ -82,6 +82,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         )
         self.assertIn("deleted_memory_absent", str(contract["kernel_invariants"]))
         self.assertIn("golden_trace_deterministic_ranking_snapshot", str(contract["kernel_invariants"]))
+        self.assertIn("memory_observability_reports_latency_slos", str(contract["kernel_invariants"]))
         self.assertIn("audit_log_integrity_detects_tampering", str(contract["kernel_invariants"]))
         threat_ids = {item["id"] for item in contract["threat_model"]}
         self.assertTrue(

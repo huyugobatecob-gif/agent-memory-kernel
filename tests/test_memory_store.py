@@ -2663,19 +2663,19 @@ class MemoryStoreTests(unittest.TestCase):
                 note_type="rule",
             )
             remembered = store.remember(
-                "Decision: project demo-site reuses successful SEO refresh loops.",
+                "Decision: project demo-work reuses successful planning iterations.",
                 scope="professional",
-                source_ref="session://seo-success",
+                source_ref="session://planning-success",
                 auto_approve=True,
             )
             remembered_memory_id = remembered["candidates"][0]["memory_id"]
 
             before = store.before_model_call(
-                "Plan the next demo-site SEO refresh loop.",
+                "Plan the next demo-work planning iteration.",
                 thread_id="thread-runtime",
                 scope="professional",
                 user_id="user-1",
-                agent_id="seo-agent",
+                agent_id="planning-agent",
                 model_id="gpt-test",
                 mode="planning",
                 token_budget=8000,
@@ -2702,7 +2702,7 @@ class MemoryStoreTests(unittest.TestCase):
             )
             self.assertNotIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][0]["content"])
             self.assertIn("MEMORY_TREE_SUPPLEMENT", envelope["messages"][1]["content"])
-            self.assertIn("demo-site", envelope["messages"][1]["content"])
+            self.assertIn("demo-work", envelope["messages"][1]["content"])
             explained = store.explain_router_run(before["router_run_id"])
             self.assertEqual(explained["router_run"]["thread_id"], "thread-runtime")
             self.assertEqual(explained["read_time_policy"]["version"], "read-time-policy-v0.1")
@@ -2715,7 +2715,7 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(memory_explain["memory"]["memory_id"], remembered_memory_id)
             self.assertEqual(memory_explain["memory"]["status"], "active")
             self.assertEqual(memory_explain["candidate"]["status"], "approved")
-            self.assertEqual(memory_explain["source_event"]["source_ref"], "session://seo-success")
+            self.assertEqual(memory_explain["source_event"]["source_ref"], "session://planning-success")
             self.assertTrue(memory_explain["policy_history"])
             self.assertTrue(memory_explain["summary"]["why_exists"])
             self.assertGreaterEqual(memory_explain["summary"]["audit_count"], 1)
@@ -2731,7 +2731,7 @@ class MemoryStoreTests(unittest.TestCase):
                 memory_id=envelope["metadata"]["selection_decisions"][0]["memory_id"],
                 rating="helpful",
                 actor="qa",
-                reason="selected memory correctly grounded the SEO loop plan",
+                reason="selected memory correctly grounded the iteration plan",
             )
             self.assertTrue(feedback["feedback_id"].startswith("rfb_"))
             self.assertEqual(feedback["score"], 1.0)
@@ -2758,10 +2758,10 @@ class MemoryStoreTests(unittest.TestCase):
                 thread_id="thread-runtime",
                 scope="professional",
                 user_id="user-1",
-                agent_id="seo-agent",
+                agent_id="planning-agent",
                 model_id="gpt-test",
-                user_text="Plan the next demo-site SEO refresh loop.",
-                assistant_text="We should reuse the successful refresh loop and track outcome memory.",
+                user_text="Plan the next demo-work planning iteration.",
+                assistant_text="We should reuse the successful planning iteration and track outcome memory.",
             )
 
             self.assertTrue(after["keeper_job_id"].startswith("kjob_"))
@@ -3679,7 +3679,7 @@ class MemoryStoreTests(unittest.TestCase):
                 store,
                 "/before-model-call",
                 {
-                    "query": "Plan the next slice-site SEO loop.",
+                    "query": "Plan the next reference-project iteration.",
                     "thread_id": "api-thread",
                     "scope": "professional",
                 },
@@ -3712,7 +3712,7 @@ class MemoryStoreTests(unittest.TestCase):
                     "memory_id": router_explain["selection_decisions"][0]["memory_id"],
                     "rating": "helpful",
                     "actor": "api-reviewer",
-                    "reason": "API selected the expected slice-site branch.",
+                    "reason": "API selected the expected reference-project branch.",
                 },
             )
             router_feedback_list = handle_api_request(
@@ -3731,8 +3731,8 @@ class MemoryStoreTests(unittest.TestCase):
                 {
                     "thread_id": "api-thread",
                     "scope": "professional",
-                    "user_text": "Plan the next slice-site SEO loop.",
-                    "assistant_text": "Reuse the winning-title pattern.",
+                    "user_text": "Plan the next reference-project iteration.",
+                    "assistant_text": "Reuse the handoff-checklist pattern.",
                 },
             )
             queued = handle_api_request(

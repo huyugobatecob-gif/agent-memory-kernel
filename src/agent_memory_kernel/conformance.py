@@ -769,14 +769,14 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
     )["candidates"][0]
     success_outcome = store.record_outcome(
         project=CONFORMANCE_PROJECT,
-        loop_id="success-internal-links",
+        loop_id="success-handoff-checklist",
         outcome_status="success",
-        hypothesis="Internal link hubs will improve crawl depth.",
-        action="Added internal link hubs to money pages.",
-        result="Crawl depth and indexed commercial pages improved.",
-        cause="Relevant internal links exposed deeper pages.",
-        lesson="Use link hubs before expanding new content.",
-        next_recommendation="Reuse link hubs when planning the next refresh loop.",
+        hypothesis="A reusable handoff checklist will improve iteration quality.",
+        action="Used the handoff checklist before planning the next milestone.",
+        result="The checklist improved iteration quality.",
+        cause="The agent reused evidence from prior successful handoffs.",
+        lesson="Reuse the handoff checklist before new planning iterations.",
+        next_recommendation="Start the next iteration with the handoff checklist.",
         score=0.91,
         scope=CONFORMANCE_SCOPE,
         actor="conformance",
@@ -784,14 +784,14 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
     )
     failure_outcome = store.record_outcome(
         project=CONFORMANCE_PROJECT,
-        loop_id="failure-stale-keywords",
+        loop_id="failure-stale-requirements",
         outcome_status="failure",
-        hypothesis="Old ranking keywords still represent current demand.",
-        action="Planned page updates from stale keyword exports.",
-        result="The refresh missed current search intent.",
-        cause="Keyword data was stale before planning.",
-        lesson="Refresh keyword data before writing loop tasks.",
-        next_recommendation="Block planning when keyword evidence is older than the project policy.",
+        hypothesis="Old requirements still represent current project needs.",
+        action="Planned the iteration from stale requirements.",
+        result="The plan missed the current project priority.",
+        cause="Requirements evidence was stale before planning.",
+        lesson="Refresh requirements evidence before planning iterations.",
+        next_recommendation="Block planning when requirements evidence is older than the project policy.",
         score=0.18,
         scope=CONFORMANCE_SCOPE,
         actor="conformance",
@@ -1744,8 +1744,8 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         "golden_trace_outcome_pack_uses_success_and_failure",
         "### Successes" in outcome_pack
         and "### Failures" in outcome_pack
-        and "Use link hubs before expanding new content." in outcome_pack
-        and "Refresh keyword data before writing loop tasks." in outcome_pack
+        and "Reuse the handoff checklist before new planning iterations." in outcome_pack
+        and "Refresh requirements evidence before planning iterations." in outcome_pack
         and "Memory: mem_" in outcome_pack
         and {"success", "failure"}.issubset(active_outcome_statuses),
         {

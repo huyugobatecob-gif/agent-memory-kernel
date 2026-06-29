@@ -9,22 +9,22 @@ from .store import MemoryStore
 
 SLICE_SCOPE = "professional"
 SLICE_THREAD_ID = "slice-thread"
-SLICE_PROJECT = "slice-site"
-SLICE_QUERY = "Plan the next slice-site SEO refresh loop using successes and failures."
+SLICE_PROJECT = "reference-project"
+SLICE_QUERY = "Plan the next reference-project iteration using successes and failures."
 
 
 def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     """Seed a deterministic full-memory fixture."""
     ids: dict[str, Any] = {}
     ids["profile_rule_id"] = store.upsert_profile_note(
-        "Always retrieve the selected Memory Tree before planning SEO loops.",
+        "Always retrieve the selected Memory Tree before planning project iterations.",
         scope=SLICE_SCOPE,
         note_type="rule",
         title="Slice planning rule",
     )
     ids["project_fact"] = _approved_memory(
         store,
-        "Fact: project slice-site uses provider-neutral runtime memory for SEO projects.",
+        "Fact: project reference-project uses provider-neutral runtime memory for iterative work.",
         "slice://project-fact",
     )
     ids["personal_preference"] = store.remember(
@@ -35,14 +35,14 @@ def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     )["candidates"][0]
     ids["success_outcome"] = store.record_outcome(
         project=SLICE_PROJECT,
-        loop_id="winning-title-refresh",
+        loop_id="success-handoff-checklist",
         outcome_status="success",
-        hypothesis="Comparing winning titles will improve refresh quality.",
-        action="Compared winning titles before rewriting priority pages.",
-        result="Winning title comparison improved refresh quality.",
-        cause="The agent reused evidence from prior successful pages.",
-        lesson="Reuse winning title comparisons before new SEO refresh loops.",
-        next_recommendation="Start the next loop with the title comparison checklist.",
+        hypothesis="A reusable handoff checklist will improve iteration quality.",
+        action="Used the handoff checklist before planning the next milestone.",
+        result="The checklist improved iteration quality.",
+        cause="The agent reused evidence from prior successful handoffs.",
+        lesson="Reuse the handoff checklist before new planning iterations.",
+        next_recommendation="Start the next iteration with the handoff checklist.",
         score=0.9,
         scope=SLICE_SCOPE,
         actor="slice",
@@ -50,14 +50,14 @@ def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     )
     ids["failure_outcome"] = store.record_outcome(
         project=SLICE_PROJECT,
-        loop_id="stale-keyword-refresh",
+        loop_id="failure-stale-requirements",
         outcome_status="failure",
-        hypothesis="Old keyword snapshots are enough for a refresh.",
-        action="Planned refresh work from stale keyword data.",
-        result="Stale keyword data caused weak refresh priorities.",
-        cause="The agent did not refresh keyword evidence before planning.",
-        lesson="Refresh keyword data before writing loop tasks.",
-        next_recommendation="Verify fresh keyword data before the next refresh loop.",
+        hypothesis="Old requirements are enough for the next iteration.",
+        action="Planned the iteration from stale requirements.",
+        result="Stale requirements caused weak priorities.",
+        cause="The agent did not refresh requirements evidence before planning.",
+        lesson="Refresh requirements evidence before planning iterations.",
+        next_recommendation="Verify fresh requirements before the next iteration.",
         score=0.2,
         scope=SLICE_SCOPE,
         actor="slice",
@@ -65,18 +65,18 @@ def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     )
     corrected = _approved_memory(
         store,
-        "Decision: project slice-site target market is ecommerce.",
+        "Decision: project reference-project target audience is small teams.",
         "slice://corrected-fact",
     )
     store.correct_memory(
         corrected["memory_id"],
-        "Decision: project slice-site target market is B2B SaaS.",
+        "Decision: project reference-project target audience is enterprise teams.",
         actor="slice",
     )
     ids["corrected_fact"] = corrected
     deleted = _approved_memory(
         store,
-        "Decision: project slice-site deprecated temporary sitemap rule.",
+        "Decision: project reference-project deprecated temporary checklist rule.",
         "slice://deleted-fact",
     )
     store.delete_memory(deleted["memory_id"], actor="slice", reason="vertical slice deletion check")
@@ -113,7 +113,7 @@ def run_vertical_slice(store: MemoryStore) -> dict[str, Any]:
         model_id="slice-model",
         user_text=SLICE_QUERY,
         assistant_text=(
-            "Reuse the successful winning-title pattern, avoid stale keyword data, "
+            "Reuse the successful handoff-checklist pattern, avoid stale requirements, "
             "and track the new outcome."
         ),
     )
@@ -150,17 +150,17 @@ def assert_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     active_outcome_statuses = {item["outcome_status"] for item in active_outcomes}
     checks = {
         "project_fact_retrieved": "provider-neutral runtime memory" in content,
-        "success_branch_retrieved": "winning titles" in content,
-        "failure_branch_retrieved": "stale keyword data" in content,
+        "success_branch_retrieved": "handoff checklist" in content,
+        "failure_branch_retrieved": "stale requirements" in content,
         "outcome_pack_has_success_and_failure": "### Successes" in outcome_pack
         and "### Failures" in outcome_pack,
         "outcome_records_have_active_provenance": {"success", "failure"}.issubset(
             active_outcome_statuses
         )
         and all(item["memory_id"] for item in active_outcomes),
-        "corrected_fact_retrieved": "B2B SaaS" in content,
-        "old_corrected_fact_absent": "target market is ecommerce" not in content,
-        "deleted_fact_absent": "deprecated temporary sitemap rule" not in content,
+        "corrected_fact_retrieved": "enterprise teams" in content,
+        "old_corrected_fact_absent": "target audience is small teams" not in content,
+        "deleted_fact_absent": "deprecated temporary checklist rule" not in content,
         "personal_lane_excluded": "concise memory review updates" not in content,
         "memory_tree_is_explicit": "<<< MEMORY_TREE_SUPPLEMENT >>>" in envelope["messages"][1]["content"],
         "context_block_has_no_tree_duplication": "MEMORY_TREE_SUPPLEMENT" not in envelope["messages"][0]["content"],

@@ -85,7 +85,7 @@ def run_acceptance_suite(store: MemoryStore) -> dict[str, Any]:
     )
     denied_content = _envelope_content(denied)
 
-    _extend_checks(checks, "memory_context_beats_no_memory_baseline", "winning titles" in allowed_content and "winning titles" not in denied_content)
+    _extend_checks(checks, "memory_context_beats_no_memory_baseline", "handoff checklist" in allowed_content and "handoff checklist" not in denied_content)
     _extend_checks(checks, "source_ids_logged", bool(allowed["prompt_envelope"]["metadata"].get("source_ids")))
     _extend_checks(checks, "selected_branches_logged", bool(allowed.get("selected_branch_ids")))
     _extend_checks(checks, "denied_memory_fails_closed", not denied["prompt_envelope"]["metadata"].get("memory_allowed") and denied.get("selected_branch_ids") == [])

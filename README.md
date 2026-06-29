@@ -215,7 +215,7 @@ Record a professional memory candidate:
 
 ```bash
 agent-memory remember --db .memory/demo.db \
-  "Rule: for SEO projects, record both successful and failed content loop attempts." \
+  "Rule: for project iterations, record both successful and failed attempts." \
   --scope professional
 ```
 
@@ -236,7 +236,7 @@ agent-memory review --db .memory/demo.db approve cand_xxxxxxxxxxxxxxxx
 Search active memory:
 
 ```bash
-agent-memory search --db .memory/demo.db "SEO projects"
+agent-memory search --db .memory/demo.db "project iterations"
 ```
 
 Mark memory truth changes explicitly:
@@ -262,8 +262,8 @@ Correct and rollback memory:
 
 ```bash
 agent-memory correct --db .memory/demo.db mem_xxxxxxxxxxxxxxxx \
-  "Decision: demo-site target market is B2B SaaS." \
-  --reason "user corrected target market"
+  "Decision: demo-project target audience is enterprise teams." \
+  --reason "user corrected target audience"
 
 agent-memory revisions --db .memory/demo.db mem_xxxxxxxxxxxxxxxx
 agent-memory rollback --db .memory/demo.db mem_xxxxxxxxxxxxxxxx \
@@ -281,16 +281,16 @@ Record a loop outcome:
 
 ```bash
 agent-memory outcome --db .memory/demo.db record \
-  --project demo-site \
+  --project demo-project \
   --status success \
-  --action "Updated search intent and internal links." \
-  --result "Organic clicks improved after publishing." \
-  --lesson "Refresh intent and internal links together." \
-  --next-recommendation "Reuse this pattern on similar pages." \
+  --action "Ran the handoff checklist before planning." \
+  --result "The next iteration shipped with fewer missed requirements." \
+  --lesson "Run the handoff checklist before planning similar work." \
+  --next-recommendation "Reuse the checklist for the next iteration." \
   --approve
 
-agent-memory outcome --db .memory/demo.db pack --project demo-site
-agent-memory outcome --db .memory/demo.db compare --project demo-site
+agent-memory outcome --db .memory/demo.db pack --project demo-project
+agent-memory outcome --db .memory/demo.db compare --project demo-project
 ```
 
 Outcome records keep structured attempt/result/cause/lesson fields and can also
@@ -299,13 +299,13 @@ create normal memory candidates, so they remain reviewable and provenance-backed
 Build a context pack for an agent:
 
 ```bash
-agent-memory context-pack --db .memory/demo.db "planning an SEO loop"
+agent-memory context-pack --db .memory/demo.db "planning a project iteration"
 ```
 
 Build a tree pack for an agent before planning:
 
 ```bash
-agent-memory tree-pack --db .memory/demo.db "planning an SEO loop" --scope professional
+agent-memory tree-pack --db .memory/demo.db "planning a project iteration" --scope professional
 ```
 
 Inspect the persistent graph tree:
@@ -324,14 +324,14 @@ agent-memory graph --db .memory/demo.db optimize --mode record_linkage --scope p
 Build the richer context that any runtime adapter would pass to an agent:
 
 ```bash
-agent-memory build-context --db .memory/demo.db "planning an SEO loop" --scope professional
+agent-memory build-context --db .memory/demo.db "planning a project iteration" --scope professional
 ```
 
 Runtime prompt envelopes can suppress graph-derived style hints when an
 orchestrator policy wants memory content but not style influence:
 
 ```bash
-agent-memory before-model-call --db .memory/demo.db "planning an SEO loop" \
+agent-memory before-model-call --db .memory/demo.db "planning a project iteration" \
   --scope professional \
   --disable-brain-style
 ```
@@ -340,7 +340,7 @@ Inspect why the Router selected memory for a prompt:
 
 ```bash
 agent-memory read-time-policy --db .memory/demo.db --scope professional
-agent-memory router-runs --db .memory/demo.db --thread-id seo-demo
+agent-memory router-runs --db .memory/demo.db --thread-id project-demo
 agent-memory router-explain --db .memory/demo.db router_xxxxxxxxxxxxxxxx
 ```
 
@@ -359,13 +359,13 @@ Inspect what changed after a saved turn:
 
 ```bash
 agent-memory after-saved-turn --db .memory/demo.db \
-  --thread-id seo-demo \
+  --thread-id project-demo \
   --scope professional \
-  --user-text "Plan the next SEO loop." \
-  --assistant-text "Reuse the prior successful refresh pattern."
+  --user-text "Plan the next project iteration." \
+  --assistant-text "Reuse the prior successful handoff pattern."
 
 agent-memory memory-changes --db .memory/demo.db --keeper-job-id kjob_xxxxxxxxxxxxxxxx
-agent-memory memory-changes --db .memory/demo.db --thread-id seo-demo
+agent-memory memory-changes --db .memory/demo.db --thread-id project-demo
 ```
 
 `memory-changes` explains the saved turns, Keeper event, candidate memories,
@@ -394,7 +394,7 @@ agent-memory dashboard --db .memory/demo.db --scope professional --summary-only
 agent-memory billing-invoice --db .memory/demo.db import --file provider-invoice.json
 agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
-agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
+agent-memory current-best --db .memory/demo.db --scope professional "planning a project iteration"
 agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates --scope professional
 agent-memory graph --db .memory/demo.db optimize --mode decay_stale --scope professional
 ```
@@ -450,18 +450,18 @@ text.
 Record profile and usage metadata:
 
 ```bash
-agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO projects."
+agent-memory profile --db .memory/demo.db set-intro "This workspace works on project iterations."
 agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
 agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
-agent-memory observability --db .memory/demo.db --thread-id seo-demo
+agent-memory observability --db .memory/demo.db --thread-id project-demo
 agent-memory billing-invoice --db .memory/demo.db list --provider openai
-agent-memory billing-reconcile --db .memory/demo.db --thread-id seo-demo --max-cost-per-1k 0.05
+agent-memory billing-reconcile --db .memory/demo.db --thread-id project-demo --max-cost-per-1k 0.05
 agent-memory migration-status --db .memory/demo.db
 agent-memory migration-changelog --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
-agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "SEO projects"
-agent-memory restore-drill-schedule --db .memory/demo.db set --name nightly --interval-hours 24 --scope professional --probe-query "SEO projects"
+agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "project iterations"
+agent-memory restore-drill-schedule --db .memory/demo.db set --name nightly --interval-hours 24 --scope professional --probe-query "project iterations"
 agent-memory restore-drill-schedule --db .memory/demo.db run-due --limit 5
 agent-memory export-control --db .memory/demo.db --scope professional --actor writer --redaction-profile safe
 agent-memory export-custody --db .memory/demo.db --scope professional --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo/exported-profile.encrypted.json
@@ -812,9 +812,9 @@ from agent_memory_kernel import MemoryOrchestrator
 memory = MemoryOrchestrator.from_path(".memory/runtime-memory.db")
 
 result = memory.run_agent_turn(
-    "Plan the next SEO loop",
+    "Plan the next project iteration",
     lambda prompt: {"assistant_text": priority_model.chat(prompt["messages"]).text},
-    thread_id="seo-demo",
+    thread_id="project-demo",
     scope="professional",
     agent_id="writer",
 )
@@ -826,19 +826,19 @@ saves the exchange, runs or queues Keeper, and returns Router/Keeper audit IDs.
 Runtime hook shape:
 
 ```bash
-agent-memory before-model-call "Plan the next SEO loop" \
-  --thread-id seo-demo \
+agent-memory before-model-call "Plan the next project iteration" \
+  --thread-id project-demo \
   --scope professional \
   --allowed-scopes professional \
   --agent-id writer \
   --model-id gpt-4.1-mini
 
 agent-memory after-saved-turn \
-  --thread-id seo-demo \
+  --thread-id project-demo \
   --scope professional \
   --keeper-mode queued \
-  --user-text "Plan the next SEO loop" \
-  --assistant-text "Use the prior successful refresh pattern."
+  --user-text "Plan the next project iteration" \
+  --assistant-text "Use the prior successful handoff pattern."
 
 agent-memory write-policy set \
   --agent-id writer \
@@ -851,16 +851,16 @@ agent-memory worker --db .memory/demo.db --once --limit 10
 
 agent-memory worker --db .memory/demo.db --daemon --poll-interval 5 --limit 10
 
-agent-memory shadow-turn "Plan the next SEO loop" \
-  --thread-id seo-demo \
+agent-memory shadow-turn "Plan the next project iteration" \
+  --thread-id project-demo \
   --scope professional \
-  --user-text "Plan the next SEO loop" \
-  --assistant-text "Use the prior successful refresh pattern."
+  --user-text "Plan the next project iteration" \
+  --assistant-text "Use the prior successful handoff pattern."
 
-agent-memory shadow-traces --thread-id seo-demo
+agent-memory shadow-traces --thread-id project-demo
 
 agent-memory shadow-eval trace_xxxxxxxxxxxxxxxx \
-  --expected-json '{"expected_branch_labels":["seo-demo"],"require_candidates":true}'
+  --expected-json '{"expected_branch_labels":["project-demo"],"require_candidates":true}'
 
 agent-memory shadow-evals --shadow-trace-id trace_xxxxxxxxxxxxxxxx
 ```
@@ -960,7 +960,8 @@ it without relying on the original planning conversation:
 - [docs/amk-000-kernel-invariants.md](docs/amk-000-kernel-invariants.md)
   defines the executable kernel invariants and conformance gate.
 - [docs/core-status-audit.md](docs/core-status-audit.md) tracks what is
-  `done`, `partial`, `missing`, `extension`, or `later-hosted`.
+  v1 `done`, optional `extension`, or `later-hosted`, with post-v1 hardening
+  separated from blockers.
 - [docs/runtime-contract.md](docs/runtime-contract.md) defines the live
   `before_model_call` / `after_saved_turn` loop.
 - [docs/memory-lifecycle-contract.md](docs/memory-lifecycle-contract.md)
@@ -1025,7 +1026,7 @@ src/agent_memory_kernel/
 docs/
   kernel-charter.md      core boundary, package model, and safety invariants
   backlog-cutover.md     core / extension / later-hosted classification
-  core-status-audit.md   done / partial / missing implementation audit
+  core-status-audit.md   factual v1 gate status and hardening backlog
   implementation-plan.md  phased build plan
   hosted-roadmap.md       hosted/platform items outside local v1
   full-memory-gap-plan.md  gap plan for automatic full memory

@@ -18,7 +18,7 @@ when the relevant invariant has code paths and verifier coverage.
 | `import_export_preserves_provenance_and_lifecycle` | `export_profile`, `import_profile`, `export_bundle`, `verify_bundle`, `import_bundle` | `golden_trace_portable_bundle_manifest_roundtrip`, `golden_trace_poisoned_bundle_import_quarantines_prompt_injection`, `golden_trace_interrupted_import_rolls_back_partial_writes`, `golden_trace_import_restores_lifecycle_tombstones`, `golden_trace_import_preserves_review_history`, `golden_trace_import_preserves_rejected_review_queue`, `golden_trace_import_preserves_policy_metadata`, `golden_trace_import_preserves_graph_evidence_chains` |
 | `auditable_memory_actions` | `remember`, `before_model_call`, `explain_memory`, `memory_changes`, `explain_router_run`, `export_profile`, `audit_integrity_report` | `professional_memory_injected_with_provenance`, `memory_explain_shows_why_remembered`, `keeper_change_is_inspectable`, `golden_trace_graph_browser_shows_source_previews`, `audit_log_integrity_detects_tampering` |
 | `capability_grants_gate_local_actions` | `capability_report`, `set_read_policy`, `set_write_policy`, `before_model_call`, `approve_candidate` | `capability_report_blocks_denied_actions`, `stored_read_policy_denies_injection` |
-| `large_histories_stay_bounded` | `before_model_call`, `prompt_budget_profile`, `migration_status`, `kernel_status` | `golden_trace_large_history_prompt_is_bounded`, `golden_trace_prompt_budget_trims_context_pack`, `kernel_status_reports_compatible_versions` |
+| `large_histories_stay_bounded` | `before_model_call`, `prompt_budget_profile`, `memory_observability`, `migration_status`, `kernel_status` | `golden_trace_large_history_prompt_is_bounded`, `golden_trace_prompt_budget_trims_context_pack`, `memory_observability_reports_latency_slos`, `kernel_status_reports_compatible_versions` |
 
 ## How To Use This Map
 
@@ -47,4 +47,4 @@ The map currently points to baseline verifiers. Remaining v1 work should expand:
   graph evidence, and adapter importer paths;
 - corrupted-store, interrupted export, and non-bundle importer recovery fixtures;
 - imported/subset audit-chain fixtures and optional external notarization hooks;
-- latency/resource fixtures for very large local stores.
+- larger-scale resource benchmarks beyond the deterministic local fixtures.

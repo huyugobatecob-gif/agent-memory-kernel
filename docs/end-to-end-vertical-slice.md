@@ -114,7 +114,7 @@ The slice is complete only if tests prove:
 The first runtime hook slice is available through:
 
 ```bash
-agent-memory before-model-call "Plan the next demo-site SEO refresh loop." \
+agent-memory before-model-call "Plan the next reference-project iteration." \
   --db /tmp/amk-slice.db \
   --scope professional \
   --thread-id thread-runtime
@@ -123,8 +123,8 @@ agent-memory after-saved-turn \
   --db /tmp/amk-slice.db \
   --scope professional \
   --thread-id thread-runtime \
-  --user-text "Plan the next demo-site SEO refresh loop." \
-  --assistant-text "Reuse the successful refresh loop and track outcome memory."
+  --user-text "Plan the next reference-project iteration." \
+  --assistant-text "Reuse the successful handoff-checklist pattern and track outcome memory."
 ```
 
 The richer fixture is available through dedicated commands:
@@ -133,7 +133,7 @@ The richer fixture is available through dedicated commands:
 agent-memory slice seed --db /tmp/amk-slice.db
 agent-memory slice run --db /tmp/amk-slice.db
 agent-memory slice assert --db /tmp/amk-slice.db
-agent-memory outcome --db /tmp/amk-slice.db pack --project slice-site
+agent-memory outcome --db /tmp/amk-slice.db pack --project reference-project
 ```
 
 `tests/test_memory_store.py` contains
