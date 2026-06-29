@@ -78,6 +78,7 @@ def conformance_spec() -> dict[str, Any]:
                 "expected_scenarios": [
                     "golden_trace_safe_export_redacts_memory_content",
                     "golden_trace_export_preserves_lifecycle_tombstones",
+                    "golden_trace_import_restores_lifecycle_tombstones",
                 ],
             },
             {
@@ -225,6 +226,14 @@ def conformance_spec() -> dict[str, Any]:
                     "profile export includes lifecycle metadata for inactive memory",
                     "deleted memory remains absent from the active memory tree",
                     "tombstones preserve status, provenance handles, and auditability",
+                ],
+            },
+            {
+                "id": "golden_trace_import_restores_lifecycle_tombstones",
+                "requires": [
+                    "profile import restores active memory with provenance handles",
+                    "inactive memory remains inactive after import",
+                    "lifecycle invalidation and audit metadata survive roundtrip",
                 ],
             },
             {
@@ -956,6 +965,42 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "tombstones": tombstones,
         },
     )
+    restored = MemoryStore(":memory:")
+    try:
+        restored.init_db()
+        import_counts = restored.import_profile(full_export)
+        restored_export = restored.export_profile(
+            scope=CONFORMANCE_SCOPE,
+            actor="conformance",
+        )
+        restored_lifecycle = restored_export.get("memory_lifecycle", {})
+        restored_tombstones = restored_lifecycle.get("tombstones", [])
+        restored_tree_text = json.dumps(restored_export.get("memory_tree", {}), sort_keys=True)
+        restored_active = restored.search("Statamic", scope=CONFORMANCE_SCOPE, actor="conformance")
+        restored_deleted = restored.search("OldSEO", scope=CONFORMANCE_SCOPE, actor="conformance")
+        _append_result(
+            results,
+            "golden_trace_import_restores_lifecycle_tombstones",
+            import_counts.get("memories", 0) == lifecycle.get("counts", {}).get("memories", -1)
+            and import_counts.get("source_events", 0) == lifecycle.get("counts", {}).get("source_events", -1)
+            and bool(restored_active)
+            and not restored_deleted
+            and restored_lifecycle.get("counts", {}).get("tombstones", 0) >= 1
+            and any(item.get("status") == "deleted" for item in restored_tombstones)
+            and "OldSEO" in json.dumps(restored_lifecycle, sort_keys=True)
+            and "OldSEO" not in restored_tree_text
+            and restored_lifecycle.get("counts", {}).get("derived_invalidations", 0) >= 1
+            and restored_lifecycle.get("counts", {}).get("audit_events", 0) >= 1,
+            {
+                "import_counts": import_counts,
+                "restored_counts": restored_lifecycle.get("counts", {}),
+                "restored_status_counts": restored_lifecycle.get("status_counts", {}),
+                "active_result_count": len(restored_active),
+                "deleted_result_count": len(restored_deleted),
+            },
+        )
+    finally:
+        restored.close()
 
     migration = store.migration_status()
     migration_checks = {item["name"]: item for item in migration.get("checks", [])}

@@ -6106,6 +6106,8 @@ class MemoryStore:
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
+        self._import_memory_lifecycle(payload.get("memory_lifecycle", {}), counts)
+
         for note in payload.get("profile_notes", []):
             if not isinstance(note, dict):
                 counts["skipped_redacted"] += 1
@@ -6206,6 +6208,290 @@ class MemoryStore:
 
         self.conn.commit()
         return dict(counts)
+
+    def _import_memory_lifecycle(self, lifecycle: Any, counts: defaultdict[str, int]) -> None:
+        if not isinstance(lifecycle, dict):
+            return
+        if lifecycle.get("version") != "memory-lifecycle-export-v0.1":
+            counts["skipped_unsupported_lifecycle"] += 1
+            return
+
+        for event in self._importable_rows(lifecycle.get("source_events")):
+            content = str(event.get("content", ""))
+            if self._is_redaction_marker(content):
+                counts["skipped_redacted"] += 1
+                continue
+            event_id = str(event.get("event_id", ""))
+            if not event_id:
+                counts["skipped_invalid"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO events
+                  (event_id, created_at, actor, scope, source_type, source_ref,
+                   content, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    str(event.get("created_at") or now_iso()),
+                    str(event.get("actor", "user")),
+                    normalize_scope(str(event.get("scope", "professional"))),
+                    str(event.get("source_type", "import")),
+                    "" if self._is_redaction_marker(event.get("source_ref", "")) else str(event.get("source_ref", "")),
+                    content,
+                    self._json_text(event.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["source_events"] += max(int(inserted.rowcount or 0), 0)
+
+        for candidate in self._importable_rows(lifecycle.get("candidate_memories")):
+            proposed_text = str(candidate.get("proposed_text", ""))
+            if self._is_redaction_marker(proposed_text):
+                counts["skipped_redacted"] += 1
+                continue
+            candidate_id = str(candidate.get("candidate_id", ""))
+            event_id = str(candidate.get("event_id", ""))
+            if not candidate_id or not self._row_exists("events", "event_id", event_id):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO candidate_memories
+                  (candidate_id, event_id, created_at, proposed_text, kind,
+                   scope, confidence, sensitivity, source_trust, status,
+                   reason, extraction_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    candidate_id,
+                    event_id,
+                    str(candidate.get("created_at") or now_iso()),
+                    proposed_text,
+                    str(candidate.get("kind", "fact")),
+                    normalize_scope(str(candidate.get("scope", "professional"))),
+                    normalize_confidence(str(candidate.get("confidence", "medium"))),
+                    str(candidate.get("sensitivity", "internal")),
+                    str(candidate.get("source_trust", "untrusted")),
+                    str(candidate.get("status", "pending")),
+                    str(candidate.get("reason", "")),
+                    self._json_text(candidate.get("extraction_json"), "{}"),
+                ),
+            )
+            counts["candidate_memories"] += max(int(inserted.rowcount or 0), 0)
+
+        for memory in self._importable_rows(lifecycle.get("memories")):
+            text = str(memory.get("text", ""))
+            if self._is_redaction_marker(text):
+                counts["skipped_redacted"] += 1
+                continue
+            memory_id = str(memory.get("memory_id", ""))
+            if not memory_id:
+                counts["skipped_invalid"] += 1
+                continue
+            candidate_id = str(memory.get("candidate_id", ""))
+            if candidate_id and not self._row_exists("candidate_memories", "candidate_id", candidate_id):
+                candidate_id = ""
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memories
+                  (memory_id, candidate_id, created_at, updated_at, text, kind,
+                   scope, confidence, sensitivity, source_trust, status,
+                   expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    memory_id,
+                    candidate_id or None,
+                    str(memory.get("created_at") or now_iso()),
+                    str(memory.get("updated_at") or memory.get("created_at") or now_iso()),
+                    text,
+                    str(memory.get("kind", "fact")),
+                    normalize_scope(str(memory.get("scope", "professional"))),
+                    normalize_confidence(str(memory.get("confidence", "medium"))),
+                    str(memory.get("sensitivity", "internal")),
+                    str(memory.get("source_trust", "untrusted")),
+                    str(memory.get("status", "active")),
+                    memory.get("expires_at"),
+                ),
+            )
+            counts["memories"] += max(int(inserted.rowcount or 0), 0)
+
+        for item in self._importable_rows(lifecycle.get("memory_items")):
+            text = str(item.get("text", ""))
+            if self._is_redaction_marker(text):
+                counts["skipped_redacted"] += 1
+                continue
+            item_id = str(item.get("item_id", ""))
+            memory_id = str(item.get("memory_id", ""))
+            event_id = str(item.get("event_id", ""))
+            if (
+                not item_id
+                or not self._row_exists("memories", "memory_id", memory_id)
+                or (event_id and not self._row_exists("events", "event_id", event_id))
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_items
+                  (item_id, memory_id, event_id, created_at, updated_at,
+                   item_type, scope, text, status, confidence, sensitivity,
+                   source_trust, owner, project, expires_at, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item_id,
+                    memory_id,
+                    event_id or None,
+                    str(item.get("created_at") or now_iso()),
+                    str(item.get("updated_at") or item.get("created_at") or now_iso()),
+                    self._normalize_graph_node_type(str(item.get("item_type", "fact"))),
+                    normalize_scope(str(item.get("scope", "professional"))),
+                    text,
+                    str(item.get("status", "active")),
+                    normalize_confidence(str(item.get("confidence", "medium"))),
+                    str(item.get("sensitivity", "internal")),
+                    str(item.get("source_trust", "untrusted")),
+                    str(item.get("owner", "")),
+                    str(item.get("project", "")),
+                    item.get("expires_at"),
+                    self._json_text(item.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["memory_items"] += max(int(inserted.rowcount or 0), 0)
+
+        for source in self._importable_rows(lifecycle.get("sources")):
+            source_id = str(source.get("source_id", ""))
+            memory_id = str(source.get("memory_id", ""))
+            event_id = str(source.get("event_id", ""))
+            if (
+                not source_id
+                or not self._row_exists("memories", "memory_id", memory_id)
+                or not self._row_exists("events", "event_id", event_id)
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO sources
+                  (source_id, memory_id, event_id, source_type, source_ref)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    source_id,
+                    memory_id,
+                    event_id,
+                    str(source.get("source_type", "import")),
+                    "" if self._is_redaction_marker(source.get("source_ref", "")) else str(source.get("source_ref", "")),
+                ),
+            )
+            counts["sources"] += max(int(inserted.rowcount or 0), 0)
+
+        for revision in self._importable_rows(lifecycle.get("revisions")):
+            revision_id = str(revision.get("revision_id", ""))
+            memory_id = str(revision.get("memory_id", ""))
+            if not revision_id or not self._row_exists("memories", "memory_id", memory_id):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_revisions
+                  (revision_id, memory_id, created_at, actor, previous_text,
+                   new_text, reason, rollback_of_revision_id, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    revision_id,
+                    memory_id,
+                    str(revision.get("created_at") or now_iso()),
+                    str(revision.get("actor", "user")),
+                    str(revision.get("previous_text", "")),
+                    str(revision.get("new_text", "")),
+                    str(revision.get("reason", "")),
+                    str(revision.get("rollback_of_revision_id", "")),
+                    self._json_text(revision.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["memory_revisions"] += max(int(inserted.rowcount or 0), 0)
+
+        for invalidation in self._importable_rows(lifecycle.get("derived_invalidations")):
+            invalidation_id = str(invalidation.get("invalidation_id", ""))
+            memory_id = str(invalidation.get("memory_id", ""))
+            if not invalidation_id or not self._row_exists("memories", "memory_id", memory_id):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO derived_invalidations
+                  (invalidation_id, created_at, memory_id, action, actor,
+                   scope, reason, surfaces_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    invalidation_id,
+                    str(invalidation.get("created_at") or now_iso()),
+                    memory_id,
+                    str(invalidation.get("action", "")),
+                    str(invalidation.get("actor", "system")),
+                    normalize_scope(str(invalidation.get("scope", "professional"))),
+                    str(invalidation.get("reason", "")),
+                    self._json_text(invalidation.get("surfaces_json"), "{}"),
+                    self._json_text(invalidation.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["derived_invalidations"] += max(int(inserted.rowcount or 0), 0)
+
+        for audit in self._importable_rows(lifecycle.get("audit")):
+            audit_id = str(audit.get("audit_id", ""))
+            target_id = str(audit.get("target_id", ""))
+            if not audit_id or (
+                audit.get("target_type") == "memory"
+                and not self._row_exists("memories", "memory_id", target_id)
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO audit_log
+                  (audit_id, created_at, action, target_type, target_id, actor,
+                   details_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    audit_id,
+                    str(audit.get("created_at") or now_iso()),
+                    str(audit.get("action", "")),
+                    str(audit.get("target_type", "memory")),
+                    target_id,
+                    str(audit.get("actor", "user")),
+                    self._json_text(audit.get("details_json"), "{}"),
+                ),
+            )
+            counts["audit_log"] += max(int(inserted.rowcount or 0), 0)
+
+        for review in self._importable_rows(lifecycle.get("review_actions")):
+            review_id = str(review.get("review_id", ""))
+            candidate_id = str(review.get("candidate_id", ""))
+            if not review_id or not self._row_exists("candidate_memories", "candidate_id", candidate_id):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO review_actions
+                  (review_id, created_at, candidate_id, action, actor, reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    review_id,
+                    str(review.get("created_at") or now_iso()),
+                    candidate_id,
+                    str(review.get("action", "")),
+                    str(review.get("actor", "user")),
+                    str(review.get("reason", "")),
+                ),
+            )
+            counts["review_actions"] += max(int(inserted.rowcount or 0), 0)
 
     def digital_brain_state(self, *, scope: str | None = None) -> list[dict[str, Any]]:
         scope = normalize_scope(scope) if scope else None
@@ -12827,36 +13113,104 @@ class MemoryStore:
             """,
             (scope, scope),
         ).fetchall()
-        memory_ids = [row["memory_id"] for row in memory_rows]
+        memory_ids = [str(row["memory_id"]) for row in memory_rows]
+        candidate_ids = sorted(
+            {
+                str(row["candidate_id"])
+                for row in memory_rows
+                if str(row["candidate_id"] or "")
+            }
+        )
 
-        def rows_for_ids(sql: str) -> list[dict[str, Any]]:
-            if not memory_ids:
+        def rows_for_values(values: list[str], sql: str) -> list[dict[str, Any]]:
+            values = [str(value) for value in values if str(value or "")]
+            if not values:
                 return []
-            placeholders = ",".join("?" for _ in memory_ids)
+            placeholders = ",".join("?" for _ in values)
             return [
                 dict(row)
-                for row in self.conn.execute(sql.format(placeholders=placeholders), tuple(memory_ids)).fetchall()
+                for row in self.conn.execute(sql.format(placeholders=placeholders), tuple(values)).fetchall()
             ]
 
-        revisions = rows_for_ids(
+        candidate_rows = rows_for_values(
+            candidate_ids,
+            """
+            SELECT candidate_id, event_id, created_at, proposed_text, kind,
+                   scope, confidence, sensitivity, source_trust, status, reason,
+                   extraction_json
+            FROM candidate_memories
+            WHERE candidate_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        memory_items = rows_for_values(
+            memory_ids,
+            """
+            SELECT item_id, memory_id, event_id, created_at, updated_at,
+                   item_type, scope, text, status, confidence, sensitivity,
+                   source_trust, owner, project, expires_at, metadata_json
+            FROM memory_items
+            WHERE memory_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        sources = rows_for_values(
+            memory_ids,
+            """
+            SELECT source_id, memory_id, event_id, source_type, source_ref
+            FROM sources
+            WHERE memory_id IN ({placeholders})
+            ORDER BY source_id ASC
+            """,
+        )
+        event_ids = sorted(
+            {
+                str(row.get("event_id") or "")
+                for row in [*candidate_rows, *memory_items, *sources]
+                if str(row.get("event_id") or "")
+            }
+        )
+        source_events = rows_for_values(
+            event_ids,
+            """
+            SELECT event_id, created_at, actor, scope, source_type, source_ref,
+                   content, metadata_json
+            FROM events
+            WHERE event_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        review_actions = rows_for_values(
+            candidate_ids,
+            """
+            SELECT review_id, created_at, candidate_id, action, actor, reason
+            FROM review_actions
+            WHERE candidate_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        revisions = rows_for_values(
+            memory_ids,
             """
             SELECT revision_id, memory_id, created_at, actor, previous_text,
                    new_text, reason, rollback_of_revision_id, metadata_json
             FROM memory_revisions
             WHERE memory_id IN ({placeholders})
             ORDER BY created_at ASC
-            """
+            """,
         )
-        invalidations = rows_for_ids(
+        invalidations = rows_for_values(
+            memory_ids,
             """
             SELECT invalidation_id, created_at, memory_id, action, actor, scope,
                    reason, surfaces_json, metadata_json
             FROM derived_invalidations
             WHERE memory_id IN ({placeholders})
             ORDER BY created_at ASC
-            """
+            """,
         )
-        audit = rows_for_ids(
+        audit = rows_for_values(
+            memory_ids,
             """
             SELECT audit_id, created_at, actor, action, target_type, target_id,
                    details_json
@@ -12864,7 +13218,7 @@ class MemoryStore:
             WHERE target_type = 'memory'
               AND target_id IN ({placeholders})
             ORDER BY created_at ASC
-            """
+            """,
         )
 
         status_counts: dict[str, int] = {}
@@ -12896,13 +13250,23 @@ class MemoryStore:
                 "active": status_counts.get("active", 0),
                 "inactive": len(memories) - status_counts.get("active", 0),
                 "tombstones": len(tombstones),
+                "source_events": len(source_events),
+                "candidate_memories": len(candidate_rows),
+                "memory_items": len(memory_items),
+                "sources": len(sources),
+                "review_actions": len(review_actions),
                 "revisions": len(revisions),
                 "derived_invalidations": len(invalidations),
                 "audit_events": len(audit),
             },
             "status_counts": status_counts,
+            "source_events": source_events,
+            "candidate_memories": candidate_rows,
             "memories": memories,
+            "memory_items": memory_items,
+            "sources": sources,
             "tombstones": tombstones,
+            "review_actions": review_actions,
             "revisions": revisions,
             "derived_invalidations": invalidations,
             "audit": audit,
@@ -12960,6 +13324,29 @@ class MemoryStore:
             return json.loads(value or "")
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    @staticmethod
+    def _importable_rows(value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        return [row for row in value if isinstance(row, dict)]
+
+    @staticmethod
+    def _json_text(value: Any, fallback: str) -> str:
+        if isinstance(value, str):
+            return value or fallback
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, sort_keys=True)
+        return fallback
+
+    def _row_exists(self, table: str, column: str, value: str) -> bool:
+        if not value:
+            return False
+        row = self.conn.execute(
+            f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1",
+            (value,),
+        ).fetchone()
+        return row is not None
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> float:

@@ -687,6 +687,16 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional",
                 auto_approve=True,
             )["candidates"][0]["memory_id"]
+            reviewed_candidate_id = store.remember(
+                "Rule: lifecycle-site reviewed exports preserve provenance.",
+                scope="professional",
+                auto_approve=False,
+            )["candidates"][0]["candidate_id"]
+            reviewed_id = store.approve_candidate(
+                reviewed_candidate_id,
+                actor="reviewer",
+                reason="portable memory review",
+            )
             deleted_id = store.remember(
                 "Decision: lifecycle-site retired plugin is GhostMarker.",
                 scope="professional",
@@ -721,8 +731,8 @@ class MemoryStoreTests(unittest.TestCase):
             profile = store.export_profile(scope="professional")
             lifecycle = profile["memory_lifecycle"]
             self.assertEqual(lifecycle["version"], "memory-lifecycle-export-v0.1")
-            self.assertEqual(lifecycle["counts"]["memories"], 3)
-            self.assertEqual(lifecycle["counts"]["active"], 1)
+            self.assertEqual(lifecycle["counts"]["memories"], 4)
+            self.assertEqual(lifecycle["counts"]["active"], 2)
             self.assertEqual(lifecycle["counts"]["inactive"], 2)
             self.assertEqual(lifecycle["counts"]["tombstones"], 2)
             self.assertEqual(lifecycle["status_counts"]["deleted"], 1)
@@ -734,6 +744,10 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn(
                 active_id,
                 {item["memory_id"] for item in lifecycle["revisions"]},
+            )
+            self.assertIn(
+                reviewed_candidate_id,
+                {item["candidate_id"] for item in lifecycle["review_actions"]},
             )
             invalidation_actions = {
                 item["action"] for item in lifecycle["derived_invalidations"]
@@ -752,6 +766,53 @@ class MemoryStoreTests(unittest.TestCase):
             safe_profile = store.export_profile(scope="professional", redaction_profile="safe")
             self.assertNotIn("GhostMarker", str(safe_profile))
             self.assertIn("[redacted:safe:text]", str(safe_profile["memory_lifecycle"]))
+
+            imported = MemoryStore(Path(tmp) / "imported.db")
+            imported.init_db()
+            import_counts = imported.import_profile(profile)
+            self.assertEqual(import_counts["source_events"], 4)
+            self.assertEqual(import_counts["candidate_memories"], 4)
+            self.assertEqual(import_counts["memories"], 4)
+            self.assertEqual(import_counts["memory_items"], 4)
+            self.assertEqual(import_counts["review_actions"], 1)
+            self.assertGreaterEqual(import_counts["memory_revisions"], 1)
+            self.assertGreaterEqual(import_counts["derived_invalidations"], 3)
+            self.assertGreaterEqual(import_counts["audit_log"], 3)
+
+            restored_results = imported.search("DuckDB", scope="professional")
+            self.assertEqual(len(restored_results), 1)
+            self.assertEqual(restored_results[0]["memory_id"], active_id)
+            self.assertEqual(
+                imported.search("provenance", scope="professional")[0]["memory_id"],
+                reviewed_id,
+            )
+            self.assertEqual(imported.search("GhostMarker", scope="professional"), [])
+            self.assertEqual(imported.search("BadSource", scope="professional"), [])
+            restored_prompt = imported.before_model_call(
+                "lifecycle-site memory status",
+                scope="professional",
+                allowed_scopes=["professional"],
+            )
+            restored_prompt_text = json.dumps(restored_prompt["prompt_envelope"], sort_keys=True)
+            self.assertIn("DuckDB", restored_prompt_text)
+            self.assertNotIn("GhostMarker", restored_prompt_text)
+            self.assertNotIn("BadSource", restored_prompt_text)
+
+            restored_profile = imported.export_profile(scope="professional")
+            restored_lifecycle = restored_profile["memory_lifecycle"]
+            self.assertEqual(restored_lifecycle["counts"]["memories"], 4)
+            self.assertEqual(restored_lifecycle["counts"]["tombstones"], 2)
+            self.assertEqual(restored_lifecycle["status_counts"]["deleted"], 1)
+            self.assertEqual(restored_lifecycle["status_counts"]["distrusted"], 1)
+            self.assertEqual(
+                {item["memory_id"] for item in restored_lifecycle["tombstones"]},
+                {deleted_id, distrusted_id},
+            )
+            self.assertTrue(restored_lifecycle["source_events"])
+            self.assertTrue(restored_lifecycle["candidate_memories"])
+            self.assertTrue(restored_lifecycle["memory_items"])
+            self.assertTrue(restored_lifecycle["review_actions"])
+            imported.close()
             store.close()
 
     def test_correct_memory_records_revision_and_rollback_restores_text(self) -> None:

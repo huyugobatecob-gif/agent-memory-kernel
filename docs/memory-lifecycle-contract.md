@@ -213,6 +213,12 @@ Export must include:
 - project profiles;
 - usage metadata when requested.
 
+Full import must restore active memory, source events, candidates, memory
+items, source references, review actions, revisions, derived invalidations,
+audit events, trust state, and tombstones. Deleted, distrusted, expired, or
+superseded memory must stay inactive after import and must not re-enter search,
+Router retrieval, or prompt-facing graph/tree surfaces.
+
 Export must not include secret payloads unless explicitly requested by a trusted
 local user and encrypted.
 
@@ -234,3 +240,5 @@ The lifecycle is not complete until tests cover:
 - export/import -> lifecycle state preserved.
 - export -> inactive memory appears as lifecycle tombstones outside the active
   prompt-facing memory tree.
+- import -> inactive tombstones stay inactive while active memory remains
+  searchable with provenance.
