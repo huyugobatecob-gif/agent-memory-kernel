@@ -281,6 +281,9 @@ Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
 --daemon` are implemented for background post-turn processing. Daemon mode can
 poll continuously under an external supervisor and supports bounded
 `--max-iterations`/`--stop-when-idle` runs for tests and maintenance.
+Baseline worker supervision status is implemented through `agent-memory
+worker-status`, `/worker/status`, and MCP `memory_worker_status`; it reports
+queued, failed, and stale Keeper jobs with operator commands.
 Shadow rollout traces are implemented through `agent-memory shadow-turn`,
 `agent-memory shadow-traces`, `/shadow-turn`, `/shadow-traces`, and Python
 adapter wrappers. These traces link Router selections and Keeper proposals with

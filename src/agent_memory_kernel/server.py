@@ -601,6 +601,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             limit=int(payload.get("limit", 10) or 10),
             actor=str(payload.get("actor", "worker")),
         )
+    if path in {"/worker/status", "/worker-status"}:
+        stale_after = payload.get("stale_after_seconds", 300)
+        return store.worker_status_report(
+            scope=payload.get("scope"),
+            stale_after_seconds=300 if stale_after in {None, ""} else int(stale_after),
+            limit=int(payload.get("limit", 20) or 20),
+        )
     raise KeyError(f"unknown endpoint: {path}")
 
 

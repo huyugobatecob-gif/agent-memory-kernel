@@ -911,6 +911,17 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_worker_status": {
+        "endpoint": "/worker/status",
+        "description": "Report queued Keeper worker supervision health.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "stale_after_seconds": _integer("Queued age threshold for stale alerts.", 300),
+                "limit": _integer("Maximum recent jobs to include.", 20),
+            }
+        ),
+    },
     "memory_keeper_eval": {
         "endpoint": "/keeper-eval/run",
         "description": "Run offline Keeper extraction regression evals.",

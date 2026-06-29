@@ -427,6 +427,7 @@ Useful endpoints:
 - `POST /acceptance/seed`, `/acceptance/run`, `/acceptance/assert`
 - `POST /conformance/seed`, `/conformance/run`, `/conformance/assert`
 - `POST /worker/run`
+- `POST /worker/status`
 
 Before enabling live memory in Hermes, run the deterministic gate:
 

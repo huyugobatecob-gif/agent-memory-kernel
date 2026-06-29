@@ -9,6 +9,8 @@ from pathlib import Path
 
 from agent_memory_kernel.cli import build_parser
 from agent_memory_kernel.extractors.base import Extractor
+from agent_memory_kernel.mcp_server import list_mcp_tools
+from agent_memory_kernel.server import handle_api_request
 from agent_memory_kernel.store import MemoryStore
 from agent_memory_kernel.worker import run_keeper_worker_daemon
 
@@ -58,6 +60,38 @@ class WorkerDaemonTests(unittest.TestCase):
             self.assertEqual(changes["keeper_job"]["status"], "completed")
             self.assertTrue(changes["keeper_job"]["candidate_ids"])
             verify.close()
+
+    def test_worker_status_reports_queued_and_stale_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "memory.db"
+            store = MemoryStore(db)
+            store.init_db()
+            queued = store.after_saved_turn(
+                thread_id="status-thread",
+                scope="professional",
+                user_text="Decision: status-site queues Keeper work.",
+                assistant_text="I will leave this queued for worker status.",
+                agent_id="status-agent",
+                keeper_mode="queued",
+            )
+
+            report = store.worker_status_report(scope="professional", stale_after_seconds=0)
+
+            self.assertEqual(report["version"], "worker-supervision-v0.1")
+            self.assertEqual(report["status"], "warn")
+            self.assertEqual(report["counts"]["queued"], 1)
+            self.assertEqual(report["stale_jobs"][0]["keeper_job_id"], queued["keeper_job_id"])
+            self.assertIn("run_once", report["recommended_commands"])
+
+            endpoint = handle_api_request(
+                store,
+                "/worker/status",
+                {"scope": "professional", "stale_after_seconds": 0},
+            )
+            self.assertEqual(endpoint["stale_jobs"][0]["keeper_job_id"], queued["keeper_job_id"])
+            names = {tool["name"] for tool in list_mcp_tools()}
+            self.assertIn("memory_worker_status", names)
+            store.close()
 
     def test_queued_keeper_failure_marks_job_failed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

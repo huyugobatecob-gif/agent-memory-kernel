@@ -106,6 +106,8 @@ Included now:
 - Operator notification queue, reviewer assignment, SLA status filtering, and
   escalation reports plus webhook/email/push payload builders for review
   candidates, export approvals, and expired export artifacts.
+- Worker supervision status for queued Keeper jobs, stale queue alerts, failed
+  job alerts, and operator run/inspect commands.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.

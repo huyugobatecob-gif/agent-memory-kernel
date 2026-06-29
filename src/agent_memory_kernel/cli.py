@@ -1523,6 +1523,19 @@ def cmd_worker(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_worker_status(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = store.worker_status_report(
+        scope=args.scope,
+        stale_after_seconds=args.stale_after_seconds,
+        limit=args.limit,
+    )
+    store.close()
+    print_json(result)
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     run_server(
         args.db,
@@ -2461,6 +2474,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--stop-when-idle", action="store_true", help="Exit daemon mode after an idle poll")
     p.add_argument("--quiet", action="store_true", help="Suppress per-iteration daemon JSON logs")
     p.set_defaults(func=cmd_worker)
+
+    p = sub.add_parser("worker-status", help="Report queued Keeper worker supervision health")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--stale-after-seconds", type=int, default=300)
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_worker_status)
 
     p = sub.add_parser("serve", help="Run the stdlib HTTP API service")
     add_common_db(p)

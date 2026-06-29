@@ -106,6 +106,7 @@ DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
+WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -6644,6 +6645,147 @@ class MemoryStore:
         self.conn.commit()
         return {"processed": len(jobs), "jobs": jobs}
 
+    def worker_status_report(
+        self,
+        *,
+        scope: str | None = None,
+        stale_after_seconds: int = 300,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Report queued Keeper worker health for supervisors and operators."""
+        scope = normalize_scope(scope) if scope else None
+        threshold = max(0, int(stale_after_seconds or 0))
+        row_limit = max(1, min(int(limit or 20), 100))
+        latest_rows = self.conn.execute(
+            """
+            SELECT keeper_job_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, status, warnings_json, metadata_json
+            FROM keeper_jobs
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, row_limit),
+        ).fetchall()
+        failed_rows = self.conn.execute(
+            """
+            SELECT keeper_job_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, status, warnings_json, metadata_json
+            FROM keeper_jobs
+            WHERE (? IS NULL OR scope = ?) AND status = 'failed'
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scope, scope, row_limit),
+        ).fetchall()
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(seconds=threshold)).replace(microsecond=0).isoformat()
+        stale_rows = self.conn.execute(
+            """
+            SELECT keeper_job_id, created_at, thread_id, scope, user_id,
+                   agent_id, model_id, status, warnings_json, metadata_json
+            FROM keeper_jobs
+            WHERE (? IS NULL OR scope = ?) AND status = 'queued' AND created_at <= ?
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (scope, scope, cutoff, row_limit),
+        ).fetchall()
+        all_counts = self.conn.execute(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM keeper_jobs
+            WHERE (? IS NULL OR scope = ?)
+            GROUP BY status
+            """,
+            (scope, scope),
+        ).fetchall()
+        counts = {str(row["status"]): int(row["count"]) for row in all_counts}
+
+        def status_item(row: sqlite3.Row) -> dict[str, Any]:
+            created_at = str(row["created_at"] or "")
+            age_seconds = self._age_seconds(created_at, now=now)
+            return {
+                "keeper_job_id": row["keeper_job_id"],
+                "created_at": created_at,
+                "thread_id": row["thread_id"],
+                "scope": row["scope"],
+                "user_id": row["user_id"],
+                "agent_id": row["agent_id"],
+                "model_id": row["model_id"],
+                "status": row["status"],
+                "age_seconds": age_seconds,
+                "warnings": self._loads_json(row["warnings_json"], []),
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+
+        latest_jobs = [status_item(row) for row in latest_rows]
+        stale_jobs = [status_item(row) for row in stale_rows]
+        failed_jobs = [status_item(row) for row in failed_rows]
+        alerts = []
+        if counts.get("queued", 0):
+            alerts.append(
+                {
+                    "severity": "info",
+                    "name": "queued_keeper_jobs",
+                    "detail": f"{counts.get('queued', 0)} queued Keeper job(s)",
+                }
+            )
+        if stale_jobs:
+            alerts.append(
+                {
+                    "severity": "warn",
+                    "name": "stale_keeper_jobs",
+                    "detail": (
+                        f"{len(stale_jobs)} queued Keeper job(s) older than "
+                        f"{threshold} seconds"
+                    ),
+                    "keeper_job_ids": [item["keeper_job_id"] for item in stale_jobs],
+                }
+            )
+        if counts.get("failed", 0):
+            alerts.append(
+                {
+                    "severity": "high",
+                    "name": "failed_keeper_jobs",
+                    "detail": f"{counts.get('failed', 0)} failed Keeper job(s)",
+                    "keeper_job_ids": [item["keeper_job_id"] for item in failed_jobs],
+                }
+            )
+        status = (
+            "fail"
+            if any(alert["severity"] == "high" for alert in alerts)
+            else "warn"
+            if any(alert["severity"] == "warn" for alert in alerts)
+            else "pass"
+        )
+        return {
+            "version": WORKER_SUPERVISION_VERSION,
+            "status": status,
+            "scope": scope or "all",
+            "stale_after_seconds": threshold,
+            "counts": {
+                "queued": counts.get("queued", 0),
+                "completed": counts.get("completed", 0),
+                "failed": counts.get("failed", 0),
+                "empty": counts.get("empty", 0),
+                "denied": counts.get("denied", 0),
+                "quarantined": counts.get("quarantined", 0),
+            },
+            "alerts": alerts,
+            "stale_jobs": stale_jobs,
+            "failed_jobs": failed_jobs,
+            "latest_jobs": latest_jobs,
+            "recommended_commands": {
+                "run_once": "agent-memory worker --db <db> --once --limit 10",
+                "run_daemon": (
+                    "agent-memory worker --db <db> --daemon --poll-interval 5 "
+                    "--limit 10"
+                ),
+                "inspect_changes": "agent-memory memory-changes --db <db> --keeper-job-id <keeper_job_id>",
+            },
+        }
+
     def _keeper_idempotency_key(
         self,
         *,
@@ -10307,6 +10449,16 @@ class MemoryStore:
             return float(value)
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _age_seconds(created_at: str, *, now: datetime) -> int:
+        try:
+            created = datetime.fromisoformat(created_at)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            return max(0, int((now - created).total_seconds()))
+        except (TypeError, ValueError):
+            return 0
 
     @staticmethod
     def _delegation_policy_item(kind: str, policy: dict[str, Any]) -> dict[str, Any]:

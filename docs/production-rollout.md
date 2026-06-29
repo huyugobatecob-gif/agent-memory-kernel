@@ -147,7 +147,12 @@ For bounded maintenance jobs:
 ```bash
 agent-memory worker --db .memory/agent-memory.db --once --limit 10
 agent-memory worker --db .memory/agent-memory.db --daemon --max-iterations 20 --stop-when-idle
+agent-memory worker-status --db .memory/agent-memory.db --stale-after-seconds 300
 ```
+
+`worker-status` returns a machine-readable health report for supervisors:
+queued counts, failed counts, stale queued jobs, alerts, and commands for
+running the worker or inspecting a failed Keeper job.
 
 ## API Deployment
 
