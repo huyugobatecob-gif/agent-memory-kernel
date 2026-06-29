@@ -2652,6 +2652,50 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(endpoint["effective_token_budget"], 7000)
             store.close()
 
+    def test_before_model_call_records_budget_trimmed_prompt_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.upsert_profile_note(
+                "Budget trim profile detail. " * 520,
+                scope="professional",
+                note_type="intro",
+                title="budget trim fixture",
+            )
+            store.remember(
+                "Decision: project budget-trim-site keeps selected memory separate from trimmed context.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            before = store.before_model_call(
+                "Plan budget-trim-site memory usage.",
+                scope="professional",
+                model_id="unknown-model",
+                token_budget=1200,
+                allowed_scopes=["professional"],
+            )
+            envelope = before["prompt_envelope"]
+            messages = envelope["messages"]
+            metadata = envelope["metadata"]
+
+            self.assertEqual(metadata["prompt_budget"]["effective_token_budget"], 1200)
+            self.assertEqual(metadata["prompt_budget"]["requested_token_budget"], 1200)
+            self.assertEqual(metadata["read_time_policy"]["runtime"]["token_budget"], 1200)
+            self.assertIn("[trimmed for token budget]", messages[0]["content"])
+            self.assertLessEqual(len(messages[0]["content"]), 4100)
+            self.assertIn("<<< MEMORY_TREE_SUPPLEMENT >>>", messages[1]["content"])
+            self.assertIn("budget-trim-site", messages[1]["content"])
+            self.assertEqual(messages[2]["content"], "Plan budget-trim-site memory usage.")
+            self.assertTrue(metadata["selected_branch_ids"])
+            self.assertTrue(metadata["selection_decisions"])
+
+            runs = store.list_router_runs(scope="professional")
+            self.assertEqual(runs[0]["token_budget"], 1200)
+            self.assertEqual(runs[0]["metadata"]["prompt_budget"]["provider"], "unknown")
+            store.close()
+
     def test_before_model_call_adds_guarded_brain_style_when_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

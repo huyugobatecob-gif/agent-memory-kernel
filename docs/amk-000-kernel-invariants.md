@@ -62,7 +62,7 @@ Those items can exist as adapters, packs, examples, or later hosted work.
 | Distrusted or quarantined sources cannot influence retrieval, summaries, graph-derived state, exports, or prompts. | Lifecycle test plus unsafe-source conformance fixture. |
 | Scope/lane/namespace isolation holds across prompts, graph evidence, summaries, browser previews, and exports. | Leak-prevention fixtures with adversarial cross-scope evidence. |
 | Corrections, rollback, delete, distrust, expire, and supersede invalidate derived memory. | Derived invalidation ledger test and prompt/export round trip. |
-| Prompt envelopes contain selected, policy-filtered memory only. | Deterministic prompt snapshot with forbidden full-graph markers. |
+| Prompt envelopes contain selected, policy-filtered, budgeted memory only. | Deterministic selected-content and budget-trim prompt snapshots. |
 | Retrieval ranking is deterministic without embeddings. | Ranking fixture with stable score inputs and tie-breakers. |
 | Import/export preserves ids, provenance, evidence, tombstones, trust state, review history, policy metadata, and lifecycle state. | Portable bundle round-trip test. |
 | Every read, write, inject, export, correction, deletion, denial, and lifecycle change is auditable. | Audit log fixture and explainability assertion. |
@@ -103,6 +103,11 @@ only selected, allowed, budgeted memory plus provenance and selection metadata.
 Memory Tree is a renderer over that read contract. It may be the default
 human-readable prompt section, but it is not the kernel ontology and must not
 bypass retrieval or policy filters.
+
+The baseline budget trace is `golden_trace_prompt_budget_trims_context_pack`:
+large context-pack material must be trimmed with an explicit marker while the
+selected Memory Tree Supplement remains a separate prompt message with its own
+provenance and selection metadata.
 
 ## Deterministic Read Contract
 
@@ -168,6 +173,7 @@ The canonical conformance corpus must include:
 - cross-scope and cross-namespace leak attempts;
 - poisoned imports and prompt-injection evidence;
 - deterministic ranking fixtures;
+- budget-trim prompt envelope fixtures;
 - provider-shaped prompt envelope snapshots;
 - import/export round trips;
 - migration and recovery checks;

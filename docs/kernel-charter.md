@@ -148,8 +148,8 @@ rules, retrieval filters, export/import behavior, and conformance tests.
    default and must not become trusted facts silently.
 8. Exports must preserve provenance, tombstones, trust state, review history,
    policy metadata, and evidence chains.
-9. Prompt envelopes must contain selected, policy-filtered memory only, never
-   the full graph.
+9. Prompt envelopes must contain selected, policy-filtered, budgeted memory
+   only, never the full graph.
 10. Every read, write, injection, export, correction, deletion, and denial must
     be auditable.
 

@@ -23,11 +23,11 @@ Status labels:
 | Raw source events and saved turns | done | `record_turn`, `after_saved_turn`, source event lifecycle | Ensure retained evidence cannot re-enter prompts after linked memory is inactive. |
 | Candidate memory lifecycle | done | review workflow, candidate tables, quarantine policy | Keep assistant/tool/web claims reviewable by default. |
 | Active memory lifecycle | partial | approve, correct, rollback, delete, distrust, expire, supersede | Prove every lifecycle change hides or invalidates all derived prompt/export surfaces. |
-| Scope/lane/namespace isolation | partial | default scopes, read policies, lane isolation tests, derived summary/semantic fixtures, graph/evidence scope fixtures, selected-content prompt snapshot | Continue hardening provider-shaped prompt envelopes, namespace fixtures, and budget snapshots. |
+| Scope/lane/namespace isolation | partial | default scopes, read policies, lane isolation tests, derived summary/semantic fixtures, graph/evidence scope fixtures, selected-content and budget-trim prompt snapshots | Continue hardening provider-shaped prompt envelopes and namespace fixtures. |
 | Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands, same-scope evidence filters | Expand graph conformance with correction/delete round trips across imported profiles. |
 | Keeper contract | partial | deterministic extractor, LLM Keeper contract, queued worker | Expand conformance for false-positive writes, retries, and reviewable unsafe claims. |
-| Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content prompt snapshot | Add deterministic budget trimming snapshots. |
-| Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, Memory Tree renderer | Add broader provider-shaped prompt-envelope snapshots and keep renderers behind the read contract. |
+| Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content snapshot, deterministic ranking snapshot, budget-trim prompt snapshot | Expand large-history ranking and adapter budget fixtures. |
+| Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, budget-trim conformance scenario, Memory Tree renderer | Add broader provider-shaped prompt-envelope snapshots and keep renderers behind the read contract. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across evidence chains and derived invalidation records. |
@@ -57,9 +57,9 @@ Status labels:
 2. Expand scope/lane/namespace isolation coverage for provider-shaped prompts.
    Summaries, semantic analyses, graph branches, graph browser previews, graph
    evidence, and selected-content prompt envelopes now have scoped fixtures.
-3. Add remaining deterministic prompt-envelope snapshots for budget trimming and
-   provider-shaped prompts. Selected content, no tag-only injection, and
-   no-full-graph injection now have local and conformance fixtures.
+3. Add remaining deterministic prompt-envelope snapshots for provider-shaped
+   prompts. Selected content, no tag-only injection, no-full-graph injection,
+   and budget trimming now have local and conformance fixtures.
 4. Expand export/import round-trip tests to cover provenance, tombstones, trust
    state, review history, policy metadata, evidence chains, and derived
    invalidation records.

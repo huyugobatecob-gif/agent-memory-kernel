@@ -79,6 +79,18 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "prompt_budget_trim_trace",
+                "steps": [
+                    "seed a long context-pack profile note and one selected memory",
+                    "build a prompt envelope with a constrained token budget",
+                    "verify the context pack is trimmed while selected Memory Tree content remains separate",
+                    "verify prompt budget metadata and Router audit use the effective budget",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_prompt_budget_trims_context_pack"
+                ],
+            },
+            {
                 "id": "safe_profile_export_trace",
                 "steps": [
                     "seed active and lifecycle-mutated professional memory",
@@ -139,6 +151,15 @@ def conformance_spec() -> dict[str, Any]:
                     "unselected active memory is absent from prompt-facing context",
                     "prompt metadata source ids contain selected sources only",
                     "memory supplement stays out of the system instruction surface",
+                ],
+            },
+            {
+                "id": "golden_trace_prompt_budget_trims_context_pack",
+                "requires": [
+                    "prompt envelope records requested and effective token budgets",
+                    "large non-selected context-pack content is trimmed with an explicit marker",
+                    "selected Memory Tree Supplement remains in a separate prompt message",
+                    "Router audit stores the same effective budget used for the envelope",
                 ],
             },
             {
@@ -683,6 +704,56 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "selected_branch_ids": prompt_snapshot["selected_branch_ids"],
             "source_ids": prompt_snapshot_source_ids,
             "message_count": len(prompt_snapshot_messages),
+        },
+    )
+    store.upsert_profile_note(
+        "Budget trim profile detail. " * 520,
+        scope=CONFORMANCE_SCOPE,
+        note_type="intro",
+        title="budget trim fixture",
+    )
+    budget_prompt = store.before_model_call(
+        "Plan conformance-site memory budget.",
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        allowed_scopes=[CONFORMANCE_SCOPE],
+        agent_id="conformance-budget-agent",
+        model_id="unknown-model",
+        token_budget=1200,
+    )
+    budget_envelope = budget_prompt["prompt_envelope"]
+    budget_messages = [
+        str(message.get("content") or "")
+        for message in budget_envelope.get("messages", [])
+    ]
+    budget_metadata = budget_envelope.get("metadata", {})
+    budget_router_row = store.conn.execute(
+        "SELECT token_budget FROM router_runs WHERE router_run_id = ?",
+        (budget_prompt["router_run_id"],),
+    ).fetchone()
+    _append_result(
+        results,
+        "golden_trace_prompt_budget_trims_context_pack",
+        len(budget_messages) >= 3
+        and budget_metadata.get("prompt_budget", {}).get("requested_token_budget") == 1200
+        and budget_metadata.get("prompt_budget", {}).get("effective_token_budget") == 1200
+        and budget_metadata.get("read_time_policy", {}).get("runtime", {}).get("token_budget")
+        == 1200
+        and "[trimmed for token budget]" in budget_messages[0]
+        and "<<< MEMORY_TREE_SUPPLEMENT >>>" in budget_messages[1]
+        and "Statamic" in budget_messages[1]
+        and budget_messages[2] == "Plan conformance-site memory budget."
+        and bool(budget_prompt.get("selected_branch_ids"))
+        and budget_router_row is not None
+        and int(budget_router_row["token_budget"]) == 1200,
+        {
+            "selected_branch_ids": budget_prompt.get("selected_branch_ids", []),
+            "message_count": len(budget_messages),
+            "context_pack_chars": len(budget_messages[0]) if budget_messages else 0,
+            "prompt_budget": budget_metadata.get("prompt_budget", {}),
+            "router_token_budget": (
+                int(budget_router_row["token_budget"]) if budget_router_row else None
+            ),
         },
     )
     _append_result(
@@ -1706,6 +1777,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_outcome_pack_uses_success_and_failure",
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_deterministic_ranking_snapshot",
+        "golden_trace_prompt_budget_trims_context_pack",
         "golden_trace_safe_export_redacts_memory_content",
         "migration_status_is_compatible",
         "secret_like_memory_is_quarantined",

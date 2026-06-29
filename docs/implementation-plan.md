@@ -117,7 +117,7 @@ can claim completion.
 | Scope/lane/namespace boundaries cannot leak across prompt, graph, summary, browser, and export surfaces | read policy, scope filtering, graph/evidence, summaries, prompt envelope, export | unit test plus prompt-envelope snapshot |
 | Correction/rollback/delete/distrust/expire/supersede invalidate derived memory | lifecycle engine, derived invalidation ledger, graph surfaces, summaries, exports | lifecycle report plus import/export round trip |
 | Export/import preserves provenance, ids, tombstones, trust, review, policy, and evidence | profile import/export, bundle import/export, lifecycle/policy state | portable round-trip test plus conformance trace |
-| Prompt envelopes contain selected filtered content only | Router, context builder, prompt formatter, renderer | deterministic envelope snapshot |
+| Prompt envelopes contain selected, filtered, budgeted content only | Router, context builder, prompt formatter, renderer | deterministic selected-content and budget-trim envelope snapshots |
 | Local actors cannot bypass capability grants | read/write/export/inject/lifecycle policies, policy simulator | denied-action trace plus dry-run report |
 | Retrieval is deterministic without live providers | lexical/rule ranking, current-best resolver, tie-breakers | ranking fixture and golden prompt snapshot |
 | Local histories stay bounded and predictable | indexes, compaction/retention, retrieval/export paths | latency/resource fixture |
