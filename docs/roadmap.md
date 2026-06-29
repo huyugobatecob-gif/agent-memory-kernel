@@ -127,7 +127,8 @@ Core work:
 - stable CLI/API surface and versioning policy;
 - `.amk` portable bundle manifest with schema and contract versions;
 - import/export round trips preserving ids, provenance, policies, evidence,
-  review history, lifecycle state, and tombstones;
+  review history, pending/rejected review queues, lifecycle state, and
+  tombstones;
 - policy simulator and dry-run behavior for read/write/inject/export/lifecycle;
 - deterministic ranking spec with stable tie-breakers;
 - local capability grants for actors and adapters;

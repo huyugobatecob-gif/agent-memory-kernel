@@ -1,4 +1,4 @@
-# Full Memory System - Implementation Plan
+# Historical Full Memory Gap Analysis
 
 > Scope note: this is the historical deep gap analysis. The current governing
 > plan is [kernel-charter.md](kernel-charter.md),
@@ -6,10 +6,18 @@
 > [implementation-plan.md](implementation-plan.md). Hosted, runtime-specific,
 > provider-specific, and domain-specific items in this document are not local
 > kernel blockers unless they are classified as `core` in the backlog cutover.
+> Use this document as research background, not as the release authority.
 
-**Goal:** turn Agent Memory Kernel into an automatic cross-model memory layer where a lightweight model maintains a graph tree and injects relevant node content into the prompt before any main agent answers.
-**Timeline:** 2-4 weeks for a usable local v0.2, 4-8 weeks for API/MCP, review UI, and production hardening.
-**Dependencies:** runtime adapter hook points, one low-cost LLM provider key, SQLite migration discipline, prompt-boundary policy, and realistic conversation transcripts for tests.
+**Historical goal:** explore an automatic cross-model memory layer where a
+lightweight Keeper/Router maintains a graph tree and injects relevant node
+content into the prompt before any main agent answers.
+**Current v1 authority:** prove the local kernel contract without requiring a
+live model provider, runtime rollout, hosted service, or domain-specific
+project.
+**Current dependencies:** SQLite migration discipline, prompt-boundary policy,
+deterministic fixtures, and realistic public conformance traces. Live provider
+keys, API/MCP deployment, review UI, dashboards, and production rollout are
+extensions unless classified as `core` elsewhere.
 
 ---
 
@@ -950,7 +958,11 @@ external runtime deployments.
 
 ---
 
-## Acceptance Criteria
+## Historical Acceptance Criteria
+
+The canonical v1 gates are now in
+[implementation-plan.md](implementation-plan.md). This checklist is retained as
+research background and should be interpreted through the core/extension split.
 
 The repository has full memory when all of these are true:
 

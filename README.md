@@ -929,13 +929,12 @@ original planning conversation. The plan is governed by
 - `later-hosted`: hosted/team/platform work that must not block local full
   memory.
 
-The gap plan for the full automatic memory system is in
-[docs/full-memory-gap-plan.md](docs/full-memory-gap-plan.md). It maps the
-reference-memory findings to the missing repository layers: automatic Keeper,
-Memory Router, prompt envelope, runtime adapter hooks, API/MCP service mode,
-review, and security hardening. Treat it as historical detail under the newer
-charter boundary: hosted, runtime-specific, and domain-specific items are not
-core requirements unless they are restated in the implementation plan.
+The historical reference-memory research log is in
+[docs/full-memory-gap-plan.md](docs/full-memory-gap-plan.md). Treat it as
+background under the newer charter boundary, not as release authority. Hosted,
+runtime-specific, provider-specific, UI, MCP/API deployment, and domain-specific
+items are not core requirements unless they are restated in the implementation
+plan.
 
 The full-memory work is split into hard contracts so contributors can implement
 it without relying on the original planning conversation:
