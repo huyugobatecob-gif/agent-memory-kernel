@@ -152,6 +152,9 @@ Required behavior:
   export and prompt-facing context surfaces;
 - filter thread summaries linked through `source_memory_ids` out of context
   builder and profile export surfaces.
+- enforce the same linked-memory scope check for summaries and semantic
+  analyses so personal/private derived content cannot appear in professional
+  context or export surfaces.
 
 ## Expire And Decay
 

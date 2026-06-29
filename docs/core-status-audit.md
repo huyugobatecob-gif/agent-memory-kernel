@@ -23,7 +23,7 @@ Status labels:
 | Raw source events and saved turns | done | `record_turn`, `after_saved_turn`, source event lifecycle | Ensure retained evidence cannot re-enter prompts after linked memory is inactive. |
 | Candidate memory lifecycle | done | review workflow, candidate tables, quarantine policy | Keep assistant/tool/web claims reviewable by default. |
 | Active memory lifecycle | partial | approve, correct, rollback, delete, distrust, expire, supersede | Prove every lifecycle change hides or invalidates all derived prompt/export surfaces. |
-| Personal/professional lanes | partial | default scopes, read policies, lane isolation tests | Harden lane isolation through summaries, semantic analyses, graph branches, exports, and prompt envelopes. |
+| Personal/professional lanes | partial | default scopes, read policies, lane isolation tests, derived summary/semantic scope fixtures | Continue lane isolation hardening for graph branches and prompt-envelope snapshots. |
 | Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands | Prove graph-derived content inherits source lifecycle, trust, and lane restrictions. |
 | Keeper contract | partial | deterministic extractor, LLM Keeper contract, queued worker | Expand conformance for false-positive writes, retries, and reviewable unsafe claims. |
 | Router contract | partial | `before_model_call`, tree packs, explainability, feedback | Add prompt-envelope snapshots proving selected content only and deterministic budget trimming. |
@@ -53,8 +53,9 @@ Status labels:
 
 1. Build an invariant matrix that maps every kernel law to the code path and
    test/conformance scenario that proves it.
-2. Harden lane isolation for derived content: summaries, semantic analyses,
-   graph branches, export surfaces, and prompt envelopes.
+2. Harden remaining lane isolation for derived content: graph branches and
+   prompt-envelope snapshots. Summaries and semantic analyses now have scoped
+   source-memory fixtures.
 3. Add deterministic prompt-envelope snapshots for selected content, no
    tag-only injection, no full-graph injection, and budget trimming.
 4. Expand export/import round-trip tests to cover provenance, tombstones, trust
@@ -62,4 +63,3 @@ Status labels:
    invalidation records.
 5. Keep examples universal until the kernel gates pass; runtime/domain examples
    must consume the kernel contract rather than shaping it.
-

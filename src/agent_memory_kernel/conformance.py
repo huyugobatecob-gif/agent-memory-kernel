@@ -128,6 +128,14 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "personal_lane_absent_from_derived_surfaces",
+                "requires": [
+                    "thread summaries linked to personal memory are absent from professional context",
+                    "semantic analyses linked to personal memory are absent from professional export",
+                    "derived memory inherits the lane restrictions of source memory",
+                ],
+            },
+            {
                 "id": "stored_read_policy_denies_injection",
                 "requires": [
                     "persistent read policy can deny prompt-facing memory injection",
@@ -334,6 +342,38 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         sensitivity="personal",
         auto_approve=True,
     )["candidates"][0]
+    store.add_thread_summary(
+        "Summary: dragonfly-private should never guide professional work.",
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        source_memory_ids=[personal_private["memory_id"]],
+    )
+    store.conn.execute(
+        """
+        INSERT INTO semantic_analyses
+          (analysis_id, run_id, event_id, memory_id, created_at, analyzer,
+           scope, facts_json, chronology_json, key_topics_json, people_json,
+           events_json, verified_entities_json, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "analysis_conformance_personal_derived",
+            None,
+            None,
+            personal_private["memory_id"],
+            now_iso(),
+            "conformance-cross-lane-fixture",
+            CONFORMANCE_SCOPE,
+            json.dumps(["Fact: dragonfly-private leaked through professional semantic analysis."]),
+            "[]",
+            "[]",
+            "[]",
+            "[]",
+            "[]",
+            "{}",
+        ),
+    )
+    store.conn.commit()
     stale = _approved_memory(
         store,
         "Decision: project conformance-site owner is Alice.",
@@ -507,6 +547,34 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         "personal_lane_is_withheld",
         "quiet personal replies" not in professional_content,
         {"scope": CONFORMANCE_SCOPE},
+    )
+    personal_derived_context = store.context_builder_pack(
+        "personal privacy check",
+        scope=CONFORMANCE_SCOPE,
+        thread_id=CONFORMANCE_THREAD_ID,
+    )
+    personal_derived_export = store.export_profile(
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+    )
+    _append_result(
+        results,
+        "personal_lane_absent_from_derived_surfaces",
+        "dragonfly-private" not in professional_content
+        and "dragonfly-private" not in personal_derived_context
+        and "dragonfly-private" not in json.dumps(
+            personal_derived_export.get("chat_history", {}),
+            sort_keys=True,
+        )
+        and "dragonfly-private" not in json.dumps(
+            personal_derived_export.get("semantic_analyses", []),
+            sort_keys=True,
+        ),
+        {
+            "scope": CONFORMANCE_SCOPE,
+            "summary_count": len(personal_derived_export.get("chat_history", {}).get("summaries", [])),
+            "semantic_analysis_count": len(personal_derived_export.get("semantic_analyses", [])),
+        },
     )
     read_policy = store.set_read_policy(
         agent_id="blocked-conformance-reader",
@@ -1318,6 +1386,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
     required = {
         "professional_memory_injected_with_provenance",
         "personal_lane_is_withheld",
+        "personal_lane_absent_from_derived_surfaces",
         "stored_read_policy_denies_injection",
         "resolved_conflict_suppresses_loser",
         "deleted_memory_absent",

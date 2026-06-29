@@ -4147,10 +4147,11 @@ class MemoryStore:
             LEFT JOIN memories m ON m.memory_id = sa.memory_id
             WHERE (? IS NULL OR sa.scope = ?)
               AND (sa.memory_id IS NULL OR m.status = 'active')
+              AND (? IS NULL OR sa.memory_id IS NULL OR m.scope = ?)
             ORDER BY sa.created_at DESC
             LIMIT ?
             """,
-            (scope, scope, max(1, min(int(limit or 50), 500))),
+            (scope, scope, scope, scope, max(1, min(int(limit or 50), 500))),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -6865,7 +6866,7 @@ class MemoryStore:
         summaries = [
             row
             for row in summaries
-            if self._thread_summary_sources_active(row["metadata_json"])
+            if self._thread_summary_sources_allowed(row["metadata_json"], scope=scope)
         ][:3]
         messages = self.conn.execute(
             """
@@ -13279,7 +13280,7 @@ class MemoryStore:
         summary_rows = [
             row
             for row in summary_rows
-            if self._thread_summary_sources_active(row["metadata_json"])
+            if self._thread_summary_sources_allowed(row["metadata_json"], scope=scope)
         ]
         return {
             "turns": [dict(row) for row in turn_rows],
@@ -13590,21 +13591,38 @@ class MemoryStore:
         except (TypeError, json.JSONDecodeError):
             return fallback
 
-    def _thread_summary_sources_active(self, metadata_json: Any) -> bool:
+    def _thread_summary_sources_allowed(
+        self,
+        metadata_json: Any,
+        *,
+        scope: str | None = None,
+    ) -> bool:
         source_memory_ids = self._thread_summary_source_memory_ids(metadata_json)
         if not source_memory_ids:
             return True
         placeholders = ",".join("?" for _ in source_memory_ids)
         rows = self.conn.execute(
             f"""
-            SELECT memory_id, status
+            SELECT memory_id, status, scope
             FROM memories
             WHERE memory_id IN ({placeholders})
             """,
             tuple(source_memory_ids),
         ).fetchall()
-        statuses = {str(row["memory_id"]): str(row["status"]) for row in rows}
-        return all(statuses.get(memory_id) == "active" for memory_id in source_memory_ids)
+        linked = {
+            str(row["memory_id"]): {
+                "status": str(row["status"]),
+                "scope": str(row["scope"]),
+            }
+            for row in rows
+        }
+        for memory_id in source_memory_ids:
+            row = linked.get(memory_id)
+            if not row or row["status"] != "active":
+                return False
+            if scope is not None and row["scope"] != scope:
+                return False
+        return True
 
     def _thread_summary_source_memory_ids(self, metadata_json: Any) -> list[str]:
         metadata = self._loads_json(metadata_json, {})

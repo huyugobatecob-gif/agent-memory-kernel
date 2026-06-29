@@ -1145,6 +1145,87 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("expire", actions)
             store.close()
 
+    def test_derived_summaries_and_semantics_respect_source_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            personal = store.remember(
+                "Preference: personal red-team codename is dragonfly-private.",
+                scope="personal",
+                sensitivity="personal",
+                auto_approve=True,
+            )
+            personal_id = personal["candidates"][0]["memory_id"]
+            store.add_thread_summary(
+                "Summary: dragonfly-private should never guide professional work.",
+                thread_id="scope-thread",
+                scope="professional",
+                source_memory_ids=[personal_id],
+            )
+            store.add_thread_summary(
+                "Summary: dragonfly-private is a personal context marker.",
+                thread_id="scope-thread",
+                scope="personal",
+                source_memory_ids=[personal_id],
+            )
+            store.conn.execute(
+                """
+                INSERT INTO semantic_analyses
+                  (analysis_id, run_id, event_id, memory_id, created_at, analyzer,
+                   scope, facts_json, chronology_json, key_topics_json, people_json,
+                   events_json, verified_entities_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "analysis_cross_lane_personal",
+                    None,
+                    None,
+                    personal_id,
+                    "2026-01-01T00:00:00Z",
+                    "test-cross-lane",
+                    "professional",
+                    json.dumps(["Fact: dragonfly-private leaked through semantic analysis."]),
+                    "[]",
+                    "[]",
+                    "[]",
+                    "[]",
+                    "[]",
+                    "{}",
+                ),
+            )
+            store.conn.commit()
+
+            professional_context = store.context_builder_pack(
+                "professional planning",
+                scope="professional",
+                thread_id="scope-thread",
+            )
+            professional_export = store.export_profile(scope="professional")
+            professional_semantic = store.list_semantic_analyses(scope="professional")
+
+            self.assertNotIn("dragonfly-private", professional_context)
+            self.assertNotIn(
+                "dragonfly-private",
+                json.dumps(professional_export.get("chat_history", {}), sort_keys=True),
+            )
+            self.assertNotIn(
+                "dragonfly-private",
+                json.dumps(professional_export.get("semantic_analyses", []), sort_keys=True),
+            )
+            self.assertNotIn(
+                "dragonfly-private",
+                json.dumps(professional_semantic, sort_keys=True),
+            )
+
+            personal_context = store.context_builder_pack(
+                "personal codename",
+                scope="personal",
+                thread_id="scope-thread",
+            )
+            self.assertIn("dragonfly-private", personal_context)
+            store.close()
+
     def test_conflict_and_supersede_truth_maintenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

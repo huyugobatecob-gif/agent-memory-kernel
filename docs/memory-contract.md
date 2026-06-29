@@ -210,7 +210,8 @@ real shadow traces prove that memory:
 - invalidates derived summaries, graph surfaces, cached packs, outcome lessons,
   and graph-derived style when underlying memory changes;
 - treats `source_memory_ids` on thread summaries and `memory_id` on semantic
-  analyses as provenance links that must respect active memory status;
+  analyses as provenance links that must respect active memory status and lane
+  scope;
 - exposes derived invalidation records so adapters can audit which graph,
   prompt-pack, export, and style surfaces were refreshed or invalidated;
 - resolves current-best answers or marks unresolved conflicts instead of
