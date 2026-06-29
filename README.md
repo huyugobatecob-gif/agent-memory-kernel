@@ -15,7 +15,8 @@ Teams can define additional scopes, namespaces, policy packs, and renderers for
 project-specific graph trees, success/failure loops, runtime adapters, CRM
 memory, SEO project memory, support memory, or any other domain-specific layer.
 Bundled templates and adapter examples are optional, not a requirement of the
-kernel.
+kernel. The starter pack contract is documented in
+[docs/default-packs.md](docs/default-packs.md).
 
 For a plain-language overview, start with
 [docs/what-is-amk.md](docs/what-is-amk.md). The project boundary is defined in

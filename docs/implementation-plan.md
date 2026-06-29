@@ -49,7 +49,7 @@ Core includes:
 - Generic `scope`, `lane`, `namespace`, `actor`, `policy`, and `surface`
   primitives.
 - The shipped personal/professional starter pack as a default policy pack, not
-  as the only valid ontology.
+  as the only valid ontology. See [default-packs.md](default-packs.md).
 - Graph nodes, graph edges, evidence links, and derivation links.
 - Keeper proposal contract.
 - Router retrieval contract.
@@ -115,6 +115,9 @@ Glossary:
 - `prompt envelope`: provider-neutral payload for the main model.
 - `Memory Tree Supplement`: optional renderer over selected memory, not the
   source of truth.
+
+The default personal/professional pack contract is exposed through
+`memory_contract()["default_packs"]`.
 
 ## Gates
 

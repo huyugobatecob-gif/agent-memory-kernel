@@ -56,7 +56,8 @@ extensions, or later hosted work.
 
 ## Default Packs
 
-The public starter pack includes two useful lanes:
+The public starter pack includes two useful lanes. The detailed contract lives
+in [default-packs.md](default-packs.md).
 
 - `personal`: preferences, stable personal context, relationships, recurring
   context, and communication style.

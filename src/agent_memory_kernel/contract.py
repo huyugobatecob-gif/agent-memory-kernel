@@ -54,6 +54,53 @@ LANES: dict[str, dict[str, Any]] = {
     },
 }
 
+DEFAULT_PACKS: dict[str, dict[str, Any]] = {
+    "personal": {
+        "lane": "personal",
+        "purpose": (
+            "Personal preferences, stable personal context, relationships, "
+            "recurring context, and communication style."
+        ),
+        "includes": [
+            "directly stated preferences",
+            "stable user facts",
+            "communication style",
+            "relationships and recurring personal context",
+        ],
+        "excludes": [
+            "secrets unless explicitly approved for storage",
+            "professional project facts unless policy allows cross-lane use",
+            "assistant guesses that were not reviewed",
+        ],
+        "retrieval_default": "explicit_only",
+        "write_policy": "direct user statements may be proposed; inferred facts require review",
+        "prompt_boundary": "withheld from professional-only prompts unless explicit policy allows it",
+        "template": "templates/vault/personal.md",
+    },
+    "professional": {
+        "lane": "professional",
+        "purpose": (
+            "Projects, decisions, constraints, collaborators, work rules, "
+            "gotchas, attempts, outcomes, and reusable work patterns."
+        ),
+        "includes": [
+            "project rules and decisions",
+            "constraints and collaborators",
+            "successful patterns and failed attempts",
+            "operational lessons and gotchas",
+        ],
+        "excludes": [
+            "private personal context unless policy allows cross-lane use",
+            "untrusted tool/web/assistant claims before review",
+            "secrets unless explicitly approved for storage",
+        ],
+        "retrieval_default": "default_work_lane",
+        "write_policy": "agent and system writes are candidates until policy or review approves them",
+        "prompt_boundary": "default work lane; still filtered by scope, namespace, policy, trust, and lifecycle",
+        "template": "templates/vault/professional.md",
+    },
+}
+
 MEMORY_KINDS = [
     "fact",
     "preference",
@@ -510,6 +557,7 @@ def memory_contract() -> dict[str, Any]:
         "default_lanes": ["personal", "professional"],
         "extension_lanes": ["project", "agent", "session"],
         "lanes": LANES,
+        "default_packs": DEFAULT_PACKS,
         "memory_kinds": MEMORY_KINDS,
         "write_actions": WRITE_ACTIONS,
         "read_actions": READ_ACTIONS,
@@ -539,6 +587,16 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "personal_lane_present": "personal" in data.get("lanes", {}),
         "professional_lane_present": "professional" in data.get("lanes", {}),
         "project_extension_present": "project" in data.get("lanes", {}),
+        "default_packs_present": {"personal", "professional"}.issubset(
+            set(data.get("default_packs", {}).keys())
+        ),
+        "default_packs_have_boundaries": all(
+            item.get("purpose")
+            and item.get("includes")
+            and item.get("excludes")
+            and item.get("prompt_boundary")
+            for item in data.get("default_packs", {}).values()
+        ),
         "write_actions_present": set(WRITE_ACTIONS).issubset(set(data.get("write_actions", []))),
         "read_actions_present": set(READ_ACTIONS).issubset(set(data.get("read_actions", []))),
         "acceptance_gates_present": len(data.get("acceptance_gates", [])) >= 6,

@@ -31,6 +31,16 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         self.assertIn("personal", contract["lanes"])
         self.assertIn("professional", contract["lanes"])
+        self.assertIn("personal", contract["default_packs"])
+        self.assertIn("professional", contract["default_packs"])
+        self.assertEqual(contract["default_packs"]["personal"]["lane"], "personal")
+        self.assertEqual(contract["default_packs"]["professional"]["lane"], "professional")
+        self.assertIn("explicit_only", contract["default_packs"]["personal"]["retrieval_default"])
+        self.assertIn(
+            "policy",
+            contract["default_packs"]["professional"]["prompt_boundary"],
+        )
+        self.assertIn("personal", contract["default_packs"]["professional"]["excludes"][0])
         self.assertIn("project", contract["extension_lanes"])
         self.assertIn("before_model_call runs before a non-incognito main model call", str(contract))
         self.assertIn("revise_or_forget", contract["closed_loop"])
