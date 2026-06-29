@@ -1757,6 +1757,35 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(google["formatted_prompt"]["contents"][0]["role"], "user")
             store.close()
 
+    def test_prompt_formatter_certification_checks_provider_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            report = store.prompt_formatter_certification(
+                providers=["openai", "anthropic", "gemini", "local"],
+                model_id="gpt-4.1-mini",
+            )
+
+            self.assertEqual(report["version"], "prompt-formatter-certification-v0.1")
+            self.assertEqual(report["status"], "pass")
+            self.assertEqual(report["summary"]["provider_count"], 4)
+            self.assertEqual(report["summary"]["failed"], 0)
+            for provider in report["providers"]:
+                self.assertEqual(provider["status"], "pass")
+                check_names = {check["name"] for check in provider["checks"]}
+                self.assertIn("memory_supplement_not_system", check_names)
+                self.assertTrue(all(check["passed"] for check in provider["checks"]))
+
+            endpoint = handle_api_request(
+                store,
+                "/prompt-format/certify",
+                {"providers": ["openai", "gemini"], "model_id": "gemini-2.5-pro"},
+            )
+            self.assertEqual(endpoint["status"], "pass")
+            self.assertEqual(endpoint["summary"]["provider_count"], 2)
+            store.close()
+
     def test_router_feedback_adjusts_future_ranking(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

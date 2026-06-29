@@ -65,6 +65,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             adapter_name=str(payload.get("adapter_name", "local-runtime")),
             adapter_version=str(payload.get("adapter_version", "")),
         )
+    if path in {"/prompt-format/certify", "/prompt-format-certify"}:
+        providers = payload.get("providers")
+        if isinstance(providers, str):
+            providers = [item.strip() for item in providers.split(",") if item.strip()]
+        return store.prompt_formatter_certification(
+            providers=providers,
+            model_id=str(payload.get("model_id", "")),
+        )
     if path == "/keeper-eval/spec":
         return keeper_eval_spec()
     if path == "/keeper-eval/run":

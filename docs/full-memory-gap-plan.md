@@ -382,8 +382,9 @@ Remaining for full memory:
   agent/scope/action capability report and read/write policies.
 - Production current-best-answer resolution beyond the baseline explicit
   conflict resolver and active-memory conflict detector.
-- Broader provider certification and provider-specific prompt envelope tests
-  beyond the baseline OpenAI/Anthropic/Google/local prompt formatters.
+- Broader live-provider certification and provider-specific prompt envelope
+  tests beyond the baseline OpenAI/Anthropic/Google/local prompt formatter
+  certification.
 - Broader provider-specific prompt-injection, source trust, and secret
   red-team fixtures beyond the baseline public conformance cases.
 - Production observability beyond the baseline report, including latency SLOs,

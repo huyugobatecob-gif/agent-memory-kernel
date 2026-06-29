@@ -149,8 +149,12 @@ Baseline prompt-envelope provider formatters are implemented through
 `before_model_call(..., prompt_format=...)`, `agent-memory before-model-call
 --prompt-format`, `/before-model-call`, and MCP `memory_before_model_call`.
 They return the neutral envelope plus OpenAI, Anthropic, Google/Gemini, or
-local formatted prompt shapes. Broader provider certification and
-provider-specific prompt-boundary tests are still backlog.
+local formatted prompt shapes. Baseline provider formatter certification is
+implemented through `agent-memory prompt-format-certify`,
+`/prompt-format/certify`, and MCP `memory_prompt_format_certify`; it verifies
+prompt-boundary invariants without live provider calls. Live-provider
+certification and broader provider-specific prompt-boundary tests are still
+backlog.
 Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
 `keeper-extraction-v0.1`, local schema validation, deterministic fallback,
 candidate extraction metadata, and offline Keeper evals through

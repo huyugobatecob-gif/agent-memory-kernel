@@ -350,6 +350,7 @@ agent-memory conformance spec
 agent-memory conformance seed --db .memory/conformance.db
 agent-memory conformance assert --db .memory/conformance.db
 agent-memory conformance certify --db .memory/conformance.db --adapter-name my-runtime
+agent-memory prompt-format-certify --db .memory/conformance.db --providers openai,anthropic,gemini,local
 ```
 
 The acceptance harness checks the minimum closed-loop behavior: selected memory
@@ -369,6 +370,8 @@ Adapters can use it as the first "does this behave like Agent Memory Kernel?"
 gate. `conformance certify` wraps the same suite in an adapter certification
 report with pass/fail status, scenario counts, golden trace coverage, and a
 local badge URL/Markdown snippet suitable for README or CI output.
+`prompt-format-certify` separately checks provider prompt shapes and proves the
+memory supplement remains user-context instead of becoming hidden system text.
 
 Record profile and usage metadata:
 

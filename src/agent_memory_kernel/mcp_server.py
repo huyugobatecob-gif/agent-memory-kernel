@@ -275,6 +275,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_prompt_format_certify": {
+        "endpoint": "/prompt-format/certify",
+        "description": "Certify provider prompt formatters against prompt-boundary invariants.",
+        "inputSchema": _schema(
+            {
+                "providers": _array(
+                    "Providers to certify, such as openai, anthropic, gemini, and local.",
+                    _string("Provider name."),
+                ),
+                "model_id": _string("Optional model id for profile metadata.", ""),
+            }
+        ),
+    },
     "memory_backup_database": {
         "endpoint": "/backup",
         "description": "Create a SQLite backup of the memory database.",

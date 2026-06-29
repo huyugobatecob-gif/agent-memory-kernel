@@ -394,6 +394,19 @@ def cmd_prompt_budget(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prompt_format_certify(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.prompt_formatter_certification(
+            providers=parse_csv(args.providers),
+            model_id=args.model_id,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_router_runs(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1752,6 +1765,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model-id", default="", help="Main model id, such as gpt-4.1-mini or claude-sonnet")
     p.add_argument("--token-budget", type=int, default=0, help="Requested memory token budget")
     p.set_defaults(func=cmd_prompt_budget)
+
+    p = sub.add_parser("prompt-format-certify", help="Certify provider prompt formatters")
+    add_common_db(p)
+    p.add_argument("--providers", default="", help="Comma-separated providers: openai, anthropic, gemini, local")
+    p.add_argument("--model-id", default="", help="Optional model id for budget/profile metadata")
+    p.set_defaults(func=cmd_prompt_format_certify)
 
     p = sub.add_parser("router-runs", help="List Router runs and prompt-facing memory reads")
     add_common_db(p)
