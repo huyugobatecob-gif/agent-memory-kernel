@@ -147,6 +147,11 @@ The portable archive target is `.amk`: a local export bundle containing:
 - redaction profile and export policy decision;
 - conformance trace outputs and prompt snapshots when available.
 
+The baseline local envelope is `amk-bundle-v0.1`. Its manifest must include a
+schema version, AMK contract marker, lifecycle/policy versions, and canonical
+JSON SHA-256 payload digest. Import must verify the manifest before applying the
+payload.
+
 Import must preserve inactive states. Deleted, distrusted, expired,
 superseded, quarantined, or denied memory must not become active through import.
 

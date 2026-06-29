@@ -144,6 +144,7 @@ EXPORT_RETENTION_VERSION = "export-retention-v0.1"
 EXPORT_CUSTODY_VERSION = "export-custody-v0.1"
 VAULT_ADAPTER_VERSION = "vault-adapter-v0.1"
 ENCRYPTED_EXPORT_VERSION = "encrypted-export-v0.1"
+AMK_BUNDLE_VERSION = "amk-bundle-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
 EXPORT_APPROVAL_KINDS = {"profile", "markdown"}
@@ -6192,6 +6193,96 @@ class MemoryStore:
     ) -> dict[str, int]:
         payload = self.decrypt_encrypted_export(envelope, passphrase=passphrase)
         return self.import_profile(payload)
+
+    def export_bundle(
+        self,
+        *,
+        scope: str | None = None,
+        project: str = "",
+        actor: str = "user",
+        redaction_profile: str = "full",
+        approval_id: str = "",
+        retention_days: int | None = None,
+        artifact_ref: str = "",
+    ) -> dict[str, Any]:
+        """Return a portable .amk bundle envelope with an integrity manifest."""
+        payload = self.export_profile(
+            scope=scope,
+            project=project,
+            actor=actor,
+            redaction_profile=redaction_profile,
+            approval_id=approval_id,
+            retention_days=retention_days,
+            artifact_ref=artifact_ref,
+        )
+        payload_digest = self._stable_json_sha256(payload)
+        metadata = dict(payload.get("export_metadata", {}))
+        manifest = {
+            "version": AMK_BUNDLE_VERSION,
+            "bundle_type": "agent-memory-profile",
+            "created_at": now_iso(),
+            "schema_version": SCHEMA_VERSION,
+            "contract_version": "amk-000",
+            "payload_digest": payload_digest,
+            "payload_digest_algorithm": "sha256:canonical-json",
+            "scope": metadata.get("scope", scope or "all"),
+            "project": project,
+            "actor": actor,
+            "redaction_profile": redaction_profile,
+            "content_included": metadata.get("redaction", {}).get("content_included", False),
+            "export_id": metadata.get("retention", {}).get("export_id", ""),
+            "lifecycle_version": payload.get("memory_lifecycle", {}).get("version", ""),
+            "policy_state_version": payload.get("memory_policy_state", {}).get("version", ""),
+        }
+        return {
+            "version": AMK_BUNDLE_VERSION,
+            "manifest": manifest,
+            "payload": payload,
+        }
+
+    def verify_bundle(self, bundle: dict[str, Any]) -> dict[str, Any]:
+        """Verify a portable .amk bundle manifest without importing it."""
+        if not isinstance(bundle, dict):
+            raise ValueError("bundle must be a JSON object")
+        if bundle.get("version") != AMK_BUNDLE_VERSION:
+            raise ValueError("unsupported AMK bundle version")
+        manifest = bundle.get("manifest")
+        payload = bundle.get("payload")
+        if not isinstance(manifest, dict) or not isinstance(payload, dict):
+            raise ValueError("AMK bundle requires manifest and payload objects")
+        if manifest.get("version") != AMK_BUNDLE_VERSION:
+            raise ValueError("AMK bundle manifest version mismatch")
+        if manifest.get("schema_version") != SCHEMA_VERSION:
+            raise ValueError("AMK bundle schema version mismatch")
+        if manifest.get("payload_digest_algorithm") != "sha256:canonical-json":
+            raise ValueError("unsupported AMK bundle digest algorithm")
+        expected = str(manifest.get("payload_digest", ""))
+        actual = self._stable_json_sha256(payload)
+        if not expected or not hmac.compare_digest(expected, actual):
+            raise ValueError("AMK bundle payload digest mismatch")
+        return {
+            "version": AMK_BUNDLE_VERSION,
+            "status": "verified",
+            "schema_version": manifest.get("schema_version"),
+            "contract_version": manifest.get("contract_version"),
+            "payload_digest": actual,
+            "scope": manifest.get("scope", "all"),
+            "redaction_profile": manifest.get("redaction_profile", ""),
+            "content_included": bool(manifest.get("content_included", False)),
+            "lifecycle_version": manifest.get("lifecycle_version", ""),
+            "policy_state_version": manifest.get("policy_state_version", ""),
+        }
+
+    def import_bundle(self, bundle: dict[str, Any]) -> dict[str, Any]:
+        """Verify and import a portable .amk bundle payload."""
+        verification = self.verify_bundle(bundle)
+        counts = self.import_profile(bundle["payload"])
+        return {
+            "version": AMK_BUNDLE_VERSION,
+            "status": "imported",
+            "verification": verification,
+            "counts": counts,
+        }
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
@@ -12757,6 +12848,10 @@ class MemoryStore:
             separators=(",", ":"),
             ensure_ascii=False,
         ).encode("utf-8")
+
+    @classmethod
+    def _stable_json_sha256(cls, value: Any) -> str:
+        return hashlib.sha256(cls._canonical_json_bytes(value)).hexdigest()
 
     @staticmethod
     def _derive_export_keys(

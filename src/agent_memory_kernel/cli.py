@@ -1450,6 +1450,52 @@ def cmd_import_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_bundle(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    bundle = store.export_bundle(
+        scope=args.scope,
+        project=args.project,
+        actor=args.actor,
+        redaction_profile=args.redaction_profile,
+        approval_id=args.approval_id,
+        retention_days=args.retention_days,
+        artifact_ref=args.out,
+    )
+    store.close()
+    Path(args.out).write_text(
+        json.dumps(bundle, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print_json(
+        {
+            "status": "bundle_written",
+            "out": args.out,
+            "version": bundle["version"],
+            "manifest": bundle["manifest"],
+        }
+    )
+    return 0
+
+
+def cmd_verify_bundle(args: argparse.Namespace) -> int:
+    bundle = json.loads(Path(args.path).read_text(encoding="utf-8"))
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.verify_bundle(bundle))
+    store.close()
+    return 0
+
+
+def cmd_import_bundle(args: argparse.Namespace) -> int:
+    bundle = json.loads(Path(args.path).read_text(encoding="utf-8"))
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.import_bundle(bundle))
+    store.close()
+    return 0
+
+
 def cmd_vault_export(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2688,6 +2734,27 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("path")
     p.set_defaults(func=cmd_import_profile)
+
+    p = sub.add_parser("export-bundle", help="Write a portable .amk profile bundle")
+    add_common_db(p)
+    p.add_argument("--out", required=True)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--actor", default="user")
+    p.add_argument("--redaction-profile", default="full", choices=["full", "safe", "metadata"])
+    p.add_argument("--approval-id", default="")
+    p.add_argument("--retention-days", type=int)
+    p.set_defaults(func=cmd_export_bundle)
+
+    p = sub.add_parser("verify-bundle", help="Verify a portable .amk bundle manifest")
+    add_common_db(p)
+    p.add_argument("path")
+    p.set_defaults(func=cmd_verify_bundle)
+
+    p = sub.add_parser("import-bundle", help="Import a verified portable .amk bundle")
+    add_common_db(p)
+    p.add_argument("path")
+    p.set_defaults(func=cmd_import_bundle)
 
     p = sub.add_parser("vault", help="Export or import a machine-readable markdown memory vault")
     add_common_db(p)

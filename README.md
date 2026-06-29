@@ -156,6 +156,8 @@ Included now:
 - Sensitive full-export approval requests for personal or secret active memory.
 - Export retention ledger with expiry, purge status, and Markdown export
   manifests.
+- Portable `.amk` profile bundle export/import with manifest checksum:
+  `amk-bundle-v0.1`.
 - Encrypted profile export/import envelopes with passphrase-derived keys:
   `encrypted-export-v0.1`.
 - Export custody reports that verify export policy, sensitive approval,
@@ -536,6 +538,15 @@ agent-memory export-profile --db .memory/demo.db \
   --scope professional \
   --redaction-profile safe
 
+agent-memory export-bundle --db .memory/demo.db \
+  --out workspace-memory.amk.json \
+  --scope professional \
+  --redaction-profile safe
+
+agent-memory verify-bundle --db .memory/demo.db workspace-memory.amk.json
+
+agent-memory import-bundle --db .memory/restored.db workspace-memory.amk.json
+
 agent-memory export --db .memory/demo.db \
   --out memory-vault \
   --redaction-profile safe \
@@ -569,6 +580,10 @@ AGENT_MEMORY_EXPORT_PASSPHRASE="change-me" agent-memory import-encrypted-profile
 agent-memory export-retention --db .memory/demo.db list --status active
 agent-memory export-retention --db .memory/demo.db enforce --actor janitor
 ```
+
+Portable `.amk` bundles wrap the same governed/redacted profile payload in an
+`amk-bundle-v0.1` manifest with schema version, AMK contract marker,
+lifecycle/policy versions, and a canonical JSON SHA-256 payload checksum.
 
 Encrypted profile exports wrap the same governed/redacted profile payload in an
 authenticated `encrypted-export-v0.1` envelope. CLI commands can read the

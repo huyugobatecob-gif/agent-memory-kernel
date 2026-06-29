@@ -30,7 +30,7 @@ Status labels:
 | Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, Memory Tree renderer | Add broader provider-shaped prompt-envelope snapshots and keep renderers behind the read contract. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
-| Import/export provenance | partial | profile export/import, lifecycle and policy state preservation | Define and test a portable memory package format/checksum story. |
+| Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across evidence chains and derived invalidation records. |
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic | Keep deterministic baseline independent of embeddings and provider calls. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness | Add invariant matrix coverage for every kernel law and prompt-envelope snapshots. |
 

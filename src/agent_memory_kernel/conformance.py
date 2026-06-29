@@ -80,6 +80,7 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_export_preserves_lifecycle_tombstones",
                     "golden_trace_import_restores_lifecycle_tombstones",
                     "golden_trace_import_preserves_policy_metadata",
+                    "golden_trace_portable_bundle_manifest_roundtrip",
                 ],
             },
             {
@@ -228,6 +229,15 @@ def conformance_spec() -> dict[str, Any]:
                     "effective capability report includes read and write decisions",
                     "denied export is visible before memory leaves the store",
                     "denied lifecycle mutation is policy-checkable",
+                ],
+            },
+            {
+                "id": "golden_trace_portable_bundle_manifest_roundtrip",
+                "requires": [
+                    "portable .amk bundle includes schema, contract, lifecycle, and policy versions",
+                    "bundle payload digest is verified before import",
+                    "tampered bundle payload is rejected",
+                    "bundle import preserves lifecycle and policy metadata",
                 ],
             },
             {
@@ -1335,6 +1345,64 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "delete_blocked": restored_delete_blocked,
             },
         )
+        bundle = store.export_bundle(
+            scope=CONFORMANCE_SCOPE,
+            actor="conformance",
+        )
+        bundle_verification = store.verify_bundle(bundle)
+        tampered_rejected = False
+        tampered = json.loads(json.dumps(bundle))
+        tampered["payload"]["profile_notes"].append(
+            {
+                "scope": CONFORMANCE_SCOPE,
+                "note_type": "intro",
+                "title": "tampered",
+                "content": "Tampered portable bundle content.",
+            }
+        )
+        try:
+            store.verify_bundle(tampered)
+        except ValueError:
+            tampered_rejected = True
+        bundle_restored = MemoryStore(":memory:")
+        try:
+            bundle_restored.init_db()
+            bundle_import = bundle_restored.import_bundle(bundle)
+            bundle_capability = bundle_restored.capability_report(
+                actor="blocked-conformance-export",
+                scope=CONFORMANCE_SCOPE,
+            )
+            bundle_active = bundle_restored.search(
+                "Statamic",
+                scope=CONFORMANCE_SCOPE,
+                actor="conformance",
+            )
+        finally:
+            bundle_restored.close()
+        _append_result(
+            results,
+            "golden_trace_portable_bundle_manifest_roundtrip",
+            bundle.get("version") == "amk-bundle-v0.1"
+            and bundle.get("manifest", {}).get("schema_version") == 1
+            and bundle.get("manifest", {}).get("contract_version") == "amk-000"
+            and bundle_verification.get("status") == "verified"
+            and bundle_verification.get("lifecycle_version") == "memory-lifecycle-export-v0.1"
+            and bundle_verification.get("policy_state_version") == "memory-policy-state-v0.1"
+            and tampered_rejected
+            and bundle_import.get("status") == "imported"
+            and bundle_import.get("counts", {}).get("memories", 0)
+            == lifecycle.get("counts", {}).get("memories", -1)
+            and bundle_capability["read"]["export"]["decision"] == "deny"
+            and bool(bundle_active),
+            {
+                "manifest": bundle.get("manifest", {}),
+                "verification": bundle_verification,
+                "tampered_rejected": tampered_rejected,
+                "import_counts": bundle_import.get("counts", {}),
+                "restored_denied_actions": bundle_capability.get("denied_actions", []),
+                "active_result_count": len(bundle_active),
+            },
+        )
     finally:
         restored.close()
 
@@ -1553,6 +1621,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "keeper_retry_is_idempotent",
         "keeper_change_is_inspectable",
         "capability_report_blocks_denied_actions",
+        "golden_trace_portable_bundle_manifest_roundtrip",
         "golden_trace_outcome_pack_uses_success_and_failure",
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_safe_export_redacts_memory_content",

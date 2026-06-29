@@ -864,6 +864,80 @@ class MemoryStoreTests(unittest.TestCase):
             imported.close()
             store.close()
 
+    def test_portable_bundle_manifest_roundtrip_and_tamper_detection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            memory_id = store.remember(
+                "Decision: bundle-site keeps portable memory exports.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            policy = store.set_read_policy(
+                agent_id="bundle-reader",
+                scope="professional",
+                action="export",
+                decision="deny",
+                reason="bundle export requires consent",
+            )
+
+            bundle = store.export_bundle(scope="professional", actor="user")
+            self.assertEqual(bundle["version"], "amk-bundle-v0.1")
+            self.assertEqual(bundle["manifest"]["schema_version"], 1)
+            self.assertEqual(bundle["manifest"]["contract_version"], "amk-000")
+            self.assertEqual(
+                bundle["manifest"]["payload_digest_algorithm"],
+                "sha256:canonical-json",
+            )
+            self.assertEqual(
+                bundle["manifest"]["payload_digest"],
+                store._stable_json_sha256(bundle["payload"]),
+            )
+
+            verification = store.verify_bundle(bundle)
+            self.assertEqual(verification["status"], "verified")
+            self.assertEqual(
+                verification["policy_state_version"],
+                "memory-policy-state-v0.1",
+            )
+            self.assertEqual(
+                verification["lifecycle_version"],
+                "memory-lifecycle-export-v0.1",
+            )
+
+            tampered = json.loads(json.dumps(bundle))
+            tampered["payload"]["profile_notes"].append(
+                {
+                    "scope": "professional",
+                    "note_type": "intro",
+                    "title": "tampered",
+                    "content": "Tampered bundle content.",
+                }
+            )
+            with self.assertRaises(ValueError):
+                store.verify_bundle(tampered)
+
+            imported = MemoryStore(Path(tmp) / "imported.db")
+            imported.init_db()
+            result = imported.import_bundle(bundle)
+            self.assertEqual(result["status"], "imported")
+            self.assertEqual(result["verification"]["status"], "verified")
+            self.assertEqual(result["counts"]["memories"], 1)
+            self.assertEqual(
+                imported.search("portable memory exports", scope="professional")[0]["memory_id"],
+                memory_id,
+            )
+            restored_policy = imported.resolve_read_policy(
+                "bundle-reader",
+                "professional",
+                "export",
+            )
+            self.assertEqual(restored_policy["decision"], "deny")
+            self.assertEqual(restored_policy["policy_id"], policy["policy_id"])
+            imported.close()
+            store.close()
+
     def test_correct_memory_records_revision_and_rollback_restores_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
