@@ -175,7 +175,7 @@ The canonical conformance corpus must include:
 - deterministic ranking fixtures;
 - budget-trim prompt envelope fixtures;
 - large-history bounded prompt fixtures;
-- provider-shaped prompt envelope snapshots;
+- provider formatter boundary snapshots;
 - import/export round trips;
 - migration and recovery checks;
 - policy dry-runs and denied-action traces;

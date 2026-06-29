@@ -92,6 +92,18 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "provider_prompt_formatter_trace",
+                "steps": [
+                    "format a red-team prompt envelope for OpenAI, Anthropic, Google/Gemini, and local runtimes",
+                    "verify each provider shape preserves the system guardrail",
+                    "verify Memory Tree, hostile memory, tool output, assistant guesses, and secret-like text stay out of provider system surfaces",
+                    "verify the current request remains present after provider formatting",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_provider_prompt_formatters_preserve_boundaries"
+                ],
+            },
+            {
                 "id": "large_history_resource_budget_trace",
                 "steps": [
                     "seed a large local history with many memories matching one query",
@@ -173,6 +185,15 @@ def conformance_spec() -> dict[str, Any]:
                     "large non-selected context-pack content is trimmed with an explicit marker",
                     "selected Memory Tree Supplement remains in a separate prompt message",
                     "Router audit stores the same effective budget used for the envelope",
+                ],
+            },
+            {
+                "id": "golden_trace_provider_prompt_formatters_preserve_boundaries",
+                "requires": [
+                    "OpenAI, Anthropic, Google/Gemini, and local prompt shapes are certifiable without provider calls",
+                    "Memory Tree Supplement remains outside provider system-instruction surfaces",
+                    "hostile memory, tool output, assistant guesses, and secret-like fixtures remain user-context only",
+                    "formatter metadata records the normalized provider and formatter version",
                 ],
             },
             {
@@ -801,6 +822,53 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "router_token_budget": (
                 int(budget_router_row["token_budget"]) if budget_router_row else None
             ),
+        },
+    )
+    formatter_report = store.prompt_formatter_certification(
+        providers=["openai", "anthropic", "gemini", "local"],
+        model_id="gpt-4.1-mini",
+    )
+    provider_checks = {
+        item["provider"]: {check["name"]: check["passed"] for check in item.get("checks", [])}
+        for item in formatter_report.get("providers", [])
+    }
+    normalized_providers = {
+        item["provider"]: item.get("normalized_provider")
+        for item in formatter_report.get("providers", [])
+    }
+    required_formatter_checks = {
+        "provider_shape",
+        "system_guardrail_preserved",
+        "memory_supplement_not_system",
+        "hostile_memory_not_system",
+        "tool_output_not_system",
+        "assistant_guess_not_system",
+        "secret_fixture_not_system",
+        "current_request_preserved",
+        "requested_provider_recorded",
+    }
+    _append_result(
+        results,
+        "golden_trace_provider_prompt_formatters_preserve_boundaries",
+        formatter_report.get("status") == "pass"
+        and formatter_report.get("summary", {}).get("provider_count") == 4
+        and formatter_report.get("summary", {}).get("failed") == 0
+        and set(provider_checks) == {"openai", "anthropic", "gemini", "local"}
+        and all(
+            required_formatter_checks.issubset(checks)
+            and all(checks[name] for name in required_formatter_checks)
+            for checks in provider_checks.values()
+        )
+        and normalized_providers.get("gemini") == "google",
+        {
+            "summary": formatter_report.get("summary", {}),
+            "normalized_providers": normalized_providers,
+            "provider_checks": {
+                provider: sorted(
+                    name for name, passed in checks.items() if passed
+                )
+                for provider, checks in provider_checks.items()
+            },
         },
     )
     large_history_prompt = store.before_model_call(
@@ -1878,6 +1946,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_deterministic_ranking_snapshot",
         "golden_trace_prompt_budget_trims_context_pack",
+        "golden_trace_provider_prompt_formatters_preserve_boundaries",
         "golden_trace_large_history_prompt_is_bounded",
         "golden_trace_safe_export_redacts_memory_content",
         "migration_status_is_compatible",
