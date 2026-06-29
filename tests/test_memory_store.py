@@ -2081,6 +2081,10 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(asserted["status"], "passed")
             self.assertTrue(asserted["checks"]["poisoning_quarantined"])
             self.assertTrue(asserted["checks"]["personal_lane_excluded"])
+            self.assertTrue(asserted["checks"]["outcome_pack_has_success_and_failure"])
+            self.assertTrue(asserted["checks"]["outcome_records_have_active_provenance"])
+            self.assertIn("### Successes", asserted["outcome_pack"])
+            self.assertIn("### Failures", asserted["outcome_pack"])
             store.close()
 
     def test_http_api_dispatcher_runtime_endpoints(self) -> None:

@@ -670,6 +670,19 @@ See [docs/production-rollout.md](docs/production-rollout.md) for the generic
 runtime rollout playbook. Hermes is kept as an optional adapter example in
 [docs/hermes-integration.md](docs/hermes-integration.md).
 
+For a provider-neutral executable loop, run:
+
+```bash
+agent-memory slice seed --db .memory/reference-loop.db
+agent-memory slice run --db .memory/reference-loop.db
+agent-memory slice assert --db .memory/reference-loop.db
+```
+
+The slice proves Router -> prompt envelope -> Keeper -> graph update behavior
+with corrected memory, deleted memory, personal/professional lane separation,
+prompt-injection quarantine, and real success/failure outcome records. See
+[examples/reference-loop-demo/README.md](examples/reference-loop-demo/README.md).
+
 For direct Python integration, wrap the main agent call:
 
 ```python
@@ -739,7 +752,8 @@ Use `--daemon` for a long-running polling worker under a process supervisor;
 `--max-iterations` and `--stop-when-idle` are available for bounded test or
 maintenance runs.
 
-For a CLI walkthrough of the full policy/review loop, see
+For a CLI walkthrough of the full policy/review loop with an optional Hermes
+adapter example, see
 [examples/hermes-e2e-demo/README.md](examples/hermes-e2e-demo/README.md).
 
 Use `shadow-turn` before a production rollout. It links one Router run and one
@@ -873,6 +887,7 @@ docs/
   hermes-integration.md  optional Hermes adapter example
   roadmap.md             next milestones
 examples/
+  reference-loop-demo/
   personal-professional-demo/
   agent-loop-demo/
   hermes-e2e-demo/

@@ -294,6 +294,11 @@ Already present:
 - First-class outcome records and outcome packs for success/failure loop
   planning.
 - Deterministic `slice seed/run/assert` vertical fixture.
+- Provider-neutral reference loop demo through
+  `examples/reference-loop-demo`; the slice now proves Router -> prompt
+  envelope -> Keeper -> graph behavior across correction, deletion,
+  professional/personal lane separation, poisoning quarantine, and
+  success/failure outcome recall with active memory provenance.
 - Basic prompt-injection-like quarantine.
 - Optional Hermes provider example with `context_pack`, `tree_pack`,
   `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile,
@@ -327,8 +332,8 @@ Remaining for full memory:
 - Broader inspection flows for batch correction and web UI review beyond the
   baseline Router explain, post-turn memory-change, review inbox/export-control,
   and export retention endpoints.
-- A runnable reference loop proving Router -> prompt envelope -> main agent ->
-  Keeper -> graph update across correction, deletion, and outcome recall.
+- Broader runnable reference loops across real external runtimes and hosted
+  deployments beyond the baseline provider-neutral local loop.
 - Graph consolidation/compaction behavior beyond the baseline idempotent
   post-turn Keeper retry guard and graph command upserts.
 - Production LLM-backed Keeper eval suite, managed model configuration,
@@ -833,6 +838,7 @@ provider billing reconciliation, dashboards, retention policy, and alerts.
 
 - Modify `examples/personal-professional-demo/README.md`.
 - Modify `examples/agent-loop-demo/README.md`.
+- Add/maintain `examples/reference-loop-demo/README.md`.
 - Add `examples/cross-model-memory-demo/README.md`.
 - Add `examples/seo-loop-memory-demo/README.md`.
 
@@ -845,7 +851,10 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli init --db /tmp/amk-demo.db
 
 **Verification:** A new user can run the examples and see that memory persists across simulated model switches.
 
-**Result:** The repository demonstrates the full idea clearly without relying on private Hermes data.
+**Result:** Baseline provider-neutral reference loop implemented through
+`examples/reference-loop-demo` and `agent-memory slice seed/run/assert`.
+Remaining work is richer cross-model and SEO-specific walkthroughs for hosted or
+external runtime deployments.
 
 ---
 

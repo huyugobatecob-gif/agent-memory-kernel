@@ -108,8 +108,11 @@ single service facade for `before_turn`, `build_prompt_context`,
 `after_turn`. Local Python runtimes can also use `run_agent_turn()` to wrap
 Router, the main agent call, turn persistence, and Keeper in one audited call.
 The richer `slice seed/run/assert` fixture now checks corrected memory, deleted
-memory, professional/personal lane separation, success/failure loop retrieval,
-and poisoning quarantine. Full v0.2 now has a local stdlib HTTP API service
+memory, professional/personal lane separation, prompt-injection quarantine, and
+real success/failure outcome records with active memory provenance. It is also
+documented as a provider-neutral reference loop in
+`examples/reference-loop-demo`.
+Full v0.2 now has a local stdlib HTTP API service
 through `agent-memory serve`, optional bearer-token protection, and a local
 stdio MCP server. `docs/production-rollout.md` now documents preflight, shadow
 rollout, worker supervision, local HTTP deployment, stdio MCP deployment,
@@ -237,8 +240,9 @@ Baseline export custody is implemented through `agent-memory export-custody`,
 passphrase environment configuration, off-host artifact reference, retention,
 and zero secret storage in SQLite. Hosted KMS integrations and managed
 off-host backup recipes are still backlog.
-The runtime policy/review acceptance path is covered by tests and
-`examples/hermes-e2e-demo`.
+The provider-neutral runtime loop is covered by tests and
+`examples/reference-loop-demo`. The optional Hermes policy/review adapter path
+is covered by tests and `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
 --daemon` are implemented for background post-turn processing. Daemon mode can
 poll continuously under an external supervisor and supports bounded

@@ -53,7 +53,8 @@ Use one deterministic test fixture with these turns:
 
 - project fact becomes a graph node or memory item;
 - personal preference remains in personal lane;
-- success and failure attempts are linked to outcome memory;
+- success and failure attempts are linked to first-class outcome records and
+  active memory provenance;
 - correction supersedes old memory;
 - deletion suppresses retrieval and derived nodes.
 
@@ -104,6 +105,7 @@ The slice is complete only if tests prove:
 - a poisoning attempt is quarantined;
 - personal lane does not leak into professional request;
 - outcome memory returns one success and one failure branch;
+- `outcome_pack` includes both branches with linked memory ids;
 - main model payload does not contain the full graph;
 - selected memory is provider-neutral.
 
@@ -131,13 +133,16 @@ The richer fixture is available through dedicated commands:
 agent-memory slice seed --db /tmp/amk-slice.db
 agent-memory slice run --db /tmp/amk-slice.db
 agent-memory slice assert --db /tmp/amk-slice.db
+agent-memory outcome --db /tmp/amk-slice.db pack --project slice-site
 ```
 
 `tests/test_memory_store.py` contains
 `test_runtime_before_and_after_model_call_vertical_slice` and
 `test_executable_vertical_slice_seed_run_assert`. Together they prove the
 minimal Router -> prompt envelope -> Keeper candidate loop and the richer
-seed/run/assert fixture.
+provider-neutral seed/run/assert fixture with correction, deletion,
+professional/personal lane isolation, poisoning quarantine, and success/failure
+outcome recall.
 
 ## Why This Comes First
 

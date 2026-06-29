@@ -24,7 +24,7 @@ def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     )
     ids["project_fact"] = _approved_memory(
         store,
-        "Fact: project slice-site uses Hermes runtime memory for SEO projects.",
+        "Fact: project slice-site uses provider-neutral runtime memory for SEO projects.",
         "slice://project-fact",
     )
     ids["personal_preference"] = store.remember(
@@ -33,15 +33,35 @@ def seed_vertical_slice(store: MemoryStore) -> dict[str, Any]:
         source_ref="slice://personal-preference",
         auto_approve=True,
     )["candidates"][0]
-    ids["success_pattern"] = _approved_memory(
-        store,
-        "Pattern: project slice-site successful SEO refresh loop worked by comparing winning titles.",
-        "slice://success-pattern",
+    ids["success_outcome"] = store.record_outcome(
+        project=SLICE_PROJECT,
+        loop_id="winning-title-refresh",
+        outcome_status="success",
+        hypothesis="Comparing winning titles will improve refresh quality.",
+        action="Compared winning titles before rewriting priority pages.",
+        result="Winning title comparison improved refresh quality.",
+        cause="The agent reused evidence from prior successful pages.",
+        lesson="Reuse winning title comparisons before new SEO refresh loops.",
+        next_recommendation="Start the next loop with the title comparison checklist.",
+        score=0.9,
+        scope=SLICE_SCOPE,
+        actor="slice",
+        auto_approve=True,
     )
-    ids["failure_gotcha"] = _approved_memory(
-        store,
-        "Failed: project slice-site failed SEO loop used stale keyword data.",
-        "slice://failure-gotcha",
+    ids["failure_outcome"] = store.record_outcome(
+        project=SLICE_PROJECT,
+        loop_id="stale-keyword-refresh",
+        outcome_status="failure",
+        hypothesis="Old keyword snapshots are enough for a refresh.",
+        action="Planned refresh work from stale keyword data.",
+        result="Stale keyword data caused weak refresh priorities.",
+        cause="The agent did not refresh keyword evidence before planning.",
+        lesson="Refresh keyword data before writing loop tasks.",
+        next_recommendation="Verify fresh keyword data before the next refresh loop.",
+        score=0.2,
+        scope=SLICE_SCOPE,
+        actor="slice",
+        auto_approve=True,
     )
     corrected = _approved_memory(
         store,
@@ -121,10 +141,23 @@ def assert_vertical_slice(store: MemoryStore) -> dict[str, Any]:
     )
     envelope = before["prompt_envelope"]
     content = "\n".join(message["content"] for message in envelope["messages"])
+    outcome_pack = store.outcome_pack(project=SLICE_PROJECT, scope=SLICE_SCOPE)
+    active_outcomes = store.list_outcomes(
+        project=SLICE_PROJECT,
+        scope=SLICE_SCOPE,
+        status="active",
+    )
+    active_outcome_statuses = {item["outcome_status"] for item in active_outcomes}
     checks = {
-        "project_fact_retrieved": "Hermes runtime memory" in content,
+        "project_fact_retrieved": "provider-neutral runtime memory" in content,
         "success_branch_retrieved": "winning titles" in content,
         "failure_branch_retrieved": "stale keyword data" in content,
+        "outcome_pack_has_success_and_failure": "### Successes" in outcome_pack
+        and "### Failures" in outcome_pack,
+        "outcome_records_have_active_provenance": {"success", "failure"}.issubset(
+            active_outcome_statuses
+        )
+        and all(item["memory_id"] for item in active_outcomes),
         "corrected_fact_retrieved": "B2B SaaS" in content,
         "old_corrected_fact_absent": "target market is ecommerce" not in content,
         "deleted_fact_absent": "deprecated temporary sitemap rule" not in content,
@@ -146,6 +179,7 @@ def assert_vertical_slice(store: MemoryStore) -> dict[str, Any]:
         "scope": SLICE_SCOPE,
         "thread_id": SLICE_THREAD_ID,
         "router_run_id": before["router_run_id"],
+        "outcome_pack": outcome_pack,
         "checks": checks,
     }
 
