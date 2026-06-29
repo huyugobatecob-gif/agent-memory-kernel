@@ -380,6 +380,7 @@ Useful endpoints:
 - `POST /notifications/ack`
 - `POST /notifications/resolve`
 - `POST /derived-invalidations`
+- `POST /derived-lineage`
 - `POST /remember`
 - `POST /graph/items`
 - `POST /graph/nodes`

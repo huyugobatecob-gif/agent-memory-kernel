@@ -55,6 +55,8 @@ Runtime tools:
 - `memory_derived_invalidations`: inspect derived surfaces refreshed or
   invalidated after correction, rollback, delete, distrust, expire, or
   supersede.
+- `memory_derived_lineage`: explain source, item, graph, outcome, audit, and
+  invalidation surface dependencies for derived memory.
 - `memory_operational_status`: report local memory health, required table
   checks, storage size warning, and configured no-memory/failed-Keeper fallback
   behavior.

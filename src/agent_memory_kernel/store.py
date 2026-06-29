@@ -103,6 +103,7 @@ ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 IDENTITY_DELEGATION_VERSION = "identity-delegation-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
+DERIVED_LINEAGE_VERSION = "derived-lineage-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
@@ -6486,6 +6487,93 @@ class MemoryStore:
             ],
         }
 
+    def derived_lineage_report(
+        self,
+        *,
+        memory_id: str = "",
+        scope: str | None = None,
+        action: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Explain derived-memory dependencies and invalidation lineage."""
+        memory_id = (memory_id or "").strip()
+        scope = normalize_scope(scope) if scope else None
+        action = (action or "").strip().lower()
+        row_limit = max(1, min(int(limit or 50), 200))
+        invalidations = self.derived_invalidations(
+            memory_id=memory_id,
+            scope=scope,
+            action=action,
+            limit=row_limit,
+        )
+        if memory_id:
+            memory = self._memory_row_any_status(memory_id)
+            dependencies = self._derived_dependency_details(memory_id, limit=row_limit)
+            surface_summary = self._derived_surface_summary(invalidations["invalidations"])
+            gaps = self._derived_lineage_gaps(memory, dependencies, invalidations["invalidations"])
+            return {
+                "version": DERIVED_LINEAGE_VERSION,
+                "mode": "memory",
+                "filters": {
+                    "memory_id": memory_id,
+                    "scope": scope or "",
+                    "action": action,
+                    "limit": row_limit,
+                },
+                "memory": self._derived_memory_summary(memory),
+                "dependency_counts": {
+                    key: len(value)
+                    for key, value in dependencies.items()
+                    if isinstance(value, list)
+                },
+                "surface_summary": surface_summary,
+                "gaps": gaps,
+                "dependencies": dependencies,
+                "invalidations": invalidations["invalidations"],
+            }
+
+        by_memory: dict[str, dict[str, Any]] = {}
+        for item in invalidations["invalidations"]:
+            item_memory_id = str(item.get("memory_id", ""))
+            entry = by_memory.setdefault(
+                item_memory_id,
+                {
+                    "memory_id": item_memory_id,
+                    "memory_status": item.get("memory_status", ""),
+                    "memory_excerpt": item.get("memory_excerpt", ""),
+                    "invalidation_count": 0,
+                    "actions": {},
+                    "latest_invalidation_at": "",
+                    "surface_summary": self._empty_derived_surface_summary(),
+                },
+            )
+            entry["invalidation_count"] += 1
+            action_name = str(item.get("action", "unknown") or "unknown")
+            entry["actions"][action_name] = int(entry["actions"].get(action_name, 0)) + 1
+            created_at = str(item.get("created_at", "") or "")
+            if created_at > str(entry["latest_invalidation_at"] or ""):
+                entry["latest_invalidation_at"] = created_at
+            entry["surface_summary"] = self._merge_derived_surface_summary(
+                entry["surface_summary"],
+                self._derived_surface_summary([item]),
+            )
+
+        return {
+            "version": DERIVED_LINEAGE_VERSION,
+            "mode": "overview",
+            "filters": {
+                "memory_id": "",
+                "scope": scope or "",
+                "action": action,
+                "limit": row_limit,
+            },
+            "memory_count": len(by_memory),
+            "invalidation_count": invalidations["count"],
+            "surface_summary": self._derived_surface_summary(invalidations["invalidations"]),
+            "lineage": list(by_memory.values()),
+            "invalidations": invalidations["invalidations"],
+        }
+
     def list_shadow_traces(
         self,
         *,
@@ -8915,6 +9003,275 @@ class MemoryStore:
             ),
         )
         return analysis_id
+
+    def _derived_dependency_details(self, memory_id: str, *, limit: int) -> dict[str, list[dict[str, Any]]]:
+        row_limit = max(1, min(int(limit or 50), 200))
+        memory_items = [
+            {
+                "item_id": row["item_id"],
+                "item_type": row["item_type"],
+                "status": row["status"],
+                "confidence": row["confidence"],
+                "source_trust": row["source_trust"],
+                "updated_at": row["updated_at"],
+                "text_excerpt": self._excerpt(row["text"], 180),
+            }
+            for row in self.conn.execute(
+                """
+                SELECT item_id, item_type, status, confidence, source_trust,
+                       updated_at, text
+                FROM memory_items
+                WHERE memory_id = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (memory_id, row_limit),
+            ).fetchall()
+        ]
+        graph_nodes = [
+            {
+                "graph_node_id": row["graph_node_id"],
+                "node_type": row["node_type"],
+                "label": row["label"],
+                "group_label": row["group_label"],
+                "status": row["status"],
+                "importance": row["importance"],
+                "confidence": row["confidence"],
+                "evidence_count": row["evidence_count"],
+            }
+            for row in self.conn.execute(
+                """
+                SELECT gn.graph_node_id, gn.node_type, gn.label, gn.group_label,
+                       gn.status, gn.importance, gn.confidence,
+                       COUNT(ne.evidence_id) AS evidence_count
+                FROM node_evidence ne
+                JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+                WHERE ne.memory_id = ?
+                   OR ne.item_id IN (
+                        SELECT item_id FROM memory_items WHERE memory_id = ?
+                   )
+                GROUP BY gn.graph_node_id
+                ORDER BY gn.group_label, gn.label
+                LIMIT ?
+                """,
+                (memory_id, memory_id, row_limit),
+            ).fetchall()
+        ]
+        graph_edges = [
+            {
+                "graph_edge_id": row["graph_edge_id"],
+                "edge_type": row["edge_type"],
+                "label": row["label"],
+                "status": row["status"],
+                "evidence_count": row["evidence_count"],
+                "source_label": row["source_label"],
+                "target_label": row["target_label"],
+            }
+            for row in self.conn.execute(
+                """
+                SELECT ge.graph_edge_id, ge.edge_type, ge.label, ge.status,
+                       ge.evidence_count, src.label AS source_label,
+                       dst.label AS target_label
+                FROM memory_graph_edges ge
+                JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+                JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+                WHERE ge.source_memory_id = ?
+                ORDER BY ge.updated_at DESC
+                LIMIT ?
+                """,
+                (memory_id, row_limit),
+            ).fetchall()
+        ]
+        sources = [
+            {
+                "source_id": row["source_id"],
+                "event_id": row["event_id"],
+                "source_type": row["source_type"],
+                "source_ref": row["source_ref"],
+                "actor": row["actor"],
+                "created_at": row["created_at"],
+            }
+            for row in self.conn.execute(
+                """
+                SELECT s.source_id, s.event_id, s.source_type, s.source_ref,
+                       e.actor, e.created_at
+                FROM sources s
+                JOIN events e ON e.event_id = s.event_id
+                WHERE s.memory_id = ?
+                ORDER BY e.created_at DESC
+                LIMIT ?
+                """,
+                (memory_id, row_limit),
+            ).fetchall()
+        ]
+        outcomes = [
+            {
+                "outcome_id": row["outcome_id"],
+                "outcome_status": row["outcome_status"],
+                "score": row["score"],
+                "project": row["project"],
+                "loop_id": row["loop_id"],
+                "status": row["status"],
+                "updated_at": row["updated_at"],
+            }
+            for row in self.conn.execute(
+                """
+                SELECT outcome_id, outcome_status, score, project, loop_id,
+                       status, updated_at
+                FROM outcome_records
+                WHERE memory_id = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (memory_id, row_limit),
+            ).fetchall()
+        ]
+        audit = [
+            {
+                "audit_id": row["audit_id"],
+                "created_at": row["created_at"],
+                "action": row["action"],
+                "actor": row["actor"],
+                "details": self._loads_json(row["details_json"], {}),
+            }
+            for row in self.conn.execute(
+                """
+                SELECT audit_id, created_at, action, actor, details_json
+                FROM audit_log
+                WHERE target_type = 'memory'
+                  AND target_id = ?
+                  AND action IN (
+                    'correct', 'rollback', 'delete',
+                    'distrust', 'expire', 'supersede',
+                    'derived_invalidation'
+                  )
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (memory_id, row_limit),
+            ).fetchall()
+        ]
+        return {
+            "memory_items": memory_items,
+            "graph_nodes": graph_nodes,
+            "graph_edges": graph_edges,
+            "sources": sources,
+            "outcomes": outcomes,
+            "audit": audit,
+        }
+
+    @staticmethod
+    def _empty_derived_surface_summary() -> dict[str, Any]:
+        return {
+            "modes": {},
+            "actions": {},
+            "updated": {},
+            "invalidated": {},
+            "scopes": [],
+        }
+
+    def _derived_surface_summary(self, invalidations: list[dict[str, Any]]) -> dict[str, Any]:
+        summary = self._empty_derived_surface_summary()
+        scopes: set[str] = set()
+        for item in invalidations:
+            action = str(item.get("action", "unknown") or "unknown")
+            summary["actions"][action] = int(summary["actions"].get(action, 0)) + 1
+            surfaces = item.get("surfaces", {}) or {}
+            mode = str(surfaces.get("mode", "unknown") or "unknown")
+            summary["modes"][mode] = int(summary["modes"].get(mode, 0)) + 1
+            for scope in surfaces.get("scopes", []) or []:
+                if str(scope or "").strip():
+                    scopes.add(str(scope))
+            for surface_key in ("updated", "invalidated"):
+                values = surfaces.get(surface_key, {}) or {}
+                if not isinstance(values, dict):
+                    continue
+                for name in values:
+                    summary[surface_key][name] = int(summary[surface_key].get(name, 0)) + 1
+        summary["scopes"] = sorted(scopes)
+        return summary
+
+    @staticmethod
+    def _merge_derived_surface_summary(
+        left: dict[str, Any],
+        right: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = {
+            "modes": dict(left.get("modes", {})),
+            "actions": dict(left.get("actions", {})),
+            "updated": dict(left.get("updated", {})),
+            "invalidated": dict(left.get("invalidated", {})),
+            "scopes": sorted(set(left.get("scopes", [])) | set(right.get("scopes", []))),
+        }
+        for key in ("modes", "actions", "updated", "invalidated"):
+            for name, count in right.get(key, {}).items():
+                merged[key][name] = int(merged[key].get(name, 0)) + int(count)
+        return merged
+
+    def _derived_memory_summary(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {"status": "missing", "memory_id": "", "text_excerpt": ""}
+        return {
+            "memory_id": row["memory_id"],
+            "kind": row["kind"],
+            "scope": row["scope"],
+            "confidence": row["confidence"],
+            "source_trust": row["source_trust"],
+            "sensitivity": row["sensitivity"],
+            "status": row["status"],
+            "updated_at": row["updated_at"],
+            "text_excerpt": self._excerpt(row["text"], 220),
+        }
+
+    @staticmethod
+    def _derived_lineage_gaps(
+        memory: sqlite3.Row | None,
+        dependencies: dict[str, list[dict[str, Any]]],
+        invalidations: list[dict[str, Any]],
+    ) -> list[dict[str, str]]:
+        gaps: list[dict[str, str]] = []
+        if memory is None:
+            gaps.append({"severity": "warn", "name": "memory_missing", "detail": "Memory id was not found."})
+            return gaps
+        status = str(memory["status"] or "")
+        if status != "active" and not invalidations:
+            gaps.append(
+                {
+                    "severity": "warn",
+                    "name": "inactive_without_invalidation",
+                    "detail": "Inactive memory has no derived invalidation record.",
+                }
+            )
+        if not dependencies.get("sources"):
+            gaps.append(
+                {
+                    "severity": "info",
+                    "name": "no_source_links",
+                    "detail": "No source rows are linked to this memory.",
+                }
+            )
+        if dependencies.get("memory_items") and not dependencies.get("graph_nodes"):
+            gaps.append(
+                {
+                    "severity": "info",
+                    "name": "no_graph_node_evidence",
+                    "detail": "Memory items exist without graph node evidence.",
+                }
+            )
+        if invalidations:
+            prompt_seen = any(
+                "prompt_envelope" in ((item.get("surfaces", {}) or {}).get("invalidated", {}) or {})
+                for item in invalidations
+            )
+            if not prompt_seen:
+                gaps.append(
+                    {
+                        "severity": "info",
+                        "name": "prompt_envelope_not_marked",
+                        "detail": "Invalidation records did not mention prompt envelope rebuild.",
+                    }
+                )
+        return gaps
 
     def _derived_surface_report(
         self,

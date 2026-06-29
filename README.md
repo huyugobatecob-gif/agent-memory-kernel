@@ -527,11 +527,14 @@ Inspect derived-memory invalidation after corrections or lifecycle changes:
 ```bash
 agent-memory derived-invalidations --db .memory/demo.db --scope professional
 agent-memory derived-invalidations --db .memory/demo.db --memory-id mem_xxxxxxxxxxxxxxxx
+agent-memory derived-lineage --db .memory/demo.db --memory-id mem_xxxxxxxxxxxxxxxx
 ```
 
 The report shows which graph, evidence, prompt-pack, export, and graph-derived
 style surfaces were refreshed or invalidated so stale memory cannot silently
-survive in derived context.
+survive in derived context. `derived-lineage` expands the same audit trail into
+source, item, graph-node, graph-edge, outcome, audit, and surface coverage so
+operators can see what depends on one memory.
 
 Use a model-backed extractor from an application:
 
@@ -817,6 +820,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_export_retention_list`, `memory_export_retention_enforce`,
 `memory_export_retention_purge`,
 `memory_capability_check`, `memory_derived_invalidations`,
+`memory_derived_lineage`,
 `memory_operational_status`, `memory_observability`,
 `memory_billing_reconcile`,
 `memory_migration_status`, `memory_backup_database`,

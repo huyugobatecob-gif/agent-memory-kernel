@@ -197,6 +197,11 @@ derived-invalidations`, `/derived-invalidations`, Python adapter wrappers,
 and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,
 expire, and supersede lifecycle actions record graph/evidence/prompt-pack/export
 surfaces that were refreshed or invalidated.
+Baseline derived-memory dependency lineage is implemented through
+`agent-memory derived-lineage`, `/derived-lineage`, Python adapter wrappers, and
+MCP `memory_derived_lineage`; it links one memory to source rows, compact
+items, graph evidence, graph edges, outcomes, audit events, and invalidation
+surface coverage.
 Baseline operational failure handling is implemented through
 `operational_status`, `/operational/status`, Python adapter wrappers, and
 MCP `memory_operational_status`. Prompt retrieval failures return a no-memory

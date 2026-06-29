@@ -844,6 +844,27 @@ class MemoryStoreTests(unittest.TestCase):
                 {"memory_id": memory_id},
             )
             self.assertEqual(api_report["count"], 2)
+            lineage = store.derived_lineage_report(memory_id=memory_id)
+            self.assertEqual(lineage["version"], "derived-lineage-v0.1")
+            self.assertEqual(lineage["mode"], "memory")
+            self.assertEqual(lineage["dependency_counts"]["memory_items"], 1)
+            self.assertGreaterEqual(lineage["dependency_counts"]["graph_nodes"], 1)
+            self.assertGreaterEqual(lineage["dependency_counts"]["sources"], 1)
+            self.assertEqual(lineage["surface_summary"]["actions"]["correct"], 1)
+            self.assertEqual(lineage["surface_summary"]["actions"]["delete"], 1)
+            self.assertIn("prompt_envelope", lineage["surface_summary"]["invalidated"])
+            self.assertTrue(
+                any(item["action"] == "derived_invalidation" for item in lineage["dependencies"]["audit"])
+            )
+            lineage_api = handle_api_request(
+                store,
+                "/derived-lineage",
+                {"memory_id": memory_id},
+            )
+            self.assertEqual(lineage_api["dependency_counts"]["memory_items"], 1)
+            overview = store.derived_lineage_report(scope="professional")
+            self.assertEqual(overview["mode"], "overview")
+            self.assertEqual(overview["memory_count"], 1)
             self.assertEqual(store.search("Drupal", scope="professional"), [])
             self.assertEqual(store.search("WordPress", scope="professional"), [])
             audit_actions = [

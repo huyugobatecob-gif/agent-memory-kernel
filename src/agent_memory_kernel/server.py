@@ -262,6 +262,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             action=str(payload.get("action", "")),
             limit=int(payload.get("limit", 50) or 50),
         )
+    if path == "/derived-lineage":
+        return store.derived_lineage_report(
+            memory_id=str(payload.get("memory_id", "")),
+            scope=payload.get("scope"),
+            action=str(payload.get("action", "")),
+            limit=int(payload.get("limit", 50) or 50),
+        )
     if path == "/after-saved-turn":
         payload = _normalize_after_turn_payload(payload)
         return store.after_saved_turn(**payload)

@@ -184,6 +184,11 @@ Already present:
   and MCP `memory_derived_invalidations`; correction, rollback, delete,
   distrust, expire, and supersede actions record affected graph, evidence,
   prompt-pack, export, and graph-derived style surfaces.
+- Baseline derived-memory dependency lineage through `agent-memory
+  derived-lineage`, `/derived-lineage`, Python adapter wrappers, and MCP
+  `memory_derived_lineage`; reports connect memory to source rows, compact
+  items, graph evidence, graph edges, outcomes, audit, and invalidation surface
+  coverage.
 - Baseline operational failure behavior through `operational_status`,
   `/operational/status`, Python adapter wrappers, and MCP
   `memory_operational_status`; Router/context failures return a no-memory
@@ -335,9 +340,10 @@ Remaining for full memory:
 - Production-grade read-time ranking beyond the baseline deterministic policy.
 - Production memory quality contract with broader behavioral metrics and golden
   fixtures.
-- Production derived-memory invalidation beyond the baseline ledger, including
-  richer summary dependency tracking, provider embeddings, cached prompt stores,
-  and outcome lesson lineage.
+- Production derived-memory invalidation beyond the baseline ledger and
+  memory-level dependency lineage, including richer summary dependency
+  tracking, provider embeddings, cached prompt stores, and outcome lesson
+  lineage.
 - Production current-best workflows beyond the baseline explicit conflict
   resolver and conservative near-duplicate heuristics, including richer
   operator approval flows for equal-trust or ambiguous claims.

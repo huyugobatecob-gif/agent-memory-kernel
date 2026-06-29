@@ -227,6 +227,18 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_derived_lineage": {
+        "endpoint": "/derived-lineage",
+        "description": "Explain derived-memory dependency lineage and invalidation surface coverage.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Optional memory id to inspect.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "action": _string("Optional lifecycle action filter.", ""),
+                "limit": _integer("Maximum lineage records.", 50),
+            }
+        ),
+    },
     "memory_operational_status": {
         "endpoint": "/operational/status",
         "description": "Report local runtime memory health and configured failure fallback behavior.",

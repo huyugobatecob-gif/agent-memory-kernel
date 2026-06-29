@@ -1388,6 +1388,21 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def derived_lineage(
+        self,
+        *,
+        memory_id: str = "",
+        scope: str | None = None,
+        action: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.derived_lineage_report(
+            memory_id=memory_id,
+            scope=scope,
+            action=action,
+            limit=limit,
+        )
+
     def review_pending(self) -> list[dict[str, Any]]:
         return self.store.list_candidates("pending")
 
