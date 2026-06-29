@@ -154,10 +154,11 @@ affected surfaces, and audit trail must be visible to adapters.
 It also checks that capability reports expose denied read/write actions and
 that denied export or lifecycle mutation paths fail closed.
 The suite now includes first public golden traces for outcome planning,
-operator graph inspection, and safe profile export. These traces prove that a
-compatible adapter can retrieve both success and failure outcome evidence,
-inspect graph nodes with source previews, and share profile shape without
-leaking content-bearing memory fields.
+operator graph inspection, safe profile export, and migration compatibility.
+These traces prove that a compatible adapter can retrieve both success and
+failure outcome evidence, inspect graph nodes with source previews, share
+profile shape without leaking content-bearing memory fields, and verify the
+local SQLite schema before rollout.
 
 The machine-readable contract also names the completion gates for governed
 read-time policy, inspection and operator control, derived-memory invalidation,

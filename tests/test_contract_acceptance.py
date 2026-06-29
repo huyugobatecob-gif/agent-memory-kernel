@@ -69,6 +69,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", scenario_ids)
         self.assertIn("golden_trace_graph_browser_shows_source_previews", scenario_ids)
         self.assertIn("golden_trace_safe_export_redacts_memory_content", scenario_ids)
+        self.assertIn("migration_status_is_compatible", scenario_ids)
         self.assertTrue(spec["golden_traces"])
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -96,6 +97,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", passed)
             self.assertIn("golden_trace_graph_browser_shows_source_previews", passed)
             self.assertIn("golden_trace_safe_export_redacts_memory_content", passed)
+            self.assertIn("migration_status_is_compatible", passed)
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")

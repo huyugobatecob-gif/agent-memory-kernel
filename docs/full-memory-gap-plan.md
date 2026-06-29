@@ -93,9 +93,9 @@ Must-have before claiming full memory:
     Baseline implemented through `agent-memory conformance spec/seed/run/assert`
     and `/conformance/spec`, `/conformance/seed`, `/conformance/run`,
     `/conformance/assert`. The suite now includes public golden traces for
-    outcome planning, graph evidence inspection, and safe profile export;
-    remaining work is migration checks, external adapter badges, and broader
-    real-world behavior traces.
+    outcome planning, graph evidence inspection, safe profile export, and
+    migration compatibility; remaining work is external adapter badges and
+    broader real-world behavior traces.
 
 ## Additional Runtime Architecture Notes
 
@@ -338,7 +338,7 @@ Remaining for full memory:
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Broader conformance traces for migration, adapter compatibility, and
   real-world memory behavior beyond the baseline public suite and its first
-  outcome/graph/export golden traces.
+  outcome/graph/export/migration golden traces.
 - Production worker supervision beyond the baseline daemon loop and rollout
   playbook, including managed health alerts and platform-specific deployment
   recipes.

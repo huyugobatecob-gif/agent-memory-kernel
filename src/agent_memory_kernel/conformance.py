@@ -59,6 +59,17 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_safe_export_redacts_memory_content"
                 ],
             },
+            {
+                "id": "migration_compatibility_trace",
+                "steps": [
+                    "initialize a local SQLite memory store",
+                    "run the migration compatibility report",
+                    "verify required runtime tables, user_version, and SQLite quick_check pass",
+                ],
+                "expected_scenarios": [
+                    "migration_status_is_compatible"
+                ],
+            },
         ],
         "scenarios": [
             {
@@ -168,6 +179,14 @@ def conformance_spec() -> dict[str, Any]:
                     "safe profile export preserves profile and graph shape",
                     "content-bearing memory fields are redacted",
                     "export metadata records redaction and retention policy",
+                ],
+            },
+            {
+                "id": "migration_status_is_compatible",
+                "requires": [
+                    "migration status reports pass and compatible",
+                    "required runtime tables are present with expected columns",
+                    "SQLite quick_check passes before adapter rollout",
                 ],
             },
         ],
@@ -626,6 +645,37 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         },
     )
 
+    migration = store.migration_status()
+    migration_checks = {item["name"]: item for item in migration.get("checks", [])}
+    required_migration_checks = {
+        "user_version",
+        "table:events",
+        "table:candidate_memories",
+        "table:memories",
+        "table:memory_items",
+        "table:memory_graph_nodes",
+        "table:memory_graph_edges",
+        "table:keeper_jobs",
+        "table:router_runs",
+        "sqlite_quick_check",
+    }
+    _append_result(
+        results,
+        "migration_status_is_compatible",
+        migration["status"] == "pass"
+        and migration["compatible"]
+        and required_migration_checks.issubset(migration_checks)
+        and all(migration_checks[name]["passed"] for name in required_migration_checks),
+        {
+            "status": migration["status"],
+            "compatible": migration["compatible"],
+            "schema_version": migration["schema_version"],
+            "sqlite_user_version": migration["sqlite_user_version"],
+            "checked": sorted(required_migration_checks),
+            "failures": migration.get("failures", []),
+        },
+    )
+
     status = "pass" if all(item["passed"] for item in results) else "fail"
     return {
         "status": status,
@@ -663,6 +713,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_outcome_pack_uses_success_and_failure",
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_safe_export_redacts_memory_content",
+        "migration_status_is_compatible",
     }
     checks = {
         "version_present": bool(data.get("version")),
