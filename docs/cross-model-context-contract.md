@@ -22,7 +22,7 @@ The memory kernel returns a provider-neutral object:
     {"role": "user", "content": "Current user request"}
   ],
   "metadata": {
-    "thread_id": "seo-demo",
+    "thread_id": "project-demo",
     "scope": "professional",
     "selected_branch_ids": [],
     "selection_decisions": [],

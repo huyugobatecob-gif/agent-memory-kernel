@@ -1,6 +1,7 @@
 # Roadmap
 
-This roadmap follows the [Kernel Charter](kernel-charter.md) and
+This roadmap follows the [Kernel Charter](kernel-charter.md),
+[AMK-000](amk-000-kernel-invariants.md), and
 [Backlog Cutover](backlog-cutover.md).
 
 The project should remain a local-first memory kernel. Adapters, packs,
@@ -20,7 +21,8 @@ Included:
 - CLI;
 - source events, candidates, active memories;
 - conversation turns, thread messages, and summaries;
-- personal and professional lanes;
+- generic scope/lane/namespace policy isolation with personal/professional
+  starter templates;
 - memory items;
 - manual review and conservative auto-approval;
 - quarantine for secret-like and prompt-injection-like content;
@@ -44,6 +46,8 @@ Core work:
 
 - keep [../SPEC.md](../SPEC.md) as the public kernel behavior spec;
 - keep [kernel-charter.md](kernel-charter.md) as the governing boundary;
+- keep [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md) as the
+  executable invariant contract;
 - keep [backlog-cutover.md](backlog-cutover.md) as the classification rule for
   new work;
 - keep [core-status-audit.md](core-status-audit.md) current with `done`,
@@ -58,6 +62,7 @@ Done when:
 
 - contributors can identify `core`, `extension`, and `later-hosted` work;
 - hosted features are not local full-memory blockers;
+- personal/professional templates do not define the kernel ontology;
 - runtime/domain examples point back to the kernel contract.
 
 ## v0.3: Memory Safety Invariants
@@ -68,12 +73,15 @@ Core work:
 
 - deleted memory cannot reappear from retained evidence;
 - distrusted sources cannot influence retrieval, summaries, or derived memory;
-- personal/private lanes cannot leak into professional prompts by default;
+- scope/lane/namespace boundaries cannot leak across prompt, graph, summary,
+  browser, or export surfaces by default;
 - derived memory invalidates after correction, deletion, distrust, expiration,
   or supersession;
 - exports preserve provenance, tombstones, trust state, policy metadata, review
   history, and evidence chains;
-- prompt envelopes contain selected memory only, never the full graph.
+- prompt envelopes contain selected memory only, never the full graph;
+- local actors cannot bypass capability grants;
+- local histories stay bounded and predictable.
 - maintain an invariant matrix that maps each law to code paths and executable
   proof.
 
@@ -84,6 +92,7 @@ Evidence required:
 - lifecycle mutation reports;
 - export/import fixtures;
 - prompt-envelope fixtures.
+- latency/resource fixtures.
 
 ## v0.4: Reference Loop And Explainability
 
@@ -107,25 +116,28 @@ Evidence required:
 - Router explainability tests;
 - no-memory fallback tests.
 
-## v0.5: Default Lanes And Beginner Templates
+## v0.5: Portable Bundles, API, And Resource Budgets
 
-Goal: make the default template valuable without domain-specific loops.
+Goal: make the kernel portable and dependable for third-party adopters.
 
-Core/default work:
+Core work:
 
-- `personal` lane templates: preferences, stable facts, recurring context,
-  relationships, communication style, and private defaults;
-- `professional` lane templates: projects, decisions, constraints,
-  collaborators, working rules, gotchas, and professional patterns;
-- beginner examples for remember, review, retrieve, correct, delete, distrust,
-  and export;
-- clear guidance for optional `project`, `agent`, and `session` lanes.
+- stable CLI/API surface and versioning policy;
+- `.amk` portable bundle manifest with schema and contract versions;
+- import/export round trips preserving ids, provenance, policies, evidence,
+  review history, lifecycle state, and tombstones;
+- policy simulator and dry-run behavior for read/write/inject/export/lifecycle;
+- deterministic ranking spec with stable tie-breakers;
+- local capability grants for actors and adapters;
+- performance/resource budgets for large histories.
 
 Evidence required:
 
-- personal/professional demo;
-- lane isolation tests;
-- vault template round trip.
+- bundle round-trip tests;
+- policy dry-run fixtures;
+- ranking golden traces;
+- API/versioning checks;
+- latency/resource fixtures.
 
 ## v0.6: Adapter Contracts
 
@@ -137,11 +149,14 @@ Extension work:
 - importer/exporter contract for provenance and lifecycle preservation;
 - retrieval-enhancer contract for embeddings or rerankers after policy
   filtering;
+- adapter capability levels: read-only, write-capable, lifecycle-capable,
+  graph-capable, export-capable, and prompt-injection capable;
 - local adapter certification through conformance scenarios.
 
 Examples:
 
 - provider-neutral reference loop;
+- personal/professional starter templates;
 - chat agent adapter;
 - coding agent adapter;
 - optional Hermes adapter;

@@ -1,11 +1,14 @@
 # Kernel Charter
 
-Agent Memory Kernel is a local-first, auditable memory kernel for agents and
-human workflows.
+Agent Memory Kernel is a universal local-first, auditable memory kernel for
+agents and human workflows.
 
 It is not a hosted agent platform, not a runtime orchestrator, and not a
 domain-specific SEO or Hermes system. Those integrations can exist, but they
 must consume the kernel contract instead of shaping it.
+
+The executable kernel law is maintained in
+[amk-000-kernel-invariants.md](amk-000-kernel-invariants.md).
 
 ## Core Promise
 
@@ -19,12 +22,14 @@ source event
 -> active memory
 -> graph/evidence model
 -> policy-filtered context pack
--> prompt envelope / Memory Tree Supplement
+-> prompt envelope
+-> optional Memory Tree rendering
 ```
 
 The main agent should never scan the full memory graph. The Router selects
 allowed memory before a model call, and the Keeper proposes memory updates after
-a saved turn.
+a saved turn. Memory Tree is a renderer over the read contract, not the kernel
+ontology.
 
 ## What The Kernel Owns
 
@@ -36,17 +41,20 @@ Core responsibilities:
 - local-first source of truth, with SQLite as the reference store;
 - immutable source events and saved turns;
 - candidate memories and active memories;
-- personal and professional default lanes;
-- optional project, agent, session, or custom lanes through policy;
+- generic scope, lane, namespace, actor, policy, and surface primitives;
+- starter personal/professional templates and optional project, agent, session,
+  or custom lanes through policy;
 - memory graph nodes, edges, evidence, and derivation links;
 - Keeper extraction and graph-command contracts;
 - Router retrieval and read-time decision policy;
-- prompt envelope and Memory Tree Supplement contracts;
+- prompt envelope contract and optional Memory Tree renderer contract;
 - review lifecycle: approve, reject, correct, delete, distrust, expire,
   supersede, and rollback;
 - read, write, inject, export, and lifecycle policies;
 - provenance-preserving import and export;
+- local actor capability grants;
 - audit trails and explainability reports;
+- schema, migration, transaction, recovery, and performance contracts;
 - deterministic baseline retrieval without requiring embeddings;
 - conformance fixtures and invariant tests.
 
@@ -100,23 +108,25 @@ extensions
 The repository can keep a simple physical layout, but docs and APIs should use
 this mental model consistently.
 
-## Default Lanes
+## Default Templates
 
-The public template starts with two lanes:
+The kernel supports generic scopes, lanes, and namespaces. The public template
+ships two starter lanes:
 
 - `personal`: user preferences, stable personal context, communication style,
   relationships, recurring context, and private defaults.
 - `professional`: projects, decisions, rules, constraints, gotchas, working
   knowledge, collaborators, and professional patterns.
 
-Other lanes are optional extensions:
+Other lanes are optional policy scopes:
 
 - `project`: project-specific decisions, constraints, facts, and outcomes.
 - `agent`: operational memory for a specific agent role.
 - `session`: short-lived context that may later become durable memory.
 
-Personal memory must not enter professional-only prompts unless an explicit
-policy allows it and the prompt metadata records that decision.
+Personal/professional is not the only valid memory model. It is the default
+starter pack. Personal memory must not enter professional-only prompts unless an
+explicit policy allows it and the prompt metadata records that decision.
 
 ## Memory Safety Invariants
 
@@ -126,8 +136,9 @@ rules, retrieval filters, export/import behavior, and conformance tests.
 1. Deleted memory cannot reappear from retained source evidence.
 2. Distrusted sources cannot influence retrieval, summaries, derived memory,
    graph-derived style, or exported active memory.
-3. Personal or private lanes cannot leak into professional, project, public, or
-   shared prompts without an explicit policy decision.
+3. Scope, lane, namespace, personal, or private memory cannot leak into another
+   prompt, export, graph, summary, or shared surface without an explicit policy
+   decision.
 4. Derived memory must be invalidated when its source is corrected, deleted,
    distrusted, expired, or superseded.
 5. Superseded memory must not win prompt-facing retrieval over its replacement.
@@ -153,7 +164,7 @@ after_saved_turn
 -> review or policy promotes safe candidates
 -> before_model_call
 -> Router selects allowed active memory
--> prompt envelope receives Memory Tree Supplement
+-> prompt envelope receives selected memory content
 -> main model answers without direct graph access
 ```
 
@@ -173,4 +184,3 @@ The kernel can claim full memory when current evidence proves:
 - every lifecycle mutation propagates to derived graph, prompt, export, and
   summary surfaces;
 - adapters can pass conformance without relying on private project behavior.
-

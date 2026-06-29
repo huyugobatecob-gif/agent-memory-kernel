@@ -145,6 +145,14 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "personal_lane_absent_from_graph_surfaces",
+                "requires": [
+                    "graph nodes with personal-only evidence are absent from professional retrieval",
+                    "graph browser source previews do not expose personal evidence in professional scope",
+                    "profile export omits graph evidence from the wrong lane",
+                ],
+            },
+            {
                 "id": "stored_read_policy_denies_injection",
                 "requires": [
                     "persistent read policy can deny prompt-facing memory injection",
@@ -388,6 +396,61 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         ),
     )
     store.conn.commit()
+    personal_private_item = store.conn.execute(
+        """
+        SELECT item_id, event_id
+        FROM memory_items
+        WHERE memory_id = ?
+        LIMIT 1
+        """,
+        (personal_private["memory_id"],),
+    ).fetchone()
+    if personal_private_item:
+        store.conn.execute(
+            """
+            INSERT INTO memory_graph_nodes
+              (graph_node_id, created_at, updated_at, node_type, label,
+               canonical_key, scope, group_label, blob, summary,
+               importance, confidence, status, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "gnode_conformance_cross_lane_personal",
+                now_iso(),
+                now_iso(),
+                "project",
+                "privacy-fixture",
+                "privacy-fixture",
+                CONFORMANCE_SCOPE,
+                "project:privacy-fixture",
+                "dragonfly-private should never enter professional graph branches.",
+                "dragonfly-private contaminated graph summary.",
+                1.0,
+                "high",
+                "active",
+                "{}",
+            ),
+        )
+        store.conn.execute(
+            """
+            INSERT INTO node_evidence
+              (evidence_id, graph_node_id, item_id, memory_id, event_id,
+               created_at, source_ref, quote, confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "nev_conformance_cross_lane_personal",
+                "gnode_conformance_cross_lane_personal",
+                personal_private_item["item_id"],
+                personal_private["memory_id"],
+                personal_private_item["event_id"],
+                now_iso(),
+                "conformance://personal-private",
+                "dragonfly-private leaked through graph evidence.",
+                "high",
+            ),
+        )
+        store.conn.commit()
     stale = _approved_memory(
         store,
         "Decision: project conformance-site owner is Alice.",
@@ -624,6 +687,47 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "scope": CONFORMANCE_SCOPE,
             "summary_count": len(personal_derived_export.get("chat_history", {}).get("summaries", [])),
             "semantic_analysis_count": len(personal_derived_export.get("semantic_analyses", [])),
+        },
+    )
+    personal_graph_prompt = store.before_model_call(
+        "privacy-fixture",
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        allowed_scopes=[CONFORMANCE_SCOPE],
+        agent_id="conformance-agent",
+        model_id="conformance-model",
+    )
+    personal_graph_envelope = personal_graph_prompt["prompt_envelope"]
+    personal_graph_injected = "\n".join(
+        [
+            str(personal_graph_envelope.get("system") or ""),
+            str(personal_graph_envelope.get("messages", [{}, {}])[0].get("content") or ""),
+            str(personal_graph_envelope.get("messages", [{}, {}])[1].get("content") or ""),
+            json.dumps(personal_graph_envelope.get("metadata", {}), sort_keys=True),
+        ]
+    )
+    personal_graph_browser = store.graph_browser(
+        scope=CONFORMANCE_SCOPE,
+        query="privacy-fixture",
+    )
+    personal_graph_export = store.export_profile(
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+    )
+    _append_result(
+        results,
+        "personal_lane_absent_from_graph_surfaces",
+        "dragonfly-private" not in personal_graph_injected
+        and "dragonfly-private" not in json.dumps(personal_graph_browser, sort_keys=True)
+        and "dragonfly-private" not in json.dumps(
+            personal_graph_export.get("memory_tree", {}),
+            sort_keys=True,
+        )
+        and not personal_graph_browser.get("nodes"),
+        {
+            "scope": CONFORMANCE_SCOPE,
+            "selected_branch_ids": personal_graph_prompt["selected_branch_ids"],
+            "graph_browser_counts": personal_graph_browser.get("counts", {}),
         },
     )
     read_policy = store.set_read_policy(
@@ -1438,6 +1542,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",
         "personal_lane_absent_from_derived_surfaces",
+        "personal_lane_absent_from_graph_surfaces",
         "stored_read_policy_denies_injection",
         "resolved_conflict_suppresses_loser",
         "deleted_memory_absent",

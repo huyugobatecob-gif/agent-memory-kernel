@@ -15,10 +15,10 @@ or domain.
 Core examples:
 
 - source events, candidates, active memories, and evidence;
-- personal/professional lanes and policy-bound custom lanes;
+- generic scope/lane/namespace policy isolation;
 - review lifecycle and lifecycle mutations;
 - Keeper and Router contracts;
-- prompt envelope and Memory Tree Supplement;
+- prompt envelope contract;
 - deterministic retrieval and selection explanations;
 - correction, delete, distrust, expire, supersede, rollback;
 - derived-memory invalidation;
@@ -34,7 +34,9 @@ kernel.
 Extension examples:
 
 - Hermes, Codex, chat-agent, or coding-agent adapters;
+- starter personal/professional templates;
 - SEO, research, CRM, support, or QA memory packs;
+- Memory Tree and other prompt renderers over the prompt envelope contract;
 - outcome loop recipes;
 - importer/exporter bridges for notes, documents, chats, task tools, and vaults;
 - optional embeddings, ANN search, semantic rerank providers, and provider
@@ -66,7 +68,8 @@ Later-hosted examples:
 | SQLite source of truth | core | Reference local store. |
 | Raw source events and turns | core | Required provenance base. |
 | Candidate and active memories | core | Required memory lifecycle. |
-| Personal/professional lanes | core | Default public mental model. |
+| Generic scope/lane/namespace policy model | core | Required isolation primitive. |
+| Personal/professional starter templates | extension | Useful public defaults over the generic model. |
 | Project/agent/session lanes | extension | Useful optional policy scopes. |
 | Graph nodes, edges, evidence | core | Required tree and provenance model. |
 | Advanced graph split/semantic compaction | extension | Optimization after evidence rules are stable. |
@@ -74,7 +77,8 @@ Later-hosted examples:
 | LLM/provider-specific Keeper prompts | extension | Optional implementation of the contract. |
 | Router retrieval contract | core | Required pre-turn memory read path. |
 | ANN/vector retrieval | extension | Optional acceleration, not source of truth. |
-| Prompt envelope and Memory Tree Supplement | core | Required agent boundary. |
+| Prompt envelope read contract | core | Required agent boundary. |
+| Memory Tree renderer | extension | Default renderer over selected memory, not the kernel ontology. |
 | Provider prompt formatters | extension | Helpful adapter surface. |
 | Review lifecycle | core | Trust boundary. |
 | Browser review UI | extension | Human surface over core lifecycle. |
@@ -111,4 +115,3 @@ Later-hosted examples:
 4. `extension` work may not weaken or bypass `core` invariants.
 5. `later-hosted` work may not be listed as a blocker for local full-memory
    completion.
-

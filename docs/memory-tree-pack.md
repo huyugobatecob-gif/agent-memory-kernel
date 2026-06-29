@@ -137,6 +137,10 @@ Each graph node has `label`, `blob`, `summary`, `importance`, `confidence`,
 `aliases_json`, `topics_json`, `chronology_json`, `verified_status`,
 `hemisphere`, visual coordinates, `embedding_json`, and `metadata_json`.
 
+Scoped tree retrieval, graph browser previews, profile export, and graph
+evidence export only expose graph nodes, edges, and evidence while the linked
+source memory remains active and belongs to the requested scope.
+
 ## Agent Contract
 
 Agents should treat branch labels and tags as routing hints, not ground truth.

@@ -31,7 +31,15 @@ observe -> encode_with_provenance -> route_relevant_memory
 Storage alone is not enough. A memory branch must be usable, auditable,
 correctable, and safe to omit when access or trust is not sufficient.
 
-## Lanes
+## Scopes, Lanes, And Namespaces
+
+The kernel primitive is generic access isolation:
+
+- `scope`: the boundary requested by a read, write, inject, lifecycle, or export
+  operation.
+- `lane`: a policy grouping inside or across scopes.
+- `namespace`: the owner or package boundary for projects, agents, workspaces,
+  apps, imports, or bundles.
 
 Default public lanes:
 
@@ -48,11 +56,16 @@ Extension lanes:
 
 Lane rules:
 
+- scope, lane, and namespace boundaries must hold across prompts, exports,
+  graph surfaces, summaries, and API responses;
 - personal memory must not enter professional-only prompts;
 - project memory should require a project identity or trusted parent scope;
 - agent memory should not be shared across roles unless policy allows it;
 - session memory should expire or be summarized before becoming durable;
 - cross-lane retrieval must be visible in prompt metadata and audit.
+
+Personal/professional lanes are starter templates. They must not be treated as
+the only valid memory model or as a bypass around scope/namespace policy.
 
 ## Typed Memory
 
@@ -171,6 +184,7 @@ These traces prove that a compatible adapter can retrieve both success and
 failure outcome evidence, inspect graph nodes with source previews, share
 profile shape without leaking content-bearing memory fields, keep prompt
 envelopes limited to selected expanded memory instead of the full graph,
+prevent personal graph evidence from appearing in professional graph surfaces,
 preserve inactive
 memory as lifecycle tombstones outside the active tree, restore lifecycle
 tombstones without reactivating them, preserve read/write policy metadata so

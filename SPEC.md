@@ -16,7 +16,8 @@ source event
 -> active memory
 -> graph/evidence model
 -> policy-filtered retrieval
--> prompt envelope / Memory Tree Supplement
+-> prompt envelope
+-> optional Memory Tree rendering
 -> Keeper update after the next saved turn
 ```
 
@@ -76,25 +77,36 @@ Required behavior:
   cross-lane content must not reappear through graph surfaces;
 - graph-derived style hints are advisory and suppressible.
 
-## Lanes
+## Scopes, Lanes, And Namespaces
 
-Default lanes:
+The kernel primitive is generic scope/lane/namespace isolation:
+
+- `scope`: access boundary for read, write, inject, lifecycle, and export
+  operations.
+- `lane`: a policy grouping inside or across scopes.
+- `namespace`: a stable owner or package boundary for projects, agents,
+  workspaces, apps, or imports.
+
+Starter lanes:
 
 - `personal`: preferences, stable personal context, communication style,
   relationships, recurring context, and private defaults.
 - `professional`: projects, decisions, constraints, rules, gotchas, working
   knowledge, collaborators, and professional patterns.
 
-Optional lanes such as `project`, `agent`, and `session` are policy scopes, not
-new kernel assumptions.
+The starter lanes are templates over the generic policy model. Optional lanes
+such as `project`, `agent`, and `session` are policy scopes, not new kernel
+assumptions.
 
-Lane law:
+Boundary law:
 
-- personal/private memory must not enter professional, project, public, or
-  shared prompts unless an explicit policy allows it;
-- cross-lane retrieval must be visible in prompt metadata and audit;
+- scope, lane, namespace, personal, or private memory must not enter another
+  prompt, export, graph, summary, or shared surface unless an explicit policy
+  allows it;
+- cross-lane or cross-namespace retrieval must be visible in prompt metadata
+  and audit;
 - summaries, semantic analyses, exports, graph nodes, and prompt envelopes must
-  inherit the lane restrictions of their source memory.
+  inherit the scope, lane, and namespace restrictions of their source memory.
 
 ## Router Contract
 
@@ -150,13 +162,13 @@ Required sections:
 2. rules/profile digest if allowed;
 3. compact active memory if allowed;
 4. older thread excerpts and summaries if allowed;
-5. `MEMORY_TREE_SUPPLEMENT`;
+5. selected memory renderer output, optionally `MEMORY_TREE_SUPPLEMENT`;
 6. recent messages;
 7. current user request.
 
 Required behavior:
 
-- include selected branch content, not only routing tags;
+- include selected content, not only routing tags;
 - keep retrieved memory outside higher-priority provider system surfaces unless
   the adapter contract explicitly preserves safety boundaries;
 - fit deterministic prompt budgets;
@@ -247,3 +259,4 @@ The following are useful but not required for the local kernel spec:
 - ANN/vector search as required infrastructure;
 - live provider certification;
 - hosted registry and badge publishing.
+- starter personal/professional templates beyond the generic scope/lane model.

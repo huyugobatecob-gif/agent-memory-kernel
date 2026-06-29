@@ -3885,10 +3885,32 @@ class MemoryStore:
             WHERE status = 'active'
               AND (? IS NULL OR scope = ?)
               AND (? IS NULL OR node_type = ?)
+              AND (
+                ? IS NULL OR EXISTS (
+                  SELECT 1
+                  FROM node_evidence ne
+                  JOIN memories m ON m.memory_id = ne.memory_id
+                  JOIN memory_items mi ON mi.item_id = ne.item_id
+                  WHERE ne.graph_node_id = memory_graph_nodes.graph_node_id
+                    AND m.status = 'active'
+                    AND mi.status = 'active'
+                    AND m.scope = ?
+                    AND mi.scope = ?
+                )
+              )
             ORDER BY importance DESC, updated_at DESC
             LIMIT ?
             """,
-            (scope, scope, node_type, node_type, max(1, min(int(limit or 50), 500))),
+            (
+                scope,
+                scope,
+                node_type,
+                node_type,
+                scope,
+                scope,
+                scope,
+                max(1, min(int(limit or 50), 500)),
+            ),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -3909,14 +3931,22 @@ class MemoryStore:
             FROM memory_graph_edges ge
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
             JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            LEFT JOIN memories m ON m.memory_id = ge.source_memory_id
             WHERE ge.status = 'active'
               AND src.status = 'active'
               AND dst.status = 'active'
-              AND (? IS NULL OR src.scope = ? OR dst.scope = ?)
+              AND (ge.source_memory_id IS NULL OR m.status = 'active')
+              AND (
+                ? IS NULL OR (
+                  src.scope = ?
+                  AND dst.scope = ?
+                  AND (ge.source_memory_id IS NULL OR m.scope = ?)
+                )
+              )
             ORDER BY ge.weight DESC, ge.updated_at DESC
             LIMIT ?
             """,
-            (scope, scope, scope, max(1, min(int(limit or 50), 500))),
+            (scope, scope, scope, scope, max(1, min(int(limit or 50), 500))),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -3938,8 +3968,23 @@ class MemoryStore:
         clauses = ["status = 'active'"]
         params: list[Any] = []
         if scope:
-            clauses.append("scope = ?")
-            params.append(scope)
+            clauses.append(
+                """
+                scope = ?
+                AND EXISTS (
+                    SELECT 1
+                    FROM node_evidence ne
+                    JOIN memories m ON m.memory_id = ne.memory_id
+                    JOIN memory_items mi ON mi.item_id = ne.item_id
+                    WHERE ne.graph_node_id = memory_graph_nodes.graph_node_id
+                      AND m.status = 'active'
+                      AND mi.status = 'active'
+                      AND m.scope = ?
+                      AND mi.scope = ?
+                )
+                """
+            )
+            params.extend([scope, scope, scope])
         if node_type:
             clauses.append("node_type = ?")
             params.append(node_type)
@@ -3976,6 +4021,7 @@ class MemoryStore:
         node_previews = self._graph_browser_node_previews(
             node_ids,
             per_item_limit=per_item_evidence_limit,
+            scope=scope,
         )
         for node in nodes:
             node["source_previews"] = node_previews.get(str(node["graph_node_id"]), [])
@@ -3993,20 +4039,24 @@ class MemoryStore:
                 FROM memory_graph_edges ge
                 JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
                 JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+                LEFT JOIN memories m ON m.memory_id = ge.source_memory_id
                 WHERE ge.status = 'active'
                   AND src.status = 'active'
                   AND dst.status = 'active'
                   AND ge.source_graph_node_id IN ({placeholders})
                   AND ge.target_graph_node_id IN ({placeholders})
+                  AND (ge.source_memory_id IS NULL OR m.status = 'active')
+                  AND (? IS NULL OR ge.source_memory_id IS NULL OR m.scope = ?)
                 ORDER BY ge.weight DESC, ge.updated_at DESC
                 LIMIT ?
                 """,
-                (*node_ids, *node_ids, max(node_limit * 3, node_limit)),
+                (*node_ids, *node_ids, scope, scope, max(node_limit * 3, node_limit)),
             ).fetchall()
             edges = [dict(row) for row in edge_rows]
             edge_previews = self._graph_browser_edge_previews(
                 [str(edge["graph_edge_id"]) for edge in edges],
                 per_item_limit=per_item_evidence_limit,
+                scope=scope,
             )
             for edge in edges:
                 edge["source_previews"] = edge_previews.get(str(edge["graph_edge_id"]), [])
@@ -4035,6 +4085,7 @@ class MemoryStore:
         node_ids: list[str],
         *,
         per_item_limit: int,
+        scope: str | None,
     ) -> dict[str, list[dict[str, Any]]]:
         if not node_ids or per_item_limit <= 0:
             return {}
@@ -4045,11 +4096,16 @@ class MemoryStore:
                    ne.event_id, ne.created_at, ne.source_ref, ne.quote,
                    ne.confidence, e.actor, e.source_type
             FROM node_evidence ne
+            JOIN memories m ON m.memory_id = ne.memory_id
+            JOIN memory_items mi ON mi.item_id = ne.item_id
             LEFT JOIN events e ON e.event_id = ne.event_id
             WHERE ne.graph_node_id IN ({placeholders})
+              AND m.status = 'active'
+              AND mi.status = 'active'
+              AND (? IS NULL OR (m.scope = ? AND mi.scope = ?))
             ORDER BY ne.graph_node_id, ne.created_at DESC
             """,
-            node_ids,
+            (*node_ids, scope, scope, scope),
         ).fetchall()
         previews: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
@@ -4064,6 +4120,7 @@ class MemoryStore:
         edge_ids: list[str],
         *,
         per_item_limit: int,
+        scope: str | None,
     ) -> dict[str, list[dict[str, Any]]]:
         if not edge_ids or per_item_limit <= 0:
             return {}
@@ -4074,11 +4131,16 @@ class MemoryStore:
                    ee.event_id, ee.created_at, ee.source_ref, ee.quote,
                    ee.confidence, e.actor, e.source_type
             FROM edge_evidence ee
+            JOIN memories m ON m.memory_id = ee.memory_id
+            JOIN memory_items mi ON mi.item_id = ee.item_id
             LEFT JOIN events e ON e.event_id = ee.event_id
             WHERE ee.graph_edge_id IN ({placeholders})
+              AND m.status = 'active'
+              AND mi.status = 'active'
+              AND (? IS NULL OR (m.scope = ? AND mi.scope = ?))
             ORDER BY ee.graph_edge_id, ee.created_at DESC
             """,
-            edge_ids,
+            (*edge_ids, scope, scope, scope),
         ).fetchall()
         previews: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
@@ -13551,10 +13613,16 @@ class MemoryStore:
             WHERE gn.status = 'active'
               AND m.status = 'active'
               AND mi.status = 'active'
-              AND (? IS NULL OR gn.scope = ?)
+              AND (
+                ? IS NULL OR (
+                  gn.scope = ?
+                  AND m.scope = ?
+                  AND mi.scope = ?
+                )
+              )
             ORDER BY ne.created_at ASC
             """,
-            (scope, scope),
+            (scope, scope, scope, scope),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -13575,10 +13643,17 @@ class MemoryStore:
               AND dst.status = 'active'
               AND m.status = 'active'
               AND mi.status = 'active'
-              AND (? IS NULL OR src.scope = ?)
+              AND (
+                ? IS NULL OR (
+                  src.scope = ?
+                  AND dst.scope = ?
+                  AND m.scope = ?
+                  AND mi.scope = ?
+                )
+              )
             ORDER BY ee.created_at ASC
             """,
-            (scope, scope),
+            (scope, scope, scope, scope, scope),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -15228,9 +15303,15 @@ class MemoryStore:
             WHERE gn.status = 'active'
               AND mi.status = 'active'
               AND m.status = 'active'
-              AND (? IS NULL OR gn.scope = ?)
+              AND (
+                ? IS NULL OR (
+                  gn.scope = ?
+                  AND m.scope = ?
+                  AND mi.scope = ?
+                )
+              )
             """,
-            (scope, scope),
+            (scope, scope, scope, scope),
         ).fetchall()
         hits = []
         for row in rows:
@@ -15284,7 +15365,9 @@ class MemoryStore:
             LEFT JOIN node_evidence ne
               ON ne.memory_id = m.memory_id OR ne.item_id = mi.item_id
             LEFT JOIN memory_graph_nodes gn
-              ON gn.graph_node_id = ne.graph_node_id AND gn.status = 'active'
+              ON gn.graph_node_id = ne.graph_node_id
+             AND gn.status = 'active'
+             AND gn.scope = m.scope
             WHERE m.status = 'active'
               AND (? IS NULL OR m.scope = ?)
             """,
@@ -15420,10 +15503,15 @@ class MemoryStore:
                    gn.label, gn.group_label, gn.blob, gn.summary,
                    gn.importance, gn.confidence, ne.quote AS evidence_quote
             FROM memory_items mi
+            JOIN memories m ON m.memory_id = mi.memory_id
             JOIN node_evidence ne ON ne.item_id = mi.item_id
             JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
             WHERE mi.memory_id IN ({placeholders})
+              AND m.status = 'active'
+              AND mi.status = 'active'
               AND gn.status = 'active'
+              AND gn.scope = m.scope
+              AND mi.scope = m.scope
             ORDER BY mi.memory_id, gn.group_label, gn.label
             """,
             memory_ids,
@@ -15446,8 +15534,14 @@ class MemoryStore:
             FROM memory_graph_edges ge
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
             JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            LEFT JOIN memories m ON m.memory_id = ge.source_memory_id
             WHERE ge.status = 'active'
               AND ge.source_memory_id IN ({placeholders})
+              AND src.status = 'active'
+              AND dst.status = 'active'
+              AND (ge.source_memory_id IS NULL OR m.status = 'active')
+              AND src.scope = dst.scope
+              AND (ge.source_memory_id IS NULL OR m.scope = src.scope)
             ORDER BY ge.source_memory_id, ge.edge_type, dst.label
             """,
             memory_ids,

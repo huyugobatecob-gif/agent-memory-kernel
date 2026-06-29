@@ -34,12 +34,12 @@ Input:
 
 ```json
 {
-  "thread_id": "seo-demo",
+  "thread_id": "project-demo",
   "scope": "professional",
   "user_id": "user_default",
   "agent_id": "writer",
   "model_id": "gpt-4.1-mini",
-  "query": "Plan the next SEO loop",
+  "query": "Plan the next project iteration",
   "mode": "planning",
   "token_budget": 12000,
   "requested_lanes": ["professional"],
@@ -85,7 +85,7 @@ Input:
 
 ```json
 {
-  "thread_id": "seo-demo",
+  "thread_id": "project-demo",
   "scope": "professional",
   "turn_id": "turn_...",
   "user_id": "user_default",
@@ -125,14 +125,14 @@ Input:
 
 ```json
 {
-  "thread_id": "seo-demo",
+  "thread_id": "project-demo",
   "scope": "professional",
   "user_id": "user_default",
   "agent_id": "writer",
   "model_id": "gpt-4.1-mini",
-  "query": "Plan the next SEO loop",
-  "user_text": "Plan the next SEO loop",
-  "assistant_text": "Reuse the prior successful refresh pattern.",
+  "query": "Plan the next project iteration",
+  "user_text": "Plan the next project iteration",
+  "assistant_text": "Reuse the prior successful iteration pattern.",
   "keeper_mode": "sync",
   "metadata": {}
 }

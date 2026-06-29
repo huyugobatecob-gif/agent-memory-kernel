@@ -2,23 +2,28 @@
 
 Local-first, auditable memory for AI agents.
 
-Agent Memory Kernel is a small open-source template for giving agents a durable
-memory layer without locking the project to one vendor, product, model, or
-private workflow. It starts with two default memory lanes:
+Agent Memory Kernel is a small open-source template for giving agents and
+human workflows a durable memory layer without locking the project to one
+vendor, product, model, or private workflow. The core primitive is generic
+scope/lane/namespace policy isolation. The starter templates include two
+default lanes:
 
 - `personal`: preferences, recurring personal context, communication style.
 - `professional`: projects, decisions, rules, gotchas, working knowledge.
 
-Teams can extend those lanes into project-specific graph trees, success/failure
-loops, runtime adapters, CRM memory, SEO project memory, support memory, or
-any other domain-specific layer. Bundled adapter examples are optional, not a
-requirement of the kernel.
+Teams can define additional scopes, namespaces, policy packs, and renderers for
+project-specific graph trees, success/failure loops, runtime adapters, CRM
+memory, SEO project memory, support memory, or any other domain-specific layer.
+Bundled templates and adapter examples are optional, not a requirement of the
+kernel.
 
 The project boundary is defined in
-[docs/kernel-charter.md](docs/kernel-charter.md): the kernel owns local memory
-truth, lifecycle, policies, retrieval, prompt packs, provenance, and
-conformance. Runtime adapters, domain packs, hosted services, vector search,
-and provider integrations are optional extensions.
+[docs/kernel-charter.md](docs/kernel-charter.md) and
+[docs/amk-000-kernel-invariants.md](docs/amk-000-kernel-invariants.md): the
+kernel owns local memory truth, lifecycle, policies, retrieval, prompt
+envelopes, provenance, portability, and conformance. Runtime adapters, domain
+packs, hosted services, vector search, Memory Tree renderers, and provider
+integrations are optional extensions.
 
 ## Why this exists
 
@@ -33,9 +38,10 @@ metadata;
 This project takes a middle path: every memory starts as an event, becomes a
 candidate, passes review or policy, and only then becomes active memory. Active
 memory has source links, trust labels, audit history, graph nodes, and an
-agent-ready context pack. When an agent needs deeper working context, the same
-data can be returned as a Memory Tree Pack: short branch labels at the top,
-active memories in the middle, and raw source excerpts at the bottom.
+agent-ready prompt envelope. When an agent needs deeper working context, the
+same selected data can be returned as a Memory Tree Pack: short branch labels
+at the top, active memories in the middle, and raw source excerpts at the
+bottom.
 
 ## Status
 
@@ -911,6 +917,8 @@ The full-memory work is split into hard contracts so contributors can implement
 it without relying on the original planning conversation:
 
 - [SPEC.md](SPEC.md) defines the public memory kernel behavior.
+- [docs/amk-000-kernel-invariants.md](docs/amk-000-kernel-invariants.md)
+  defines the executable kernel invariants and conformance gate.
 - [docs/core-status-audit.md](docs/core-status-audit.md) tracks what is
   `done`, `partial`, `missing`, `extension`, or `later-hosted`.
 - [docs/runtime-contract.md](docs/runtime-contract.md) defines the live
@@ -919,7 +927,8 @@ it without relying on the original planning conversation:
   defines create, correct, delete, distrust, expire, conflict, and export
   behavior.
 - [docs/cross-model-context-contract.md](docs/cross-model-context-contract.md)
-  defines the provider-neutral prompt envelope and Memory Tree Supplement.
+  defines the provider-neutral prompt envelope and optional Memory Tree
+  rendering.
 - [docs/security-identity-contract.md](docs/security-identity-contract.md)
   defines identity, permissions, trust, audit, and leakage controls.
 - [docs/production-rollout.md](docs/production-rollout.md) gives the

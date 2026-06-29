@@ -1226,6 +1226,106 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("dragonfly-private", personal_context)
             store.close()
 
+    def test_graph_branches_and_evidence_respect_source_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            personal = store.remember(
+                "Preference: personal graph marker is graph-private-marker.",
+                scope="personal",
+                sensitivity="personal",
+                source_ref="fixture://personal-graph-marker",
+                auto_approve=True,
+            )
+            personal_id = personal["candidates"][0]["memory_id"]
+            evidence_row = store.conn.execute(
+                """
+                SELECT mi.item_id, mi.event_id
+                FROM memory_items mi
+                WHERE mi.memory_id = ?
+                LIMIT 1
+                """,
+                (personal_id,),
+            ).fetchone()
+            self.assertIsNotNone(evidence_row)
+            store.conn.execute(
+                """
+                INSERT INTO memory_graph_nodes
+                  (graph_node_id, created_at, updated_at, node_type, label,
+                   canonical_key, scope, group_label, blob, summary,
+                   importance, confidence, status, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "gnode_cross_lane_personal",
+                    "2026-01-01T00:00:00Z",
+                    "2026-01-01T00:00:00Z",
+                    "project",
+                    "graph-private-marker",
+                    "graph-private-marker",
+                    "professional",
+                    "project:graph-private-marker",
+                    "graph-private-marker should not enter professional graph branches.",
+                    "graph-private-marker contaminated graph node.",
+                    1.0,
+                    "high",
+                    "active",
+                    "{}",
+                ),
+            )
+            store.conn.execute(
+                """
+                INSERT INTO node_evidence
+                  (evidence_id, graph_node_id, item_id, memory_id, event_id,
+                   created_at, source_ref, quote, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "nev_cross_lane_personal",
+                    "gnode_cross_lane_personal",
+                    evidence_row["item_id"],
+                    personal_id,
+                    evidence_row["event_id"],
+                    "2026-01-01T00:00:00Z",
+                    "fixture://personal-graph-marker",
+                    "graph-private-marker leaked through graph evidence.",
+                    "high",
+                ),
+            )
+            store.conn.commit()
+
+            prompt = store.before_model_call(
+                "graph-private-marker",
+                scope="professional",
+                allowed_scopes=["professional"],
+                agent_id="graph-scope-agent",
+            )
+            envelope = prompt["prompt_envelope"]
+            injected_text = "\n".join(
+                [
+                    envelope["system"],
+                    envelope["messages"][0]["content"],
+                    envelope["messages"][1]["content"],
+                    json.dumps(envelope["metadata"], sort_keys=True),
+                ]
+            )
+            exported = store.export_profile(scope="professional")
+            graph_browser = store.graph_browser(
+                scope="professional",
+                query="graph-private-marker",
+            )
+
+            self.assertNotIn("graph-private-marker", injected_text)
+            self.assertNotIn(
+                "graph-private-marker",
+                json.dumps(exported.get("memory_tree", {}), sort_keys=True),
+            )
+            self.assertEqual(store.list_graph_nodes(scope="professional", node_type="project"), [])
+            self.assertEqual(graph_browser["nodes"], [])
+            self.assertEqual(graph_browser["edges"], [])
+            store.close()
+
     def test_conflict_and_supersede_truth_maintenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

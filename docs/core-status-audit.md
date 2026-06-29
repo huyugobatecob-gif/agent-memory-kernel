@@ -23,11 +23,11 @@ Status labels:
 | Raw source events and saved turns | done | `record_turn`, `after_saved_turn`, source event lifecycle | Ensure retained evidence cannot re-enter prompts after linked memory is inactive. |
 | Candidate memory lifecycle | done | review workflow, candidate tables, quarantine policy | Keep assistant/tool/web claims reviewable by default. |
 | Active memory lifecycle | partial | approve, correct, rollback, delete, distrust, expire, supersede | Prove every lifecycle change hides or invalidates all derived prompt/export surfaces. |
-| Personal/professional lanes | partial | default scopes, read policies, lane isolation tests, derived summary/semantic scope fixtures | Continue lane isolation hardening for graph branches and prompt-envelope snapshots. |
-| Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands | Prove graph-derived content inherits source lifecycle, trust, and lane restrictions. |
+| Scope/lane/namespace isolation | partial | default scopes, read policies, lane isolation tests, derived summary/semantic fixtures, graph/evidence scope fixtures, selected-content prompt snapshot | Continue hardening provider-shaped prompt envelopes, namespace fixtures, and budget snapshots. |
+| Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands, same-scope evidence filters | Expand graph conformance with correction/delete round trips across imported profiles. |
 | Keeper contract | partial | deterministic extractor, LLM Keeper contract, queued worker | Expand conformance for false-positive writes, retries, and reviewable unsafe claims. |
 | Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content prompt snapshot | Add deterministic budget trimming snapshots. |
-| Prompt envelope / Memory Tree Supplement | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario | Add broader provider-shaped prompt-envelope snapshots. |
+| Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, Memory Tree renderer | Add broader provider-shaped prompt-envelope snapshots and keep renderers behind the read contract. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation | Define and test a portable memory package format/checksum story. |
@@ -39,6 +39,7 @@ Status labels:
 | Capability | Status | Placement |
 | --- | --- | --- |
 | Hermes rollout | extension | `adapters/`, examples, deployment docs |
+| Personal/professional starter templates | extension | default pack over generic scope/lane/namespace policy |
 | SEO loop memory | extension | domain pack over generic outcome records |
 | Provider prompt formatters | extension | adapter compatibility, not kernel truth |
 | Embeddings and ANN indexes | extension | retrieval enhancement after policy filtering |
@@ -51,16 +52,19 @@ Status labels:
 
 ## Immediate Kernel Gaps
 
-1. Build an invariant matrix that maps every kernel law to the code path and
-   test/conformance scenario that proves it.
-2. Harden remaining lane isolation for derived content: graph branches and
-   prompt-envelope snapshots. Summaries and semantic analyses now have scoped
-   source-memory fixtures.
+1. Keep `AMK-000` and the invariant matrix mapped to the code path and
+   test/conformance scenario that proves every kernel law.
+2. Expand scope/lane/namespace isolation coverage for provider-shaped prompts.
+   Summaries, semantic analyses, graph branches, graph browser previews, graph
+   evidence, and selected-content prompt envelopes now have scoped fixtures.
 3. Add remaining deterministic prompt-envelope snapshots for budget trimming and
    provider-shaped prompts. Selected content, no tag-only injection, and
    no-full-graph injection now have local and conformance fixtures.
 4. Expand export/import round-trip tests to cover provenance, tombstones, trust
    state, review history, policy metadata, evidence chains, and derived
    invalidation records.
-5. Keep examples universal until the kernel gates pass; runtime/domain examples
+5. Add remaining kernel-contract coverage for local API/versioning, capability
+   grants, deterministic ranking, portable bundles, and performance/resource
+   budgets.
+6. Keep examples universal until the kernel gates pass; runtime/domain examples
    must consume the kernel contract rather than shaping it.
