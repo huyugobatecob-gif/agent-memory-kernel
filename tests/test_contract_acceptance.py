@@ -54,6 +54,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         )
         self.assertIn("deleted_memory_absent", str(contract["kernel_invariants"]))
         self.assertIn("golden_trace_deterministic_ranking_snapshot", str(contract["kernel_invariants"]))
+        self.assertIn("audit_log_integrity_detects_tampering", str(contract["kernel_invariants"]))
         threat_ids = {item["id"] for item in contract["threat_model"]}
         self.assertTrue(
             {
@@ -76,6 +77,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
             str(contract["threat_model"]),
         )
+        self.assertIn("audit_log_integrity_detects_tampering", str(contract["threat_model"]))
 
     def test_acceptance_suite_passes_seeded_full_memory_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,6 +116,7 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("keeper_retry_is_idempotent", scenario_ids)
         self.assertIn("keeper_change_is_inspectable", scenario_ids)
         self.assertIn("capability_report_blocks_denied_actions", scenario_ids)
+        self.assertIn("audit_log_integrity_detects_tampering", scenario_ids)
         self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", scenario_ids)
         self.assertIn("golden_trace_graph_browser_shows_source_previews", scenario_ids)
         self.assertIn("golden_trace_deterministic_ranking_snapshot", scenario_ids)
@@ -170,6 +173,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("keeper_retry_is_idempotent", passed)
             self.assertIn("keeper_change_is_inspectable", passed)
             self.assertIn("capability_report_blocks_denied_actions", passed)
+            self.assertIn("audit_log_integrity_detects_tampering", passed)
             self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", passed)
             self.assertIn("golden_trace_graph_browser_shows_source_previews", passed)
             self.assertIn("golden_trace_deterministic_ranking_snapshot", passed)

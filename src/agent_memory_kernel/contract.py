@@ -237,11 +237,13 @@ KERNEL_INVARIANTS = [
             "MemoryStore.memory_changes",
             "MemoryStore.explain_router_run",
             "MemoryStore.export_profile",
+            "MemoryStore.audit_integrity_report",
         ],
         "verifiers": [
             "professional_memory_injected_with_provenance",
             "keeper_change_is_inspectable",
             "golden_trace_graph_browser_shows_source_previews",
+            "audit_log_integrity_detects_tampering",
         ],
     },
     {
@@ -386,12 +388,14 @@ THREAT_MODEL = [
             "retrieval_and_lifecycle_actions_emit_audit_metadata",
             "why_remembered_and_why_injected_are_available",
             "export_and_import_preserve_review_history_and_provenance",
+            "local_audit_entries_are_hash_chained_for_tamper_evidence",
         ],
         "verifiers": [
             "keeper_change_is_inspectable",
             "professional_memory_injected_with_provenance",
             "golden_trace_graph_browser_shows_source_previews",
             "golden_trace_portable_bundle_manifest_roundtrip",
+            "audit_log_integrity_detects_tampering",
         ],
     },
 ]

@@ -168,6 +168,18 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "audit_integrity_trace",
+                "steps": [
+                    "create a local audit log with signed audit entries",
+                    "verify the audit integrity report passes before mutation",
+                    "modify one signed audit row in place",
+                    "verify the audit integrity report fails with an entry hash mismatch",
+                ],
+                "expected_scenarios": [
+                    "audit_log_integrity_detects_tampering"
+                ],
+            },
+            {
                 "id": "security_red_team_trace",
                 "steps": [
                     "attempt to store secret-like user text",
@@ -330,6 +342,14 @@ def conformance_spec() -> dict[str, Any]:
                     "denied read and inject are visible before prompt retrieval",
                     "denied export is visible before memory leaves the store",
                     "denied lifecycle mutation is policy-checkable and dry-runnable without mutation",
+                ],
+            },
+            {
+                "id": "audit_log_integrity_detects_tampering",
+                "requires": [
+                    "new local audit rows carry a previous hash and entry hash",
+                    "audit integrity report passes for an unchanged local chain",
+                    "in-place edits to signed audit metadata are detected as hash mismatches",
                 ],
             },
             {
@@ -1983,6 +2003,7 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         "table:memory_graph_edges",
         "table:keeper_jobs",
         "table:router_runs",
+        "table:audit_log",
         "sqlite_quick_check",
     }
     _append_result(
@@ -2024,6 +2045,53 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "versions": kernel_versions,
             "surfaces": kernel_surfaces,
             "failures": kernel_status.get("failures", []),
+        },
+    )
+
+    audit_store = MemoryStore(":memory:")
+    try:
+        audit_store.init_db()
+        audit_store.remember(
+            "Decision: audit integrity conformance memory is durable.",
+            scope=CONFORMANCE_SCOPE,
+            source_ref="conformance://audit-integrity",
+            auto_approve=True,
+        )
+        audit_clean = audit_store.audit_integrity_report()
+        audit_row = audit_store.conn.execute(
+            """
+            SELECT audit_id
+            FROM audit_log
+            WHERE entry_hash != ''
+            ORDER BY rowid DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if audit_row:
+            audit_store.conn.execute(
+                "UPDATE audit_log SET details_json = ? WHERE audit_id = ?",
+                (json.dumps({"tampered": True}, sort_keys=True), audit_row["audit_id"]),
+            )
+            audit_store.conn.commit()
+        audit_tampered = audit_store.audit_integrity_report()
+    finally:
+        audit_store.close()
+    tamper_reasons = {
+        str(item.get("reason"))
+        for item in audit_tampered.get("failures", [])
+    }
+    _append_result(
+        results,
+        "audit_log_integrity_detects_tampering",
+        audit_clean.get("status") == "pass"
+        and audit_clean.get("coverage") == "complete"
+        and audit_clean.get("signed_entries", 0) >= 2
+        and audit_tampered.get("status") == "fail"
+        and "entry_hash_mismatch" in tamper_reasons,
+        {
+            "clean": audit_clean,
+            "tampered": audit_tampered,
+            "tamper_reasons": sorted(tamper_reasons),
         },
     )
 
@@ -2211,6 +2279,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "keeper_retry_is_idempotent",
         "keeper_change_is_inspectable",
         "capability_report_blocks_denied_actions",
+        "audit_log_integrity_detects_tampering",
         "golden_trace_portable_bundle_manifest_roundtrip",
         "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
         "golden_trace_outcome_pack_uses_success_and_failure",

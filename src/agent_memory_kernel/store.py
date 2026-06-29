@@ -402,6 +402,11 @@ class MemoryStore:
             ("due_at", "TEXT NOT NULL DEFAULT ''"),
         ]:
             self._ensure_column("memory_notifications", column, declaration)
+        for column, declaration in [
+            ("previous_hash", "TEXT NOT NULL DEFAULT ''"),
+            ("entry_hash", "TEXT NOT NULL DEFAULT ''"),
+        ]:
+            self._ensure_column("audit_log", column, declaration)
         self._audit("init", "database", str(self.db_path), details={"version": "0.1.0"})
         self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         self.conn.commit()
@@ -2588,6 +2593,17 @@ class MemoryStore:
                 "status",
                 "payload_json",
             ],
+            "audit_log": [
+                "audit_id",
+                "created_at",
+                "action",
+                "target_type",
+                "target_id",
+                "actor",
+                "details_json",
+                "previous_hash",
+                "entry_hash",
+            ],
         }
         checks: list[dict[str, Any]] = []
 
@@ -2650,6 +2666,85 @@ class MemoryStore:
                     "status": "applied" if user_version >= SCHEMA_VERSION else "pending",
                 }
             ],
+        }
+
+    def audit_integrity_report(self, *, limit: int = 20) -> dict[str, Any]:
+        """Verify local audit-log hash chaining for tamper-evidence."""
+        limit = max(1, min(int(limit or 20), 200))
+        rows = self.conn.execute(
+            """
+            SELECT rowid, audit_id, created_at, action, target_type, target_id,
+                   actor, details_json, previous_hash, entry_hash
+            FROM audit_log
+            ORDER BY rowid ASC
+            """
+        ).fetchall()
+        previous_hash = ""
+        signed_count = 0
+        unsigned_count = 0
+        failures: list[dict[str, Any]] = []
+        first_hash = ""
+        last_hash = ""
+        for row in rows:
+            entry_hash = str(row["entry_hash"] or "")
+            if not entry_hash:
+                unsigned_count += 1
+                continue
+            signed_count += 1
+            previous_recorded = str(row["previous_hash"] or "")
+            expected_hash = self._audit_entry_hash(
+                audit_id=str(row["audit_id"]),
+                created_at=str(row["created_at"]),
+                action=str(row["action"]),
+                target_type=str(row["target_type"]),
+                target_id=str(row["target_id"]),
+                actor=str(row["actor"]),
+                details_json=str(row["details_json"] or "{}"),
+                previous_hash=previous_recorded,
+            )
+            if not first_hash:
+                first_hash = entry_hash
+            if previous_recorded != previous_hash:
+                failures.append(
+                    {
+                        "audit_id": row["audit_id"],
+                        "rowid": int(row["rowid"]),
+                        "reason": "previous_hash_mismatch",
+                        "expected_previous_hash": previous_hash,
+                        "recorded_previous_hash": previous_recorded,
+                    }
+                )
+            if not hmac.compare_digest(entry_hash, expected_hash):
+                failures.append(
+                    {
+                        "audit_id": row["audit_id"],
+                        "rowid": int(row["rowid"]),
+                        "reason": "entry_hash_mismatch",
+                        "expected_entry_hash": expected_hash,
+                        "recorded_entry_hash": entry_hash,
+                    }
+                )
+            previous_hash = entry_hash
+            last_hash = entry_hash
+
+        limited_failures = failures[:limit]
+        return {
+            "version": "audit-integrity-v0.1",
+            "status": "fail" if failures else "pass",
+            "checked_entries": len(rows),
+            "signed_entries": signed_count,
+            "unsigned_entries": unsigned_count,
+            "coverage": "complete" if signed_count == len(rows) else "partial",
+            "first_entry_hash": first_hash,
+            "last_entry_hash": last_hash,
+            "failure_count": len(failures),
+            "failures": limited_failures,
+            "truncated_failures": max(0, len(failures) - len(limited_failures)),
+            "notes": [
+                "Unsigned entries are legacy or imported audit rows and are not treated as failures."
+            ]
+            if unsigned_count
+            else [],
         }
 
     def migration_changelog(self, *, limit: int = 20) -> dict[str, Any]:
@@ -13328,6 +13423,32 @@ class MemoryStore:
     def _stable_json_sha256(cls, value: Any) -> str:
         return hashlib.sha256(cls._canonical_json_bytes(value)).hexdigest()
 
+    @classmethod
+    def _audit_entry_hash(
+        cls,
+        *,
+        audit_id: str,
+        created_at: str,
+        action: str,
+        target_type: str,
+        target_id: str,
+        actor: str,
+        details_json: str,
+        previous_hash: str,
+    ) -> str:
+        return cls._stable_json_sha256(
+            {
+                "audit_id": audit_id,
+                "created_at": created_at,
+                "action": action,
+                "target_type": target_type,
+                "target_id": target_id,
+                "actor": actor,
+                "details_json": details_json,
+                "previous_hash": previous_hash,
+            }
+        )
+
     @staticmethod
     def _derive_export_keys(
         passphrase: str,
@@ -17630,20 +17751,46 @@ class MemoryStore:
         actor: str = "system",
         details: dict[str, Any] | None = None,
     ) -> None:
+        audit_id = new_id("aud")
+        created_at = now_iso()
+        details_json = json.dumps(details or {}, sort_keys=True)
+        row = self.conn.execute(
+            """
+            SELECT entry_hash
+            FROM audit_log
+            WHERE entry_hash != ''
+            ORDER BY rowid DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        previous_hash = str(row["entry_hash"] or "") if row else ""
+        entry_hash = self._audit_entry_hash(
+            audit_id=audit_id,
+            created_at=created_at,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            actor=actor,
+            details_json=details_json,
+            previous_hash=previous_hash,
+        )
         self.conn.execute(
             """
             INSERT INTO audit_log
-              (audit_id, created_at, action, target_type, target_id, actor, details_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+              (audit_id, created_at, action, target_type, target_id, actor,
+               details_json, previous_hash, entry_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                new_id("aud"),
-                now_iso(),
+                audit_id,
+                created_at,
                 action,
                 target_type,
                 target_id,
                 actor,
-                json.dumps(details or {}, sort_keys=True),
+                details_json,
+                previous_hash,
+                entry_hash,
             ),
         )
 

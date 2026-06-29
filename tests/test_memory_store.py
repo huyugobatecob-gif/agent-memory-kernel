@@ -189,6 +189,45 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertGreaterEqual(denied["count"], 3)
             store.close()
 
+    def test_audit_integrity_report_detects_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            store.remember(
+                "Decision: audit integrity rows are hash chained.",
+                scope="professional",
+                auto_approve=True,
+            )
+            clean = store.audit_integrity_report()
+            self.assertEqual(clean["status"], "pass")
+            self.assertEqual(clean["coverage"], "complete")
+            self.assertGreaterEqual(clean["signed_entries"], 2)
+
+            row = store.conn.execute(
+                """
+                SELECT audit_id
+                FROM audit_log
+                WHERE entry_hash != ''
+                ORDER BY rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            self.assertIsNotNone(row)
+            store.conn.execute(
+                "UPDATE audit_log SET details_json = ? WHERE audit_id = ?",
+                (json.dumps({"tampered": True}, sort_keys=True), row["audit_id"]),
+            )
+            store.conn.commit()
+
+            tampered = store.audit_integrity_report()
+            self.assertEqual(tampered["status"], "fail")
+            self.assertIn(
+                "entry_hash_mismatch",
+                {item["reason"] for item in tampered["failures"]},
+            )
+            store.close()
+
     def test_http_write_policy_endpoints(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

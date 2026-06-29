@@ -670,6 +670,14 @@ def cmd_kernel_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit_integrity(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.audit_integrity_report(limit=args.limit))
+    store.close()
+    return 0
+
+
 def cmd_migration_changelog(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2282,6 +2290,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("--skip-integrity-check", action="store_true")
     p.set_defaults(func=cmd_kernel_status)
+
+    p = sub.add_parser("audit-integrity", help="Verify local audit-log tamper-evidence hash chain")
+    add_common_db(p)
+    p.add_argument("--limit", type=int, default=20, help="Maximum audit integrity failures to return")
+    p.set_defaults(func=cmd_audit_integrity)
 
     p = sub.add_parser("migration-changelog", help="Summarize schema migrations and recent recovery events")
     add_common_db(p)

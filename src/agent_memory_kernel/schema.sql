@@ -599,7 +599,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type    TEXT NOT NULL,
     target_id      TEXT NOT NULL,
     actor          TEXT NOT NULL DEFAULT 'user',
-    details_json   TEXT NOT NULL DEFAULT '{}'
+    details_json   TEXT NOT NULL DEFAULT '{}',
+    previous_hash  TEXT NOT NULL DEFAULT '',
+    entry_hash     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS review_actions (

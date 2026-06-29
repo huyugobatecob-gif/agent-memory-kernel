@@ -41,7 +41,7 @@ The machine-readable version of this table lives in
 | `malicious_or_poisoned_import` | verify bundle digests; screen digest-valid imported text before activation; preserve lifecycle and policy state; prevent redacted imports from restoring hidden content | `golden_trace_portable_bundle_manifest_roundtrip`, `golden_trace_poisoned_bundle_import_quarantines_prompt_injection`, `golden_trace_import_restores_lifecycle_tombstones`, `golden_trace_import_preserves_policy_metadata`, `golden_trace_import_preserves_graph_evidence_chains` |
 | `provider_prompt_boundary_failure` | keep memory out of unsafe provider system surfaces; preserve formatter metadata; keep Memory Tree as a selected-content renderer | `golden_trace_provider_prompt_formatters_preserve_boundaries`, `golden_trace_prompt_budget_trims_context_pack` |
 | `corrupt_or_partial_store` | report migration status; run SQLite integrity checks; fail closed to no-memory mode | `migration_status_is_compatible`, `kernel_status_reports_compatible_versions` |
-| `audit_tampering_or_blind_spots` | expose who/what/why metadata; preserve provenance and review history; keep graph source previews | `keeper_change_is_inspectable`, `professional_memory_injected_with_provenance`, `golden_trace_graph_browser_shows_source_previews`, `golden_trace_portable_bundle_manifest_roundtrip` |
+| `audit_tampering_or_blind_spots` | expose who/what/why metadata; preserve provenance and review history; keep graph source previews; hash-chain new local audit entries for tamper evidence | `keeper_change_is_inspectable`, `professional_memory_injected_with_provenance`, `golden_trace_graph_browser_shows_source_previews`, `golden_trace_portable_bundle_manifest_roundtrip`, `audit_log_integrity_detects_tampering` |
 
 ## Non-Goals For Local V1
 
@@ -70,4 +70,5 @@ hardening should add:
 - explicit corrupted-store fixtures beyond `quick_check`;
 - interrupted import/export recovery fixtures;
 - cross-version bundle compatibility fixtures;
-- explicit audit tamper-evidence or audit-chain checks;
+- stronger audit-chain coverage for imported/subset audit rows and external
+  notarization hooks where deployments need root-resistant evidence;
