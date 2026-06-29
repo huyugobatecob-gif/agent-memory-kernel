@@ -223,6 +223,7 @@ KERNEL_INVARIANTS = [
         "verifiers": [
             "golden_trace_portable_bundle_manifest_roundtrip",
             "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+            "golden_trace_interrupted_import_rolls_back_partial_writes",
             "golden_trace_import_restores_lifecycle_tombstones",
             "golden_trace_import_preserves_policy_metadata",
             "golden_trace_import_preserves_graph_evidence_chains",
@@ -375,10 +376,12 @@ THREAT_MODEL = [
             "migration_status_is_visible",
             "sqlite_integrity_check_can_fail_closed",
             "no_memory_fallback_is_explicit",
+            "interrupted_import_rolls_back_partial_writes",
         ],
         "verifiers": [
             "migration_status_is_compatible",
             "kernel_status_reports_compatible_versions",
+            "golden_trace_interrupted_import_rolls_back_partial_writes",
         ],
     },
     {

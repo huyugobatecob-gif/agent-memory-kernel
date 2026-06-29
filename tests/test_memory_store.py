@@ -1086,6 +1086,44 @@ class MemoryStoreTests(unittest.TestCase):
             imported.close()
             store.close()
 
+    def test_failed_bundle_import_rolls_back_partial_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = MemoryStore(Path(tmp) / "source.db")
+            source.init_db()
+            source.remember(
+                "Decision: interrupted imports must roll back partial memory rows.",
+                scope="professional",
+                auto_approve=True,
+            )
+            bundle = source.export_bundle(scope="professional", actor="tester")
+
+            target = MemoryStore(Path(tmp) / "target.db")
+            target.init_db()
+
+            def fail_import_tree(_tree: object, _counts: object) -> None:
+                raise RuntimeError("simulated interrupted import")
+
+            target._import_memory_tree = fail_import_tree  # type: ignore[method-assign]
+            with self.assertRaises(RuntimeError):
+                target.import_bundle(bundle)
+
+            for table in [
+                "events",
+                "candidate_memories",
+                "memories",
+                "memory_items",
+                "memory_graph_nodes",
+                "memory_graph_edges",
+                "sources",
+            ]:
+                count = target.conn.execute(
+                    f"SELECT COUNT(*) AS count FROM {table}"
+                ).fetchone()["count"]
+                self.assertEqual(count, 0, table)
+            self.assertEqual(target.audit_integrity_report()["status"], "pass")
+            target.close()
+            source.close()
+
     def test_correct_memory_records_revision_and_rollback_restores_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

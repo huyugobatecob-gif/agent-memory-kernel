@@ -146,6 +146,18 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "interrupted_import_recovery_trace",
+                "steps": [
+                    "start importing a verified portable bundle into a fresh store",
+                    "simulate an interruption after lifecycle rows begin importing",
+                    "verify the import raises instead of reporting success",
+                    "verify events, candidates, active memories, graph rows, and sources roll back",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_interrupted_import_rolls_back_partial_writes"
+                ],
+            },
+            {
                 "id": "migration_compatibility_trace",
                 "steps": [
                     "initialize a local SQLite memory store",
@@ -368,6 +380,14 @@ def conformance_spec() -> dict[str, Any]:
                     "digest-valid bundles are still screened for imported content suitability",
                     "prompt-injection-like profile notes, active memory rows, and graph nodes are skipped or quarantined",
                     "poisoned imported text is absent from active search and prompt envelopes",
+                ],
+            },
+            {
+                "id": "golden_trace_interrupted_import_rolls_back_partial_writes",
+                "requires": [
+                    "bundle import is atomic across policy, lifecycle, graph, profile, chat, and usage rows",
+                    "mid-import exceptions roll back already written source events, candidates, active memories, graph rows, and sources",
+                    "failed imports leave the target store usable with a valid audit integrity report",
                 ],
             },
             {
@@ -1929,6 +1949,50 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "prompt_selected_branch_ids": poisoned_prompt.get("selected_branch_ids", []),
             },
         )
+        interrupted_restored = MemoryStore(":memory:")
+        interrupted_failed = False
+        interrupted_counts: dict[str, int] = {}
+        interrupted_audit: dict[str, Any] = {}
+        try:
+            interrupted_restored.init_db()
+
+            def fail_import_tree(_tree: object, _counts: object) -> None:
+                raise RuntimeError("simulated interrupted import")
+
+            interrupted_restored._import_memory_tree = fail_import_tree  # type: ignore[method-assign]
+            try:
+                interrupted_restored.import_bundle(bundle)
+            except RuntimeError:
+                interrupted_failed = True
+            for table in [
+                "events",
+                "candidate_memories",
+                "memories",
+                "memory_items",
+                "memory_graph_nodes",
+                "memory_graph_edges",
+                "sources",
+            ]:
+                interrupted_counts[table] = int(
+                    interrupted_restored.conn.execute(
+                        f"SELECT COUNT(*) AS count FROM {table}"
+                    ).fetchone()["count"]
+                )
+            interrupted_audit = interrupted_restored.audit_integrity_report()
+        finally:
+            interrupted_restored.close()
+        _append_result(
+            results,
+            "golden_trace_interrupted_import_rolls_back_partial_writes",
+            interrupted_failed
+            and all(count == 0 for count in interrupted_counts.values())
+            and interrupted_audit.get("status") == "pass",
+            {
+                "interrupted_failed": interrupted_failed,
+                "table_counts": interrupted_counts,
+                "audit_integrity": interrupted_audit,
+            },
+        )
         bundle_restored = MemoryStore(":memory:")
         try:
             bundle_restored.init_db()
@@ -2282,6 +2346,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "audit_log_integrity_detects_tampering",
         "golden_trace_portable_bundle_manifest_roundtrip",
         "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+        "golden_trace_interrupted_import_rolls_back_partial_writes",
         "golden_trace_outcome_pack_uses_success_and_failure",
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_deterministic_ranking_snapshot",

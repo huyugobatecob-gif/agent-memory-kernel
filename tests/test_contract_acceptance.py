@@ -77,6 +77,10 @@ class ContractAcceptanceTests(unittest.TestCase):
             "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
             str(contract["threat_model"]),
         )
+        self.assertIn(
+            "golden_trace_interrupted_import_rolls_back_partial_writes",
+            str(contract["threat_model"]),
+        )
         self.assertIn("audit_log_integrity_detects_tampering", str(contract["threat_model"]))
 
     def test_acceptance_suite_passes_seeded_full_memory_fixture(self) -> None:
@@ -131,6 +135,10 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", scenario_ids)
         self.assertIn(
             "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+            scenario_ids,
+        )
+        self.assertIn(
+            "golden_trace_interrupted_import_rolls_back_partial_writes",
             scenario_ids,
         )
         self.assertIn("migration_status_is_compatible", scenario_ids)
@@ -188,6 +196,10 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", passed)
             self.assertIn(
                 "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+                passed,
+            )
+            self.assertIn(
+                "golden_trace_interrupted_import_rolls_back_partial_writes",
                 passed,
             )
             self.assertIn("migration_status_is_compatible", passed)

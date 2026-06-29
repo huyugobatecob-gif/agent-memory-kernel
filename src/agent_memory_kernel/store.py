@@ -4440,6 +4440,7 @@ class MemoryStore:
         scope: str = "professional",
         note_type: str = "rule",
         title: str = "",
+        commit: bool = True,
     ) -> str:
         scope = normalize_scope(scope)
         note_type = (note_type or "rule").strip().lower()
@@ -4467,7 +4468,8 @@ class MemoryStore:
                     """,
                     (ts, title, content, existing["profile_note_id"]),
                 )
-                self.conn.commit()
+                if commit:
+                    self.conn.commit()
                 return str(existing["profile_note_id"])
         note_id = new_id("pnote")
         self.conn.execute(
@@ -4479,7 +4481,8 @@ class MemoryStore:
             """,
             (note_id, ts, ts, scope, note_type, title, content),
         )
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
         return note_id
 
     def list_profile_notes(
@@ -4513,6 +4516,7 @@ class MemoryStore:
         saved_model_choices: dict[str, Any] | None = None,
         data_enrichment_snapshot: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        commit: bool = True,
     ) -> str:
         scope = normalize_scope(scope)
         project = (project or "").strip()
@@ -4540,7 +4544,8 @@ class MemoryStore:
                 """,
                 (*payload, existing["profile_id"]),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
             return str(existing["profile_id"])
         profile_id = new_id("profile")
         self.conn.execute(
@@ -4553,7 +4558,8 @@ class MemoryStore:
             """,
             (profile_id, ts, ts, scope, project, *payload[1:]),
         )
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
         return profile_id
 
     def record_llm_usage(
@@ -4568,6 +4574,7 @@ class MemoryStore:
         cost: float = 0.0,
         currency: str = "USD",
         metadata: dict[str, Any] | None = None,
+        commit: bool = True,
     ) -> str:
         scope = normalize_scope(scope)
         total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
@@ -4595,7 +4602,8 @@ class MemoryStore:
                 json.dumps(metadata or {}, sort_keys=True),
             ),
         )
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
         return usage_id
 
     def list_llm_usage(
@@ -6500,6 +6508,19 @@ class MemoryStore:
         }
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
+        savepoint = f"import_profile_{uuid.uuid4().hex[:8]}"
+        self.conn.execute(f"SAVEPOINT {savepoint}")
+        try:
+            counts = self._import_profile_unchecked(payload)
+        except Exception:
+            self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+        self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        self.conn.commit()
+        return counts
+
+    def _import_profile_unchecked(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
         self._import_memory_policy_state(payload.get("memory_policy_state", {}), counts)
         self._import_memory_lifecycle(payload.get("memory_lifecycle", {}), counts)
@@ -6523,6 +6544,7 @@ class MemoryStore:
                 scope=str(note.get("scope", "professional")),
                 note_type=str(note.get("note_type", "rule")),
                 title="" if self._is_redaction_marker(title) else title,
+                commit=False,
             )
             counts["profile_notes"] += 1
 
@@ -6541,6 +6563,7 @@ class MemoryStore:
                     profile.get("data_enrichment_snapshot_json"), {}
                 ),
                 metadata=self._loads_json(profile.get("metadata_json"), {}),
+                commit=False,
             )
             counts["project_profiles"] += 1
 
@@ -6606,10 +6629,10 @@ class MemoryStore:
                 cost=float(usage.get("cost", 0) or 0),
                 currency=str(usage.get("currency", "USD")),
                 metadata=self._loads_json(usage.get("metadata_json"), {}),
+                commit=False,
             )
             counts["llm_usage_stats"] += 1
 
-        self.conn.commit()
         return dict(counts)
 
     def _import_memory_policy_state(self, policy_state: Any, counts: defaultdict[str, int]) -> None:
