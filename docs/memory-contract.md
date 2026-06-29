@@ -169,7 +169,9 @@ capture, tool-output prompt injection, untrusted tool claims, assistant
 guesses, and personal export approval/redaction.
 These traces prove that a compatible adapter can retrieve both success and
 failure outcome evidence, inspect graph nodes with source previews, share
-profile shape without leaking content-bearing memory fields, preserve inactive
+profile shape without leaking content-bearing memory fields, keep prompt
+envelopes limited to selected expanded memory instead of the full graph,
+preserve inactive
 memory as lifecycle tombstones outside the active tree, restore lifecycle
 tombstones without reactivating them, preserve read/write policy metadata so
 restored denial paths still fail closed, verify the local SQLite schema before

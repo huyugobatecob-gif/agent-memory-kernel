@@ -26,8 +26,8 @@ Status labels:
 | Personal/professional lanes | partial | default scopes, read policies, lane isolation tests, derived summary/semantic scope fixtures | Continue lane isolation hardening for graph branches and prompt-envelope snapshots. |
 | Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands | Prove graph-derived content inherits source lifecycle, trust, and lane restrictions. |
 | Keeper contract | partial | deterministic extractor, LLM Keeper contract, queued worker | Expand conformance for false-positive writes, retries, and reviewable unsafe claims. |
-| Router contract | partial | `before_model_call`, tree packs, explainability, feedback | Add prompt-envelope snapshots proving selected content only and deterministic budget trimming. |
-| Prompt envelope / Memory Tree Supplement | partial | cross-model context contract, prompt format certification | Add golden traces for no full-graph leakage and no tag-only injection. |
+| Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content prompt snapshot | Add deterministic budget trimming snapshots. |
+| Prompt envelope / Memory Tree Supplement | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario | Add broader provider-shaped prompt-envelope snapshots. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation | Define and test a portable memory package format/checksum story. |
@@ -56,8 +56,9 @@ Status labels:
 2. Harden remaining lane isolation for derived content: graph branches and
    prompt-envelope snapshots. Summaries and semantic analyses now have scoped
    source-memory fixtures.
-3. Add deterministic prompt-envelope snapshots for selected content, no
-   tag-only injection, no full-graph injection, and budget trimming.
+3. Add remaining deterministic prompt-envelope snapshots for budget trimming and
+   provider-shaped prompts. Selected content, no tag-only injection, and
+   no-full-graph injection now have local and conformance fixtures.
 4. Expand export/import round-trip tests to cover provenance, tombstones, trust
    state, review history, policy metadata, evidence chains, and derived
    invalidation records.

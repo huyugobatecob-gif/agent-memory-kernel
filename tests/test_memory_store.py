@@ -2160,6 +2160,60 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(api_changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             store.close()
 
+    def test_prompt_envelope_snapshot_contains_selected_memory_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            selected = store.remember(
+                "Decision: project alpha-safe should use the selected rollout checklist.",
+                scope="professional",
+                source_ref="fixture://selected-alpha",
+                auto_approve=True,
+            )["candidates"][0]
+            unselected = store.remember(
+                "Decision: project beta-hidden contains forbidden-full-graph-marker.",
+                scope="professional",
+                source_ref="fixture://unselected-beta",
+                auto_approve=True,
+            )["candidates"][0]
+            private = store.remember(
+                "Preference: private-prompt-marker belongs only to personal memory.",
+                scope="personal",
+                sensitivity="personal",
+                source_ref="fixture://private-marker",
+                auto_approve=True,
+            )["candidates"][0]
+
+            before = store.before_model_call(
+                "alpha-safe selected rollout",
+                thread_id="thread-prompt-snapshot",
+                scope="professional",
+                allowed_scopes=["professional"],
+                agent_id="snapshot-agent",
+                model_id="gpt-test",
+                limit=1,
+            )
+            envelope = before["prompt_envelope"]
+            system_text = envelope["system"]
+            message_texts = [message["content"] for message in envelope["messages"]]
+            full_prompt_text = system_text + "\n" + "\n".join(message_texts)
+            supplement = message_texts[1]
+
+            self.assertEqual(len(before["selected_branch_ids"]), 1)
+            self.assertNotIn("MEMORY_TREE_SUPPLEMENT", system_text)
+            self.assertNotIn("MEMORY_TREE_SUPPLEMENT", message_texts[0])
+            self.assertIn("<<< MEMORY_TREE_SUPPLEMENT >>>", supplement)
+            self.assertIn("Expanded content:", supplement)
+            self.assertIn("selected rollout checklist", supplement)
+            self.assertIn(selected["memory_id"], envelope["metadata"]["source_ids"])
+            self.assertIn("fixture://selected-alpha", envelope["metadata"]["source_ids"])
+            self.assertNotIn("forbidden-full-graph-marker", full_prompt_text)
+            self.assertNotIn("private-prompt-marker", full_prompt_text)
+            self.assertNotIn(unselected["memory_id"], envelope["metadata"]["source_ids"])
+            self.assertNotIn(private["memory_id"], envelope["metadata"]["source_ids"])
+            store.close()
+
     def test_before_model_call_can_format_provider_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

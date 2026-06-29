@@ -121,6 +121,15 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "prompt_envelope_contains_selected_content_only",
+                "requires": [
+                    "MEMORY_TREE_SUPPLEMENT contains expanded selected memory content",
+                    "unselected active memory is absent from prompt-facing context",
+                    "prompt metadata source ids contain selected sources only",
+                    "memory supplement stays out of the system instruction surface",
+                ],
+            },
+            {
                 "id": "personal_lane_is_withheld",
                 "requires": [
                     "professional-only prompts do not include personal-lane memory",
@@ -328,6 +337,11 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         "Decision: project conformance-site canonical CMS is Statamic.",
         "conformance://professional-memory",
     )
+    unselected_prompt = _approved_memory(
+        store,
+        "Decision: project beta-hidden contains forbidden-full-graph-marker.",
+        "conformance://unselected-prompt-memory",
+    )
     personal = store.remember(
         "Preference: user likes quiet personal replies.",
         scope="personal",
@@ -486,6 +500,7 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         "version": CONFORMANCE_VERSION,
         "ids": {
             "cms_memory_id": cms["memory_id"],
+            "unselected_prompt_memory_id": unselected_prompt["memory_id"],
             "personal_memory_id": personal["memory_id"],
             "personal_private_memory_id": personal_private["memory_id"],
             "stale_owner_memory_id": stale["memory_id"],
@@ -531,15 +546,50 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         model_id="conformance-model",
     )
     professional_content = _envelope_content(professional)
+    professional_source_ids = professional["prompt_envelope"]["metadata"].get("source_ids", [])
     _append_result(
         results,
         "professional_memory_injected_with_provenance",
         "Statamic" in professional_content
         and bool(professional["selected_branch_ids"])
-        and bool(professional["prompt_envelope"]["metadata"].get("source_ids")),
+        and bool(professional_source_ids),
         {
             "selected_branch_ids": professional["selected_branch_ids"],
-            "source_ids": professional["prompt_envelope"]["metadata"].get("source_ids", []),
+            "source_ids": professional_source_ids,
+        },
+    )
+    prompt_snapshot = store.before_model_call(
+        "canonical CMS Statamic",
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        allowed_scopes=[CONFORMANCE_SCOPE],
+        agent_id="conformance-agent",
+        model_id="conformance-model",
+        limit=1,
+    )
+    prompt_snapshot_content = _envelope_content(prompt_snapshot)
+    prompt_snapshot_system = str(prompt_snapshot["prompt_envelope"].get("system") or "")
+    prompt_snapshot_messages = [
+        str(message.get("content") or "")
+        for message in prompt_snapshot["prompt_envelope"].get("messages", [])
+    ]
+    prompt_snapshot_source_ids = prompt_snapshot["prompt_envelope"]["metadata"].get("source_ids", [])
+    _append_result(
+        results,
+        "prompt_envelope_contains_selected_content_only",
+        "MEMORY_TREE_SUPPLEMENT" not in prompt_snapshot_system
+        and len(prompt_snapshot_messages) >= 2
+        and "<<< MEMORY_TREE_SUPPLEMENT >>>" in prompt_snapshot_messages[1]
+        and "Expanded content:" in prompt_snapshot_messages[1]
+        and "Statamic" in prompt_snapshot_messages[1]
+        and "forbidden-full-graph-marker" not in prompt_snapshot_content
+        and "dragonfly-private" not in prompt_snapshot_content
+        and "conformance://professional-memory" in prompt_snapshot_source_ids
+        and "conformance://unselected-prompt-memory" not in prompt_snapshot_source_ids,
+        {
+            "selected_branch_ids": prompt_snapshot["selected_branch_ids"],
+            "source_ids": prompt_snapshot_source_ids,
+            "message_count": len(prompt_snapshot_messages),
         },
     )
     _append_result(
@@ -1385,6 +1435,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
     scenario_ids = {str(item.get("id")) for item in data.get("scenarios", [])}
     required = {
         "professional_memory_injected_with_provenance",
+        "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",
         "personal_lane_absent_from_derived_surfaces",
         "stored_read_policy_denies_injection",
