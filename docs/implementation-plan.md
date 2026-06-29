@@ -3,23 +3,77 @@
 This is the v1 implementation plan for Agent Memory Kernel.
 
 Agent Memory Kernel is a universal, local-first, auditable memory kernel. It is
-not a Hermes rollout, not an SEO workflow, not a hosted product, and not an
-agent runtime. Runtime adapters, domain packs, hosted services, MCP/HTTP
-surfaces, dashboards, embeddings, and provider integrations can exist, but they
-must consume the kernel contract instead of defining it.
+not a Hermes rollout, not an SEO workflow, not a hosted SaaS, and not an agent
+runtime. Adapters, domain packs, UIs, hosted services, provider integrations,
+embeddings, MCP/HTTP surfaces, dashboards, and demos may exist, but they must
+consume the kernel contract instead of defining it.
 
-The governing documents are [what-is-amk.md](what-is-amk.md),
-[../SPEC.md](../SPEC.md), [kernel-charter.md](kernel-charter.md),
-[amk-000-kernel-invariants.md](amk-000-kernel-invariants.md),
-[backlog-cutover.md](backlog-cutover.md), [adapter-contract.md](adapter-contract.md),
-[threat-model.md](threat-model.md), and
-[invariant-verifier-map.md](invariant-verifier-map.md). Current evidence is tracked
-in [core-status-audit.md](core-status-audit.md).
+The plan is gate-driven. V1 is not complete because a feature exists; it is
+complete only when the local kernel proves the required memory behavior through
+deterministic tests, golden traces, and conformance scenarios.
 
-## V1 Acceptance Test
+## Governing Documents
 
-V1 is complete when a fresh local store can prove this loop without a live model
-provider, hosted service, private runtime, or domain-specific project data:
+The normative project boundary is defined by:
+
+- [what-is-amk.md](what-is-amk.md)
+- [../SPEC.md](../SPEC.md)
+- [kernel-charter.md](kernel-charter.md)
+- [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md)
+- [backlog-cutover.md](backlog-cutover.md)
+- [adapter-contract.md](adapter-contract.md)
+- [threat-model.md](threat-model.md)
+- [invariant-verifier-map.md](invariant-verifier-map.md)
+- [core-status-audit.md](core-status-audit.md)
+
+If those documents disagree, the kernel charter, AMK-000 invariants, and the
+machine-readable contract are the source of truth.
+
+## Artifact Classes
+
+Every file, API, command, example, and roadmap item should be labeled mentally
+as one of these artifact classes before it becomes release work.
+
+| Class | Meaning | V1 release blocker |
+| --- | --- | --- |
+| `core spec` | Required kernel behavior and public semantics. | Yes |
+| `reference implementation` | Local SQLite implementation of the core spec. | Yes, when it proves core behavior |
+| `conformance fixture` | Golden traces, tests, and fixtures that prove the spec. | Yes |
+| `extension example` | Adapters, UIs, domain packs, provider hooks, hosted paths, and demos. | No |
+
+This boundary prevents extension work from becoming core through documentation
+gravity. HTTP/MCP, browser UI, notifications, billing, Digital Brain UX,
+embeddings, Hermes, SEO packs, hosted mode, provider formatters, and demos are
+extension examples unless they are used only as thin conformance consumers.
+
+## V1 Core Manifest
+
+V1 core includes only behavior required to own local memory truth safely.
+
+| Area | Artifact class | Required v1 behavior |
+| --- | --- | --- |
+| Local store | `reference implementation` | SQLite source of truth, migrations, transactions, status. |
+| Source events and saved turns | `core spec` + `reference implementation` | Append observed evidence and saved exchanges before memory extraction. |
+| Candidate memory | `core spec` + `reference implementation` | Proposed memory remains reviewable, quarantined, or policy-promoted. |
+| Active memory | `core spec` + `reference implementation` | Reviewed or policy-approved memory can be retrieved and later corrected, distrusted, deleted, expired, superseded, or rolled back. |
+| Scope, lane, namespace | `core spec` | Generic isolation primitive for reads, writes, prompt injection, export, lifecycle, and graph surfaces. |
+| Default packs | `extension example` + `conformance fixture` | Personal/professional are starter fixtures proving the generic isolation model, not the ontology. |
+| Graph and evidence | `core spec` + `reference implementation` | Nodes, edges, evidence links, and derivations cannot bypass lifecycle or policy. |
+| Keeper contract | `core spec` | Post-turn writer proposes candidates and graph commands; it does not silently trust unsafe claims. |
+| Router contract | `core spec` | Pre-call reader selects allowed, relevant, budgeted memory; the main agent never scans the full graph. |
+| Prompt envelope | `core spec` | Provider-neutral selected-memory payload with provenance, reasons, warnings, and budget metadata. |
+| Review lifecycle | `core spec` + `reference implementation` | Approve, reject, correct, delete, distrust, expire, supersede, quarantine, and rollback are auditable and policy-gated. |
+| Policy and capabilities | `core spec` | Read, write, inject, export, lifecycle, and redaction decisions fail closed and explain denials. |
+| Explainability | `core spec` | Explain why memory exists, why it was rejected, why it was retrieved, why it was omitted, and why it was denied. |
+| Import/export | `core spec` + `reference implementation` | Preserve provenance, lifecycle, tombstones, review history, review queues, trust state, policy metadata, evidence chains, and derived invalidations. |
+| Versioning and recovery | `core spec` + `reference implementation` | Version schema/contract/bundles, handle migrations, backups, corrupted stores, interrupted writes, and cross-version imports. |
+| Conformance | `conformance fixture` | Provider-free golden traces prove the full loop and safety invariants. |
+
+## V1 Acceptance Loop
+
+V1 is complete when a fresh local store can prove this loop without a live
+model provider, hosted service, private runtime, domain project, or extension
+adapter:
 
 ```text
 source event
@@ -27,231 +81,98 @@ source event
 -> review or policy decision
 -> active memory
 -> graph/evidence model
--> Router-selected context pack
+-> Router-selected context
 -> provider-neutral prompt envelope
 -> saved turn
 -> Keeper proposal for the next memory update
 ```
 
-Every transition must be auditable. Every selected memory item must have
-provenance and a selection reason. The main agent must never scan the full
-graph; it receives only selected, policy-filtered, budgeted memory.
+Required proof:
 
-## Core Boundary
+- every transition is auditable;
+- every selected memory item has provenance and a selection reason;
+- the main agent receives selected memory, not tags only and not the full graph;
+- denied, inactive, unsafe, cross-scope, or stale memory fails closed;
+- import/export preserves memory state without reviving unsafe content.
 
-V1 core includes only behavior that changes memory truth, safety, lifecycle,
-retrieval, prompt injection, portability, or conformance.
+## Non-Negotiable Invariants
 
-Core includes:
+These are the release laws for v1:
 
-- SQLite local-first reference storage and migrations.
-- Raw source events and saved turns.
-- Candidate memories and active memories.
-- Generic `scope`, `lane`, `namespace`, `actor`, `policy`, and `surface`
-  primitives.
-- The shipped personal/professional starter pack as a default policy pack, not
-  as the only valid ontology. See [default-packs.md](default-packs.md).
-- Graph nodes, graph edges, evidence links, and derivation links.
-- Keeper proposal contract.
-- Router retrieval contract.
-- Provider-neutral prompt envelope and selected Memory Tree Supplement
-  contract.
-- Review lifecycle: approve, reject, correct, delete, distrust, expire,
-  supersede, quarantine, and rollback.
-- Read, write, export, inject, lifecycle, and redaction policies.
-- Audit trails and explainability for why memory exists and why it was shown.
-- Import/export with provenance, tombstones, trust state, review history,
-  review queues, policy metadata, lifecycle state, evidence chains, and derived
-  invalidations.
-- Deterministic ranking without mandatory embeddings.
-- Conformance scenarios, golden traces, and local resource budgets.
+1. The main agent never scans raw memory or the full graph.
+2. Router output is selected, policy-filtered, budgeted, and explainable.
+3. Keeper writes are reviewable by default unless explicit policy allows
+   promotion.
+4. Scope, lane, namespace, personal, and private boundaries hold across
+   storage, retrieval, prompt, graph, summary, export, import, and audit.
+5. Every active memory can answer: why remembered, from what evidence, under
+   what policy, where it may appear, and how to revoke it.
+6. Deleted, distrusted, expired, superseded, quarantined, rejected, pending, or
+   denied memory cannot reappear through retained evidence or derived surfaces.
+7. Prompt envelopes are provider-neutral and do not depend on renderer,
+   provider, adapter, or domain semantics.
+8. Import/export is atomic, versioned, provenance-preserving, and fail-closed
+   under partial, hostile, redacted, corrupted, or cross-version inputs.
+9. Deterministic local retrieval works without embeddings or provider rerankers.
+10. V1 claims are backed by conformance fixtures, not prose.
 
-Not core for v1:
+## Core Gates
 
-- Hermes rollout or any named runtime rollout.
-- SEO loop traces or any domain pack as an architecture requirement.
-- Hosted identity, tenancy, RBAC, team administration, hosted dashboards,
-  hosted billing, hosted sync, or hosted collaboration.
-- Remote MCP deployment, hosted API deployment, managed schedulers, managed
-  alerts, live notification transports, KMS, or managed off-host backup.
-- ANN/vector search as required infrastructure, live embedding provider
-  certification, live provider prompt certification, or advanced graph
-  compaction.
-- Browser UI, rich graph UI, dashboards, billing reports, notification queues,
-  markdown vault adapters, full agent turn runners, and domain demos as v1
-  blockers.
+Each gate must have docs, code paths, unit tests, and conformance evidence where
+applicable. A gate can use existing implementation, but it is not closed until
+the proof is explicit.
 
-Those items may remain under `adapters/`, `examples/`, `extensions/`, or a
-later hosted roadmap. They must not be needed to understand, install, verify, or
-use the local kernel.
+### Gate 0: Normative Boundary
 
-## Public Model
-
-The public project should answer four questions:
-
-- What was stored?
-- Who or what is allowed to read it?
-- How can it be corrected, hidden, distrusted, exported, or deleted?
-- Why did the agent receive this memory for this request?
-
-Glossary:
-
-- `source_event`: raw observed evidence such as a message, tool result, import,
-  document excerpt, or maintenance event.
-- `candidate_memory`: proposed durable memory awaiting review or policy
-  promotion.
-- `active_memory`: reviewed or policy-approved memory that can enter retrieval.
-- `scope`: access boundary for read, write, inject, lifecycle, and export.
-- `lane`: policy grouping inside or across scopes. `personal` and
-  `professional` are starter lanes.
-- `namespace`: stable owner or package boundary for projects, agents,
-  workspaces, apps, or imports.
-- `surface`: where memory can appear: prompt, export, graph browser, summary,
-  API response, review queue, or audit report.
-- `policy`: local rules that decide read, write, inject, export, lifecycle, and
-  redaction behavior.
-- `Keeper`: post-turn writer that proposes candidates and graph commands after
-  a turn is saved.
-- `Router`: pre-call reader that selects allowed, relevant, budgeted memory.
-- `prompt envelope`: provider-neutral payload for the main model.
-- `Memory Tree Supplement`: optional renderer over selected memory, not the
-  source of truth.
-
-The default personal/professional pack contract is exposed through
-`memory_contract()["default_packs"]`.
-
-## Gates
-
-Work is complete only when the matching gate has evidence.
-
-| Gate | Required proof |
-| --- | --- |
-| Boundary | The item is classified as `core`, `extension`, or `later-hosted`; non-core work is not a v1 blocker. |
-| Kernel law | Schema, docs, and machine-readable contract describe the same primitives, lifecycle states, and policies. |
-| Invariants | Each AMK-000 law maps to code paths, audit events, unit tests, and conformance scenarios. |
-| Local loop | The source-event -> prompt-envelope -> Keeper-proposal loop runs locally with deterministic fallbacks. |
-| Lifecycle safety | Deleted, distrusted, expired, superseded, quarantined, denied, or cross-scope memory cannot reach prompt, graph, summary, export, or derived surfaces. |
-| Policy and capability | Local actors can perform only allowed actions; denied actions are auditable and non-mutating. |
-| Prompt boundary | Prompt envelopes include selected, filtered, budgeted content only, never the full graph. |
-| Portability | Import/export preserves ids, provenance, tombstones, trust state, review history, review queues, policy metadata, lifecycle state, evidence chains, and derived invalidations. |
-| Recovery | Migration, backup, restore, rollback, interrupted import/export, corrupted-store, and partial-write behavior fail closed or recover deterministically. |
-| Resource budget | Large stores have bounded retrieval, prompt size, export size, and local latency/resource fixtures. |
-
-## Phase 0: Scope Reset
-
-Goal: make the repository read as a kernel before adding more surface area.
+Goal: make the repository read as a kernel before any more feature work.
 
 Tasks:
 
-1. Keep one public promise: local-first, auditable agent memory.
-2. Maintain `core`, `extension`, and `later-hosted` labels in
-   [backlog-cutover.md](backlog-cutover.md).
-3. Keep Hermes, SEO, hosted, UI, MCP/HTTP deployment, provider, notifications,
-   billing, and dashboard work out of v1 completion criteria.
-4. Keep personal/professional as the default pack over generic lane policy.
-5. Keep Memory Tree as a renderer over selected memory, not the ontology.
-6. Keep glossary and "is / is not" language plain enough for a new GitHub
-   reader.
+1. Keep `core spec`, `reference implementation`, `conformance fixture`, and
+   `extension example` labels consistent in docs and roadmap language.
+2. Keep Hermes, SEO, hosted, UI, MCP/HTTP deployment, provider, billing,
+   notification, embedding, and dashboard work out of v1 completion criteria.
+3. Keep personal/professional as starter fixtures over generic lane policy.
+4. Keep Memory Tree and Digital Brain language as optional renderers over
+   selected memory, not the kernel ontology.
+5. Keep glossary language plain enough for a new contributor to explain
+   `scope`, `lane`, `namespace`, `candidate`, `active memory`, `evidence`,
+   `Router`, `Keeper`, and `prompt envelope`.
 
 Done when:
 
-- a contributor can tell what belongs to v1 core;
-- examples and adapters cannot accidentally become architecture;
+- a contributor can tell what is core and what is extension;
+- extension examples can be deleted without changing the kernel contract;
 - [core-status-audit.md](core-status-audit.md) lists only true kernel blockers.
 
 Verification:
 
 ```bash
-rg -n "core|extension|later-hosted|not core|not a hosted|not a Hermes|Memory Tree" README.md SPEC.md docs
+rg -n "Hermes|SEO|hosted|billing|notification|Digital Brain|embedding|MCP|HTTP" README.md SPEC.md docs
+rg -n "core spec|reference implementation|conformance fixture|extension example|core|extension|later-hosted" README.md SPEC.md docs
 ```
 
-## Phase 1: Kernel Schema And Laws
+### Gate 1: Core Loop Golden Trace
 
-Goal: lock the normative data model and safety laws.
+Goal: prove the smallest complete memory loop end to end.
 
 Tasks:
 
-1. Version schema for source events, turns, candidates, active memories,
-   evidence, graph nodes/edges, lanes, namespaces, policies, capability grants,
-   reviews, tombstones, revisions, audit records, and derived invalidations.
-2. Define allowed lifecycle transitions and blocked transitions.
-3. Define policy inheritance across prompt, graph, summary, export, review, and
-   derived surfaces.
-4. Keep the threat model current for prompt injection, malicious imports,
-   distrusted evidence, private-lane leaks, stale evidence revival, partial
-   writes, corrupted stores, and audit tampering.
-5. Keep schema, contract, bundle, conformance, lifecycle, and policy versions
-   visible in the local status surface.
+1. Seed a source event and saved turn.
+2. Produce a candidate memory with provenance.
+3. Promote it through review or explicit write policy.
+4. Link it to graph/evidence.
+5. Select it through Router retrieval.
+6. Build a provider-neutral prompt envelope.
+7. Save the next turn.
+8. Produce a Keeper proposal for the next update.
+9. Record audit entries for each transition.
 
 Done when:
 
-- docs and `memory_contract()` describe the same kernel law;
-- adapters cannot define their own lifecycle semantics;
-- breaking changes require version and migration/conformance evidence.
-
-Verification:
-
-```bash
-PYTHONPATH=src python3 -m unittest tests.test_memory_store tests.test_contract_acceptance
-```
-
-## Phase 2: Executable Invariant Harness
-
-Goal: make memory-safety laws executable before claiming completion.
-
-Tasks:
-
-1. Maintain invariant -> schema/table -> store path -> read path -> audit event
-   -> unit test -> conformance scenario mapping.
-2. Keep golden traces for deletion, distrust, correction, rollback,
-   expiration, supersession, quarantine, lane/scope/namespace isolation,
-   deterministic ranking, prompt budget trimming, export/import, recovery, and
-   no-full-graph prompts.
-3. Add negative fixtures for poisoned imports, malicious bundles, distrusted
-   evidence, denied scopes, stale retained evidence, and policy bypass.
-4. Keep conformance runnable with no private data and no live provider.
-5. Make failures name the memory id, source id, policy decision, and blocked
-   surface where possible.
-
-Done when:
-
-- every AMK-000 invariant has an executable verifier;
-- a new adapter can run conformance locally and understand failures;
-- the invariant map and machine-readable contract stay synchronized.
-
-Verification:
-
-```bash
-PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance seed --db /tmp/amk-conformance.db
-PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance run --db /tmp/amk-conformance.db
-PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
-PYTHONPATH=src python3 -m unittest tests.test_contract_acceptance tests.test_memory_store
-```
-
-## Phase 3: Local Reference Loop
-
-Goal: prove the baseline loop end to end with SQLite and deterministic logic.
-
-Tasks:
-
-1. Persist saved turns and raw source events before Keeper extraction.
-2. Let Keeper propose candidates and graph commands without silently trusting
-   assistant, tool, web, external document, or imported claims.
-3. Promote candidates only through review or explicit write policy.
-4. Let Router retrieve active memory through lifecycle, trust, sensitivity,
-   scope, lane, namespace, conflict, capability, and budget filters.
-5. Build prompt envelopes containing selected content, provenance, reasons,
-   warnings, and budget metadata.
-6. Keep no-memory, failed-Keeper, and failed-Router fallbacks explicit and
-   auditable.
-7. Persist prompt snapshots that show exactly what was injected.
-
-Done when:
-
-- the deterministic vertical slice passes;
-- the main model receives selected memory, not tags and not the full graph;
-- inactive, unsafe, denied, or cross-scope memory stays out of prompt-facing
-  retrieval.
+- the full loop passes from an empty local SQLite store;
+- the loop requires no provider, runtime adapter, hosted service, or domain data;
+- failures name the memory id, source id, policy decision, and failed surface.
 
 Verification:
 
@@ -259,99 +180,209 @@ Verification:
 PYTHONPATH=src python3 -m agent_memory_kernel.cli slice seed --db /tmp/amk-slice.db
 PYTHONPATH=src python3 -m agent_memory_kernel.cli slice run --db /tmp/amk-slice.db
 PYTHONPATH=src python3 -m agent_memory_kernel.cli slice assert --db /tmp/amk-slice.db
-PYTHONPATH=src python3 -m unittest tests.test_orchestrator tests.test_worker tests.test_memory_store
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance seed --db /tmp/amk-conformance.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
 ```
 
-## Phase 4: Review And Explainability
+### Gate 2: Lifecycle Propagation
 
-Goal: make memory inspectable, correctable, permissioned, and auditable.
+Goal: ensure memory state changes affect every derived and prompt-facing
+surface.
 
 Tasks:
 
-1. Keep approve, reject, correct, delete, distrust, expire, supersede,
-   quarantine, and rollback available through stable local APIs.
-2. Enforce local actor/capability grants for read, write, inject, export, and
-   lifecycle actions.
-3. Add or strengthen policy dry-run output for allowed and denied operations.
-4. Add or strengthen human-readable diffs for memory changes.
-5. Expose "why this memory exists": source evidence, reviewer, scope, lane,
-   namespace, policy decision, trust state, lifecycle history, and audit trail.
-6. Expose "why this memory was shown": Router run, score, selection reason,
-   prompt role, budget decision, warning, and prompt snapshot.
-7. Ensure derived graph, summary, export, prompt, and style surfaces inherit
-   lifecycle restrictions.
+1. Prove correction updates active retrieval, graph summaries, compact memory,
+   prompt envelopes, exports, and derived invalidation records.
+2. Prove rollback restores the prior state and invalidates stale derived data.
+3. Prove delete, distrust, expire, supersede, quarantine, reject, and pending
+   states stay out of retrieval, graph, summary, export, and prompt surfaces.
+4. Prove retained source evidence cannot reactivate inactive memory.
+5. Prove lifecycle tombstones survive export/import without becoming active.
+
+Done when:
+
+- every lifecycle mutation has a cross-surface verifier;
+- derived invalidation records explain what was refreshed or hidden;
+- inactive memory remains auditable but not prompt-facing.
+
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_memory_store tests.test_contract_acceptance
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
+```
+
+### Gate 3: Scope, Lane, And Namespace Isolation
+
+Goal: prove access boundaries with adversarial fixtures, not prose.
+
+Tasks:
+
+1. Test personal/professional as starter fixtures over the generic policy
+   model.
+2. Add namespace-specific fixtures for projects, agents, imports, and bundles.
+3. Prove denied memory is absent from prompts, tree packs, graph browser data,
+   summaries, semantic analyses, exports, and API responses.
+4. Prove cross-lane or cross-namespace access requires explicit policy and is
+   visible in prompt metadata and audit.
+5. Preserve denied policy paths across export/import.
+
+Done when:
+
+- no prompt, graph, summary, export, or audit surface leaks cross-boundary
+  content by default;
+- personal/professional proves isolation without becoming the only ontology;
+- denied access is explainable and non-mutating.
+
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_memory_store tests.test_contract_acceptance tests.test_http_auth
+```
+
+### Gate 4: Trust And Explainability
+
+Goal: make every memory decision inspectable.
+
+Tasks:
+
+1. Expose why a memory exists: source event, candidate, reviewer or policy
+   decision, scope/lane/namespace, trust state, sensitivity, graph/evidence,
+   lifecycle history, audit trail, and revocation handles.
+2. Expose why a candidate was rejected or quarantined.
+3. Expose why a memory was retrieved: Router run, score, selection reason,
+   warning, prompt role, budget decision, and prompt snapshot.
+4. Expose why memory was omitted or denied: policy match, lifecycle state,
+   trust state, scope boundary, budget, conflict, or safety reason.
+5. Keep explainability available through the stable local surface first; HTTP
+   and MCP may mirror it only as extension adapters.
 
 Done when:
 
 - a reviewer can inspect evidence before promotion;
-- denied actions are auditable and do not mutate state;
-- lifecycle changes are reflected in all prompt-facing and export-facing
-  surfaces.
+- an operator can explain any read, write, denial, lifecycle change, and prompt
+  injection;
+- denied actions are auditable and do not mutate memory state.
 
 Verification:
 
 ```bash
 PYTHONPATH=src python3 -m unittest tests.test_review_inbox tests.test_memory_store tests.test_operational_failure
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
 ```
 
-## Phase 5: Durability, Recovery, And Portability
+### Gate 5: Router And Prompt Boundary
+
+Goal: prove the main agent receives only selected, allowed, budgeted memory.
+
+Tasks:
+
+1. Add tests that fail if prompt construction bypasses Router selection.
+2. Prove prompt envelopes never include the full graph, raw event stream, or
+   unauthorized memory.
+3. Keep selected content richer than tags: branch labels, active memory text,
+   provenance, reasons, warnings, and budget metadata.
+4. Lock deterministic ranking under fixed inputs.
+5. Add prompt budget, token-pressure, latency, and large-history fixtures.
+6. Keep embeddings, ANN, and provider rerankers as optional post-policy
+   enhancers, not required retrieval infrastructure.
+7. Keep provider formatters from moving retrieved memory into unsafe
+   high-priority system surfaces.
+
+Done when:
+
+- Router receives graph/store access, but the main model receives only the
+  filtered envelope;
+- large local histories remain bounded;
+- retrieval works deterministically without live providers or embeddings.
+
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_memory_store tests.test_embeddings_contract tests.test_contract_acceptance
+```
+
+### Gate 6: Keeper Safety
+
+Goal: make the post-turn writer useful without silently trusting bad memory.
+
+Tasks:
+
+1. Keep assistant, tool, web, external document, and imported claims reviewable
+   by default.
+2. Quarantine secret-like and prompt-injection-like content.
+3. Add fixtures for false positives, retries, dedupe, contradiction, deletion,
+   policy denial, and partial Keeper failure.
+4. Ensure Keeper graph commands are normalized, auditable, and linked to source
+   evidence.
+5. Ensure failed Keeper runs are visible and do not block no-memory fallback.
+
+Done when:
+
+- Keeper improves memory without bypassing review or policy;
+- unsafe or unsupported claims do not become active facts silently;
+- retry and dedupe behavior is deterministic.
+
+Verification:
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_llm_keeper_contract tests.test_keeper_eval tests.test_worker tests.test_memory_store
+```
+
+### Gate 7: Portability, Recovery, And Versioning
 
 Goal: make memory durable and movable without reviving unsafe state.
 
 Tasks:
 
-1. Keep schema migration status, migration changelog, backup, restore, and
-   restore-drill behavior versioned and testable.
-2. Add fixtures for failed migrations, partial writes, interrupted exports,
-   interrupted imports, corrupted SQLite, stale backups, and oversized stores.
-3. Define portable `.amk` bundle semantics with schema, contract, lifecycle,
-   policy, conformance, checksum, and redaction metadata.
-4. Preserve ids, provenance, graph/evidence chains, trust state, review
+1. Preserve ids, provenance, graph/evidence chains, trust state, review
    history, pending/rejected review queues, policy metadata, tombstones,
    lifecycle state, and derived invalidations.
-5. Keep redacted bundles from restoring hidden content.
-6. Keep deleted, distrusted, expired, superseded, quarantined, rejected, pending,
-   and denied memory inactive after import unless a later explicit review or
-   policy action changes it.
-7. Add cross-version import/export fixtures before declaring public stability.
+2. Keep redacted exports from restoring hidden content.
+3. Keep pending, rejected, inactive, distrusted, deleted, expired, superseded,
+   quarantined, denied, or unsafe memory inactive after import.
+4. Add fixtures for partial bundles, hostile bundles, unknown adapters,
+   interrupted export, interrupted non-bundle import, corrupted SQLite,
+   cross-version bundles, stale backups, and oversized stores.
+5. Keep schema, contract, bundle, lifecycle, policy, migration, and
+   compatibility versions visible in status.
+6. Add audit-chain checks for imported or subset histories.
 
 Done when:
 
-- a profile or bundle can move between local stores without changing lifecycle
-  semantics;
-- adversarial imports cannot activate unsafe or inactive memory;
-- recovery checks fail closed with readable operator output.
+- profile or bundle movement does not change lifecycle semantics;
+- adversarial imports fail closed;
+- recovery checks produce readable operator output.
 
 Verification:
 
 ```bash
 PYTHONPATH=src python3 -m unittest tests.test_backup_migration tests.test_memory_store tests.test_contract_acceptance
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
 ```
 
-## Phase 6: Public Surface And Adapter Contract
+### Gate 8: Public Local Surface
 
 Goal: let outside runtimes use the kernel without copying internals.
 
 Tasks:
 
-1. Freeze the stable local Python and CLI surface for init, record, review,
+1. Freeze stable local Python and CLI surfaces for init, record, review,
    retrieve, explain, lifecycle, import, export, conformance, and status.
-2. Expose schema, contract, conformance, bundle, lifecycle, policy, and
-   migration compatibility status.
-3. Document adapter capability levels: read-only, write-capable,
-   lifecycle-capable, graph-capable, export-capable, and prompt-injection
-   capable. See [adapter-contract.md](adapter-contract.md).
-4. Treat HTTP/MCP as optional adapters over the same contract, not separate
-   truth paths.
-5. Keep provider prompt formatters and embeddings as optional extension checks
-   after policy filtering.
-6. Keep adapter certification local and reproducible.
+2. Expose schema, contract, conformance, bundle, lifecycle, policy, migration,
+   and compatibility status.
+3. Keep HTTP/MCP as optional mirrors over the same contract, not separate truth
+   paths.
+4. Keep adapter capability levels local and provider-free:
+   `read-only`, `write-capable`, `lifecycle-capable`, `graph-capable`,
+   `export-capable`, and `prompt-injection-capable`.
+5. Keep adapter certification reproducible without private project data.
 
 Done when:
 
-- a new adapter can run conformance without private project assumptions;
-- local API/CLI versioning is visible and testable;
-- optional HTTP/MCP/provider surfaces cannot bypass policy checks.
+- a new adapter can run conformance locally;
+- optional HTTP/MCP/provider surfaces cannot bypass policy checks;
+- local API/CLI versioning is visible and testable.
 
 Verification:
 
@@ -359,61 +390,104 @@ Verification:
 PYTHONPATH=src python3 -m unittest tests.test_contract_acceptance tests.test_mcp_server tests.test_http_auth
 ```
 
-## Phase 7: Public V1 Package And Universal Demo
+### Gate 9: Public V1 Package
 
-Goal: make the repository shareable without making examples part of the core.
+Goal: make the repository shareable as a kernel.
 
 Tasks:
 
-1. Keep one canonical universal demo: local conversation memory with review,
-   correction, deletion, distrust, retrieval, prompt envelope, and export/import.
-2. Keep personal/professional templates as default starter packs over generic
-   policy primitives.
-3. Keep all runtime/domain examples thin and explicitly optional.
-4. Publish a release checklist: conformance, migrations, recovery, prompt
+1. Keep one canonical universal demo that proves the core loop with review,
+   correction, deletion, distrust, retrieval, prompt envelope, and
+   export/import.
+2. Keep runtime/domain examples thin and explicitly optional.
+3. Publish a release checklist: conformance, migrations, recovery, prompt
    snapshots, export/import, latency/resource fixture, and docs links.
+4. Ensure examples can be removed without changing the kernel contract.
 5. Keep hosted/platform/domain/provider items out of v1 completion criteria.
 
 Done when:
 
-- a public user can install, run the demo, inspect memory, correct it, retrieve
-  it, export/import it, and run conformance locally;
-- examples can be deleted without changing the kernel contract;
-- extension docs point back to the charter, AMK-000, and conformance suite.
+- a public user can install, initialize, record, review, retrieve, explain,
+  correct, delete, export/import, and run conformance locally;
+- the README points to the core spec before optional extensions;
+- every v1 claim is backed by a command or test.
 
 Verification:
 
 ```bash
-rg -n "optional|example|extension|kernel contract|AMK-000|conformance" README.md docs examples templates
 PYTHONPATH=src python3 -m unittest discover -s tests
+PYTHONPATH=src python3 -m agent_memory_kernel.cli contract assert
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance spec-assert
 ```
 
-## Phase 8: Optional Enhancements After V1
+## Deferred Extensions
 
-Goal: add power without making the kernel heavier.
+The following tracks are useful, but they are not v1 core blockers:
 
-Allowed extension tracks:
-
-- Runtime adapters for chat apps, coding agents, Hermes, LangGraph, AutoGen,
-  CrewAI, OpenAI Agents SDK, Claude/Codex-style workflows, and CLI scripts.
-- Domain packs for SEO, research, support, CRM, QA, and outcome loops.
-- Notes/document/vault importer-exporter bridges.
-- HTTP/MCP services and richer local UI.
+- Hermes, Codex, chat-agent, coding-agent, LangGraph, AutoGen, CrewAI, and
+  OpenAI Agents SDK adapters.
+- SEO, research, support, CRM, QA, outcome-loop, project, agent, and session
+  packs beyond fixtures needed for isolation tests.
+- HTTP/MCP deployment, remote MCP hosting, and richer local UI.
+- Browser review UI, graph UI, dashboards, billing reports, notifications, and
+  external sender bridges.
+- Digital Brain and Memory Tree presentation beyond selected-memory renderers.
 - Optional embeddings, ANN indexes, provider rerankers, and live provider
   certification.
-- Notification senders, managed schedulers, hosted sync, hosted teams, hosted
-  dashboards, billing operations, and cloud custody.
+- Provider-specific prompt formatters beyond boundary-preservation tests.
+- Markdown vaults, document importers, task-tool bridges, and sync adapters.
+- Hosted identity, tenancy, RBAC, teams, hosted dashboards, hosted registry,
+  managed alerts, schedulers, KMS, cloud custody, and hosted collaboration.
 
-Rules:
+Extension rules:
 
 1. Extensions consume the kernel contract.
-2. Extensions run after policy filtering, not before it.
+2. Extensions run after policy and lifecycle filtering.
 3. Extensions are not required for deterministic v1 conformance.
-4. Extensions cannot weaken AMK-000 memory-safety invariants.
+4. Extensions cannot weaken AMK-000 invariants.
 5. Hosted work stays in [hosted-roadmap.md](hosted-roadmap.md).
 
-Verification:
+## Execution Order
+
+Use this order for implementation. Do not add extension work until the matching
+core gate is closed.
+
+1. Freeze this implementation plan and keep [core-status-audit.md](core-status-audit.md)
+   synchronized with gate status.
+2. Add or update conformance scenarios for the full v1 loop before adding more
+   feature code.
+3. Close lifecycle propagation gaps.
+4. Close scope/lane/namespace isolation gaps.
+5. Add stable why-remembered, why-rejected, why-retrieved, why-omitted, and
+   why-denied explainability surfaces.
+6. Harden Router budget, deterministic ranking, prompt-envelope boundaries,
+   and no-full-graph tests.
+7. Harden Keeper false-positive, retry, dedupe, contradiction, deletion, and
+   denial fixtures.
+8. Harden import/export, recovery, corrupted-store, interrupted-write, and
+   cross-version fixtures.
+9. Freeze local API/CLI/status surfaces and adapter capability contract.
+10. Run the public release checklist and only then polish extension examples.
+
+## Release Checklist
+
+V1 can be claimed only when these commands pass from a clean checkout:
 
 ```bash
+PYTHONPATH=src python3 -m agent_memory_kernel.cli contract assert
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance spec-assert
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice seed --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice run --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli slice assert --db /tmp/amk-slice.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance seed --db /tmp/amk-conformance.db
+PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance assert --db /tmp/amk-conformance.db
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
+
+Manual release review:
+
+- README states the kernel promise before extension features.
+- SPEC and machine-readable contract describe the same lifecycle and policy.
+- Invariant verifier map has no unmapped v1 law.
+- Core status audit has no `missing` or unresolved `partial` item for v1 gates.
+- Extension docs cannot be mistaken for v1 requirements.
