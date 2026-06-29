@@ -401,9 +401,9 @@ The conformance suite is the public compatibility layer. It checks named
 scenarios for professional memory injection, stored read-policy denial,
 personal-lane isolation, resolved conflict suppression, deleted-memory absence,
 unsafe-memory absence, reviewable/idempotent Keeper writes, and golden traces
-for outcome planning, graph evidence inspection, safe profile export,
-migration compatibility, and security red-team cases for secrets, tool output,
-assistant guesses, and personal export approval/redaction.
+for outcome planning, graph evidence inspection, safe profile export, lifecycle
+tombstone export, migration compatibility, and security red-team cases for
+secrets, tool output, assistant guesses, and personal export approval/redaction.
 Adapters can use it as the first "does this behave like Agent Memory Kernel?"
 gate. `conformance certify` wraps the same suite in an adapter certification
 report with pass/fail status, scenario counts, golden trace coverage, and a
@@ -500,6 +500,9 @@ vault, or backup ID.
 Use `--redaction-profile safe` or `--redaction-profile metadata` when the
 export should preserve structure while replacing memory content-bearing fields
 with explicit redaction markers. `full` is the default and includes content.
+Profile exports include a `memory_lifecycle` section so inactive memory remains
+auditable as tombstones, revisions, derived invalidations, and audit events
+without re-entering the active memory tree.
 When a `full` export includes personal or secret active memory, request and
 approve a one-time export approval before passing `--approval-id`.
 

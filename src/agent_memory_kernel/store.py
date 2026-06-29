@@ -5555,6 +5555,7 @@ class MemoryStore:
         payload = {
             "profile_notes": self.list_profile_notes(scope=scope),
             "project_profiles": [dict(row) for row in profiles],
+            "memory_lifecycle": self._export_memory_lifecycle(scope=scope),
             "memory_tree": {
                 "groups": self.list_graph_groups(scope=scope),
                 "nodes": self.list_graph_nodes(scope=scope, limit=500),
@@ -11178,8 +11179,11 @@ class MemoryStore:
                     (ts, graph_edge_id),
                 )
                 inactive_edges += max(int(cursor.rowcount or 0), 0)
+            else:
+                self._refresh_graph_edge_from_active_evidence(graph_edge_id, ts=ts)
 
         inactive_nodes = 0
+        refreshed_nodes = 0
         node_rows = self.conn.execute(
             """
             SELECT DISTINCT graph_node_id
@@ -11212,6 +11216,9 @@ class MemoryStore:
                     (ts, graph_node_id),
                 )
                 inactive_nodes += max(int(cursor.rowcount or 0), 0)
+            else:
+                if self._refresh_graph_node_from_active_evidence(graph_node_id, ts=ts):
+                    refreshed_nodes += 1
 
         for scope in sorted(affected_scopes):
             self._refresh_graph_groups(scope)
@@ -11223,6 +11230,7 @@ class MemoryStore:
             updated={
                 "memory_graph_groups": len(affected_scopes),
                 "digital_brain_state": len(affected_scopes),
+                "memory_graph_nodes_refreshed": refreshed_nodes,
             },
             invalidated={
                 "memory_graph_nodes": inactive_nodes,
@@ -11237,6 +11245,98 @@ class MemoryStore:
                 "outcome_lessons": "status_filtered_on_retrieval",
             },
         )
+
+    def _refresh_graph_node_from_active_evidence(self, graph_node_id: str, *, ts: str) -> bool:
+        row = self.conn.execute(
+            """
+            SELECT graph_node_id, node_type, label, summary
+            FROM memory_graph_nodes
+            WHERE graph_node_id = ?
+            """,
+            (graph_node_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        evidence_rows = self.conn.execute(
+            """
+            SELECT ne.quote
+            FROM node_evidence ne
+            JOIN memories m ON m.memory_id = ne.memory_id
+            JOIN memory_items mi ON mi.memory_id = m.memory_id
+            WHERE ne.graph_node_id = ?
+              AND m.status = 'active'
+              AND mi.status = 'active'
+            ORDER BY ne.created_at ASC
+            """,
+            (graph_node_id,),
+        ).fetchall()
+        quotes: list[str] = []
+        seen: set[str] = set()
+        for evidence in evidence_rows:
+            quote = str(evidence["quote"] or "").strip()
+            if not quote or quote in seen:
+                continue
+            seen.add(quote)
+            quotes.append(quote)
+        if not quotes:
+            return False
+        blob = "\n".join(f"- {excerpt(quote, 260)}" for quote in quotes)
+        label = str(row["label"])
+        node_type = str(row["node_type"])
+        summary = str(row["summary"] or "") or excerpt(blob, 180)
+        embedding_text = " ".join([label, summary, blob])
+        importance = min(1.0, 0.55 + (0.05 * max(0, len(quotes) - 1)))
+        self.conn.execute(
+            """
+            UPDATE memory_graph_nodes
+            SET updated_at = ?, blob = ?, importance = ?, topics_json = ?,
+                embedding_json = ?
+            WHERE graph_node_id = ?
+            """,
+            (
+                ts,
+                blob,
+                importance,
+                json.dumps(self._node_topics(node_type, label, blob), sort_keys=True),
+                json.dumps(lexical_embedding(embedding_text)),
+                graph_node_id,
+            ),
+        )
+        return True
+
+    def _refresh_graph_edge_from_active_evidence(self, graph_edge_id: str, *, ts: str) -> bool:
+        evidence_rows = self.conn.execute(
+            """
+            SELECT ee.memory_id, ee.event_id
+            FROM edge_evidence ee
+            JOIN memories m ON m.memory_id = ee.memory_id
+            JOIN memory_items mi ON mi.memory_id = m.memory_id
+            WHERE ee.graph_edge_id = ?
+              AND m.status = 'active'
+              AND mi.status = 'active'
+            ORDER BY ee.created_at ASC
+            """,
+            (graph_edge_id,),
+        ).fetchall()
+        if not evidence_rows:
+            return False
+        first = evidence_rows[0]
+        self.conn.execute(
+            """
+            UPDATE memory_graph_edges
+            SET updated_at = ?, status = 'active', evidence_count = ?,
+                source_memory_id = ?, source_event_id = ?
+            WHERE graph_edge_id = ?
+            """,
+            (
+                ts,
+                len(evidence_rows),
+                first["memory_id"],
+                first["event_id"],
+                graph_edge_id,
+            ),
+        )
+        return True
 
     def _refresh_graph_groups(self, scope: str) -> None:
         ts = now_iso()
@@ -12715,6 +12815,99 @@ class MemoryStore:
             "summaries": [dict(row) for row in summary_rows],
         }
 
+    def _export_memory_lifecycle(self, *, scope: str | None) -> dict[str, Any]:
+        memory_rows = self.conn.execute(
+            """
+            SELECT memory_id, candidate_id, created_at, updated_at, kind, scope,
+                   confidence, sensitivity, source_trust, status, expires_at,
+                   text
+            FROM memories
+            WHERE (? IS NULL OR scope = ?)
+            ORDER BY created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        memory_ids = [row["memory_id"] for row in memory_rows]
+
+        def rows_for_ids(sql: str) -> list[dict[str, Any]]:
+            if not memory_ids:
+                return []
+            placeholders = ",".join("?" for _ in memory_ids)
+            return [
+                dict(row)
+                for row in self.conn.execute(sql.format(placeholders=placeholders), tuple(memory_ids)).fetchall()
+            ]
+
+        revisions = rows_for_ids(
+            """
+            SELECT revision_id, memory_id, created_at, actor, previous_text,
+                   new_text, reason, rollback_of_revision_id, metadata_json
+            FROM memory_revisions
+            WHERE memory_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """
+        )
+        invalidations = rows_for_ids(
+            """
+            SELECT invalidation_id, created_at, memory_id, action, actor, scope,
+                   reason, surfaces_json, metadata_json
+            FROM derived_invalidations
+            WHERE memory_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """
+        )
+        audit = rows_for_ids(
+            """
+            SELECT audit_id, created_at, actor, action, target_type, target_id,
+                   details_json
+            FROM audit_log
+            WHERE target_type = 'memory'
+              AND target_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """
+        )
+
+        status_counts: dict[str, int] = {}
+        tombstones: list[dict[str, Any]] = []
+        memories: list[dict[str, Any]] = []
+        for row in memory_rows:
+            item = dict(row)
+            status = str(item.get("status") or "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            memories.append(item)
+            if status != "active":
+                tombstones.append(
+                    {
+                        "memory_id": item["memory_id"],
+                        "status": status,
+                        "updated_at": item["updated_at"],
+                        "scope": item["scope"],
+                        "kind": item["kind"],
+                        "source_trust": item["source_trust"],
+                        "candidate_id": item["candidate_id"],
+                    }
+                )
+
+        return {
+            "version": "memory-lifecycle-export-v0.1",
+            "scope": scope or "all",
+            "counts": {
+                "memories": len(memories),
+                "active": status_counts.get("active", 0),
+                "inactive": len(memories) - status_counts.get("active", 0),
+                "tombstones": len(tombstones),
+                "revisions": len(revisions),
+                "derived_invalidations": len(invalidations),
+                "audit_events": len(audit),
+            },
+            "status_counts": status_counts,
+            "memories": memories,
+            "tombstones": tombstones,
+            "revisions": revisions,
+            "derived_invalidations": invalidations,
+            "audit": audit,
+        }
+
     def _export_node_evidence(self, *, scope: str | None) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             """
@@ -12723,7 +12916,11 @@ class MemoryStore:
                    ne.confidence
             FROM node_evidence ne
             JOIN memory_graph_nodes gn ON gn.graph_node_id = ne.graph_node_id
+            JOIN memories m ON m.memory_id = ne.memory_id
+            JOIN memory_items mi ON mi.memory_id = m.memory_id
             WHERE gn.status = 'active'
+              AND m.status = 'active'
+              AND mi.status = 'active'
               AND (? IS NULL OR gn.scope = ?)
             ORDER BY ne.created_at ASC
             """,
@@ -12741,9 +12938,13 @@ class MemoryStore:
             JOIN memory_graph_edges ge ON ge.graph_edge_id = ee.graph_edge_id
             JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
             JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            JOIN memories m ON m.memory_id = ee.memory_id
+            JOIN memory_items mi ON mi.memory_id = m.memory_id
             WHERE ge.status = 'active'
               AND src.status = 'active'
               AND dst.status = 'active'
+              AND m.status = 'active'
+              AND mi.status = 'active'
               AND (? IS NULL OR src.scope = ?)
             ORDER BY ee.created_at ASC
             """,

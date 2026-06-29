@@ -120,6 +120,8 @@ Required propagation:
 - remove from FTS/vector retrieval;
 - mark graph nodes or edges inactive when they have no remaining active
   evidence;
+- refresh shared graph nodes and edges from remaining active evidence when only
+  some source memory was deleted;
 - record a `derived_invalidations` entry with inactive graph/evidence and
   prompt-pack/export/style surfaces;
 - invalidate summaries that depend only on deleted memory;
@@ -199,7 +201,11 @@ Export must include:
 
 - active memories;
 - review state;
-- corrections and deletions;
+- corrections, deletions, distrust, expiry, and other lifecycle tombstones;
+- lifecycle metadata for active and inactive memory;
+- memory revisions;
+- derived invalidation records;
+- lifecycle audit events;
 - source references;
 - graph nodes and edges;
 - evidence;
@@ -218,6 +224,7 @@ The lifecycle is not complete until tests cover:
 - correct -> old memory no longer retrieved;
 - rollback -> previous text is retrieved again and rollback revision is recorded;
 - delete -> derived graph edge removed or disabled;
+- delete -> shared active graph node rebuilt from remaining active evidence;
 - distrust -> memory visible in audit but absent from prompt;
 - conflict -> newer trusted memory wins;
 - resolved conflict -> loser is absent from prompt-facing tree/context retrieval;
@@ -225,3 +232,5 @@ The lifecycle is not complete until tests cover:
 - supersede -> old memory is absent from prompt and graph, resolved relation remains;
 - stale -> low-priority retrieval;
 - export/import -> lifecycle state preserved.
+- export -> inactive memory appears as lifecycle tombstones outside the active
+  prompt-facing memory tree.

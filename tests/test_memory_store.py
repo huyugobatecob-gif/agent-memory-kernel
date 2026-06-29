@@ -677,6 +677,83 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(profile["memory_tree"]["edge_evidence"], [])
             store.close()
 
+    def test_export_profile_preserves_lifecycle_tombstones_and_policy_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            active_id = store.remember(
+                "Decision: lifecycle-site active CMS is SQLite.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            deleted_id = store.remember(
+                "Decision: lifecycle-site retired plugin is GhostMarker.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            distrusted_id = store.remember(
+                "Decision: lifecycle-site unverified source says use BadSource.",
+                scope="professional",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            store.correct_memory(
+                active_id,
+                "Decision: lifecycle-site active CMS is DuckDB.",
+                actor="reviewer",
+                reason="user corrected CMS",
+            )
+            store.delete_memory(deleted_id, actor="reviewer", reason="plugin retired")
+            store.distrust_memory(distrusted_id, actor="reviewer", reason="source unreliable")
+
+            self.assertEqual(store.search("GhostMarker", scope="professional"), [])
+            self.assertEqual(store.search("BadSource", scope="professional"), [])
+            prompt = store.before_model_call(
+                "lifecycle-site memory status",
+                scope="professional",
+                allowed_scopes=["professional"],
+            )
+            prompt_text = json.dumps(prompt["prompt_envelope"], sort_keys=True)
+            self.assertNotIn("GhostMarker", prompt_text)
+            self.assertNotIn("BadSource", prompt_text)
+
+            profile = store.export_profile(scope="professional")
+            lifecycle = profile["memory_lifecycle"]
+            self.assertEqual(lifecycle["version"], "memory-lifecycle-export-v0.1")
+            self.assertEqual(lifecycle["counts"]["memories"], 3)
+            self.assertEqual(lifecycle["counts"]["active"], 1)
+            self.assertEqual(lifecycle["counts"]["inactive"], 2)
+            self.assertEqual(lifecycle["counts"]["tombstones"], 2)
+            self.assertEqual(lifecycle["status_counts"]["deleted"], 1)
+            self.assertEqual(lifecycle["status_counts"]["distrusted"], 1)
+            self.assertEqual(
+                {item["memory_id"] for item in lifecycle["tombstones"]},
+                {deleted_id, distrusted_id},
+            )
+            self.assertIn(
+                active_id,
+                {item["memory_id"] for item in lifecycle["revisions"]},
+            )
+            invalidation_actions = {
+                item["action"] for item in lifecycle["derived_invalidations"]
+            }
+            self.assertTrue({"correct", "delete", "distrust"}.issubset(invalidation_actions))
+            audit_actions = {item["action"] for item in lifecycle["audit"]}
+            self.assertTrue({"correct", "delete", "distrust"}.issubset(audit_actions))
+            self.assertEqual(profile["export_metadata"]["redaction"]["profile"], "full")
+            self.assertEqual(profile["export_metadata"]["approval"]["status"], "not_required")
+            self.assertEqual(profile["export_metadata"]["retention"]["status"], "active")
+
+            tree_text = json.dumps(profile["memory_tree"], sort_keys=True)
+            self.assertNotIn("GhostMarker", tree_text)
+            self.assertNotIn("BadSource", tree_text)
+
+            safe_profile = store.export_profile(scope="professional", redaction_profile="safe")
+            self.assertNotIn("GhostMarker", str(safe_profile))
+            self.assertIn("[redacted:safe:text]", str(safe_profile["memory_lifecycle"]))
+            store.close()
+
     def test_correct_memory_records_revision_and_rollback_restores_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

@@ -70,12 +70,14 @@ def conformance_spec() -> dict[str, Any]:
             {
                 "id": "safe_profile_export_trace",
                 "steps": [
-                    "seed active professional memory",
+                    "seed active and lifecycle-mutated professional memory",
                     "export the profile using the safe redaction profile",
                     "verify memory-tree shape is preserved but content-bearing fields are redacted",
+                    "verify lifecycle tombstones are preserved outside the active tree",
                 ],
                 "expected_scenarios": [
-                    "golden_trace_safe_export_redacts_memory_content"
+                    "golden_trace_safe_export_redacts_memory_content",
+                    "golden_trace_export_preserves_lifecycle_tombstones",
                 ],
             },
             {
@@ -215,6 +217,14 @@ def conformance_spec() -> dict[str, Any]:
                     "safe profile export preserves profile and graph shape",
                     "content-bearing memory fields are redacted",
                     "export metadata records redaction and retention policy",
+                ],
+            },
+            {
+                "id": "golden_trace_export_preserves_lifecycle_tombstones",
+                "requires": [
+                    "profile export includes lifecycle metadata for inactive memory",
+                    "deleted memory remains absent from the active memory tree",
+                    "tombstones preserve status, provenance handles, and auditability",
                 ],
             },
             {
@@ -920,6 +930,30 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "redacted_keys": redaction["redacted_keys"],
             "retention_status": retention["status"],
             "export_id": retention["export_id"],
+        },
+    )
+    full_export = store.export_profile(
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+    )
+    lifecycle = full_export.get("memory_lifecycle", {})
+    lifecycle_text = json.dumps(lifecycle, sort_keys=True)
+    active_tree_text = json.dumps(full_export.get("memory_tree", {}), sort_keys=True)
+    tombstones = lifecycle.get("tombstones", [])
+    _append_result(
+        results,
+        "golden_trace_export_preserves_lifecycle_tombstones",
+        lifecycle.get("version") == "memory-lifecycle-export-v0.1"
+        and lifecycle.get("counts", {}).get("tombstones", 0) >= 1
+        and any(item.get("status") == "deleted" for item in tombstones)
+        and "OldSEO" in lifecycle_text
+        and "OldSEO" not in active_tree_text
+        and lifecycle.get("counts", {}).get("derived_invalidations", 0) >= 1
+        and lifecycle.get("counts", {}).get("audit_events", 0) >= 1,
+        {
+            "counts": lifecycle.get("counts", {}),
+            "status_counts": lifecycle.get("status_counts", {}),
+            "tombstones": tombstones,
         },
     )
 
