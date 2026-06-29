@@ -18,6 +18,7 @@ healthy enough to keep enabled for a live agent path:
 agent-memory observability --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
 agent-memory observability --db .memory/demo.db --router-latency-slo-ms 750 --keeper-latency-slo-ms 2500
+agent-memory dashboard --db .memory/demo.db --scope professional --summary-only
 agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 ```
 
@@ -26,6 +27,15 @@ The same report is exposed through:
 - HTTP: `POST /observability`
 - MCP: `memory_observability`
 - Python adapter wrapper: `observability_report()`
+
+Use `dashboard` when an operator or supervising agent needs one compact view
+across local health, observability, billing, worker queue, recovery schedules,
+and open notifications:
+
+- CLI: `agent-memory dashboard`
+- HTTP: `POST /operations/dashboard`
+- MCP: `memory_operations_dashboard`
+- Python adapter wrapper: `operations_dashboard()`
 
 The report returns:
 
@@ -82,7 +92,8 @@ Invoice ingestion surfaces:
 - Python adapter wrappers: `import_billing_invoice()`,
   `billing_invoice_items()`
 
-This is a baseline local report with local latency SLO checks and recorded-cost
-reconciliation. Production deployments should still add supervisor metrics,
-live provider invoice fetchers, dashboards, managed alerts, and hosted
-retention policy enforcement beyond the local export retention ledger.
+This is a baseline local report with local latency SLO checks, a machine-readable
+dashboard, and recorded-cost reconciliation. Production deployments should
+still add supervisor metrics, live provider invoice fetchers, hosted dashboard
+publishing, managed alerts, and hosted retention policy enforcement beyond the
+local export retention ledger.

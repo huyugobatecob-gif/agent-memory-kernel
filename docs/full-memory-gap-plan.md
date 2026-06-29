@@ -423,9 +423,9 @@ Remaining for full memory:
   beyond the expanded baseline public conformance and prompt-formatter
   certification cases.
 - Production observability beyond the baseline report, latency SLOs,
-  recorded-cost reconciliation, and local invoice ingestion, including live
-  provider invoice fetchers, hosted retention policies, dashboards, and
-  managed alerts.
+  recorded-cost reconciliation, local invoice ingestion, and local operations
+  dashboard, including live provider invoice fetchers, hosted retention
+  policies, hosted dashboard publishing, and managed alerts.
 - Production operational failure behavior beyond the local baseline for slow,
   unavailable, corrupted, partially migrated, or oversized memory stores,
   including latency budgets, encrypted off-host backups, hosted migration
@@ -901,12 +901,15 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 estimates, selected branches, Router/Keeper wall-clock duration, Keeper job
 health, LLM usage tokens/cost, and local latency SLO alerts through
 `agent-memory observability`, `/observability`, the Python provider example,
-and MCP `memory_observability`. Baseline provider billing reconciliation and
-invoice ingestion are implemented through `agent-memory billing-reconcile`,
-`agent-memory billing-invoice`, `/billing/reconcile`, `/billing/invoice/*`, the
-Python provider example, and MCP `memory_billing_reconcile` /
-`memory_billing_invoice_*`. Remaining work is live provider invoice fetchers,
-dashboards, hosted retention policy, and managed alerts.
+and MCP `memory_observability`. Baseline operations dashboard is implemented
+through `agent-memory dashboard`, `/operations/dashboard`, the Python provider
+example, and MCP `memory_operations_dashboard`. Baseline provider billing
+reconciliation and invoice ingestion are implemented through
+`agent-memory billing-reconcile`, `agent-memory billing-invoice`,
+`/billing/reconcile`, `/billing/invoice/*`, the Python provider example, and
+MCP `memory_billing_reconcile` / `memory_billing_invoice_*`. Remaining work is
+live provider invoice fetchers, hosted dashboard publishing, hosted retention
+policy, and managed alerts.
 
 ### Step 16: Add End-To-End Demos
 

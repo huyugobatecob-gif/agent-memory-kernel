@@ -67,6 +67,9 @@ The adapter should:
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
   fallback behavior before routing critical work through memory;
+- expose `operations_dashboard()` so operators and supervising agents can read
+  one local health view across observability, billing, worker, recovery, and
+  notifications;
 - expose `import_billing_invoice()` and `billing_invoice_items()` so runtime
   operators can reconcile recorded memory usage against imported provider
   invoices without live billing API access;

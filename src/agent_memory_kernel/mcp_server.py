@@ -262,6 +262,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_operations_dashboard": {
+        "endpoint": "/operations/dashboard",
+        "description": "Aggregate local memory operations health into one dashboard report.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "thread_id": _string("Optional thread id.", ""),
+                "limit": _integer("Maximum nested rows and alerts.", 20),
+                "stale_after_seconds": _integer("Queued Keeper age threshold for stale alerts.", 300),
+                "include_details": _boolean("Include nested component reports.", True),
+            }
+        ),
+    },
     "memory_quality_report": {
         "endpoint": "/memory-quality",
         "description": "Report Router feedback, shadow eval, Keeper health, and quality gates.",

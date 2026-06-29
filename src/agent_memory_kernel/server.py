@@ -172,6 +172,14 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 2500.0 if keeper_latency_slo in {None, ""} else float(keeper_latency_slo)
             ),
         )
+    if path in {"/dashboard", "/operations/dashboard"}:
+        return store.operations_dashboard(
+            scope=payload.get("scope"),
+            thread_id=payload.get("thread_id"),
+            limit=int(payload.get("limit", 20) or 20),
+            stale_after_seconds=int(payload.get("stale_after_seconds", 300) or 300),
+            include_details=bool(payload.get("include_details", True)),
+        )
     if path in {"/billing/reconcile", "/billing-reconcile"}:
         expected_cost = payload.get("expected_cost")
         max_cost_per_1k = payload.get("max_cost_per_1k")

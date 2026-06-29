@@ -394,6 +394,10 @@ Baseline implementation:
   `memory_observability` summarize Router token estimates, selected branches,
   Router/Keeper wall-clock duration, Keeper job status, warnings, and LLM usage
   tokens/cost, plus local latency SLO breach alerts.
+- `agent-memory dashboard`, `/operations/dashboard`, and MCP
+  `memory_operations_dashboard` aggregate local operational health,
+  observability, billing, worker, recovery schedule, and notification status
+  into one machine-readable operator report.
 - `agent-memory migration-status`, `agent-memory migration-changelog`,
   `agent-memory backup`, `agent-memory restore`, and
   `agent-memory restore-drill` provide local SQLite schema checks, migration
@@ -406,7 +410,8 @@ Baseline implementation:
 
 Still production work: encrypted off-host backups, platform scheduler
 deployment recipes, hosted migration release-note publication, hosted health
-checks, restart policies, dashboards, and managed alert delivery.
+checks, restart policies, hosted dashboard publishing, and managed alert
+delivery.
 
 ## End State
 

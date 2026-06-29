@@ -148,14 +148,19 @@ Baseline observability and cost accounting are implemented through
 and MCP `memory_observability`. The report joins Router selected branches and
 prompt token estimates, Router/Keeper wall-clock durations, Keeper
 status/warnings, LLM usage tokens/cost, and local latency SLO alerts.
+Baseline operations dashboard is implemented through `agent-memory dashboard`,
+`/operations/dashboard`, Python adapter wrappers, and MCP
+`memory_operations_dashboard`; it aggregates operational health, observability,
+billing, worker, recovery schedule, and notification status into one report.
 Baseline provider billing reconciliation is implemented through
 `agent-memory billing-reconcile`, `/billing/reconcile`, Python adapter
 wrappers, and MCP `memory_billing_reconcile`; it compares recorded usage cost
 against expected billing amounts or imported provider invoice line items and
 flags suspicious usage rows. Baseline invoice ingestion is implemented through
 `agent-memory billing-invoice`, `/billing/invoice/*`, Python adapter wrappers,
-and MCP `memory_billing_invoice_*`. Live provider invoice fetchers, dashboards,
-hosted retention policy, and managed alerts are still backlog.
+and MCP `memory_billing_invoice_*`. Live provider invoice fetchers, hosted
+dashboard publishing, hosted retention policy, and managed alerts are still
+backlog.
 Baseline prompt-envelope provider formatters are implemented through
 `before_model_call(..., prompt_format=...)`, `agent-memory before-model-call
 --prompt-format`, `/before-model-call`, and MCP `memory_before_model_call`.

@@ -239,6 +239,23 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def operations_dashboard(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 20,
+        stale_after_seconds: int = 300,
+        include_details: bool = True,
+    ) -> dict[str, Any]:
+        return self.store.operations_dashboard(
+            scope=scope,
+            thread_id=thread_id,
+            limit=limit,
+            stale_after_seconds=stale_after_seconds,
+            include_details=include_details,
+        )
+
     def import_billing_invoice(
         self,
         *,

@@ -91,6 +91,8 @@ Included now:
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report with token, cost,
   wall-clock duration, and local latency SLO alert telemetry.
+- Operations dashboard that aggregates operational health, observability,
+  billing, worker, recovery schedules, and notifications into one report.
 - Billing reconciliation report for recorded memory LLM usage, provider/model
   cost grouping, imported provider invoice line items, expected-cost deltas,
   and suspicious usage rows.
@@ -350,6 +352,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --scope professional
+agent-memory dashboard --db .memory/demo.db --scope professional --summary-only
 agent-memory billing-invoice --db .memory/demo.db import --file provider-invoice.json
 agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
@@ -850,6 +853,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_derived_lineage`,
 `memory_operational_status`, `memory_observability`,
+`memory_operations_dashboard`,
 `memory_billing_reconcile`, `memory_billing_invoice_import`,
 `memory_billing_invoice_list`,
 `memory_embedding_certify`,

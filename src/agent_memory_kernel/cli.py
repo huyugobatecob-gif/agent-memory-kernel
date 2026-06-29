@@ -516,6 +516,22 @@ def cmd_observability(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.operations_dashboard(
+            scope=args.scope,
+            thread_id=args.thread_id,
+            limit=args.limit,
+            stale_after_seconds=args.stale_after_seconds,
+            include_details=not args.summary_only,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_billing_reconcile(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2064,6 +2080,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--router-latency-slo-ms", type=float, default=750.0)
     p.add_argument("--keeper-latency-slo-ms", type=float, default=2500.0)
     p.set_defaults(func=cmd_observability)
+
+    p = sub.add_parser("dashboard", help="Aggregate local memory operations health")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--thread-id")
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--stale-after-seconds", type=int, default=300)
+    p.add_argument("--summary-only", action="store_true", help="Omit nested component reports")
+    p.set_defaults(func=cmd_dashboard)
 
     p = sub.add_parser("billing-reconcile", help="Reconcile recorded LLM usage costs")
     add_common_db(p)

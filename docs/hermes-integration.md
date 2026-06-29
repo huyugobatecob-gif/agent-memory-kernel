@@ -263,6 +263,9 @@ class HermesMemoryProvider:
     def observability_report(self, scope: str | None = None, thread_id: str | None = None) -> dict:
         ...
 
+    def operations_dashboard(self, scope: str | None = None, thread_id: str | None = None) -> dict:
+        ...
+
     def import_billing_invoice(self, invoice_id: str, provider: str, line_items: list[dict]) -> dict:
         ...
 
@@ -340,7 +343,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_after_turn`, `memory_retrieve_context`, `memory_ingest_graph`,
 `memory_changes`, `memory_tree_pack`, `memory_capability_check`,
 `memory_derived_invalidations`, `memory_operational_status`,
-`memory_observability`, `memory_billing_reconcile`,
+`memory_observability`, `memory_operations_dashboard`,
+`memory_billing_reconcile`,
 `memory_billing_invoice_import`, `memory_billing_invoice_list`,
 `memory_migration_status`, `memory_backup_database`, `memory_migration_changelog`,
 `memory_restore_database`,

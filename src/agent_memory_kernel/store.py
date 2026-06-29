@@ -115,6 +115,7 @@ DERIVED_LINEAGE_VERSION = "derived-lineage-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
+OPERATIONS_DASHBOARD_VERSION = "operations-dashboard-v0.1"
 WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
 BILLING_INVOICE_VERSION = "billing-invoice-v0.1"
@@ -2059,6 +2060,8 @@ class MemoryStore:
             "graph_commands",
             "memory_export_approvals",
             "memory_export_records",
+            "provider_invoice_items",
+            "restore_drill_schedules",
         }
         try:
             rows = self.conn.execute(
@@ -4794,6 +4797,316 @@ class MemoryStore:
             "by_currency": by_currency,
             "anomalies": anomalies[:row_limit],
             "latest_usage": items[:row_limit],
+        }
+
+    def operations_dashboard(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 20,
+        stale_after_seconds: int = 300,
+        include_details: bool = True,
+    ) -> dict[str, Any]:
+        """Aggregate local memory operations health into one dashboard report."""
+        scope = normalize_scope(scope) if scope and scope != "all" else None
+        thread_id = (thread_id or "").strip() or None
+        row_limit = max(1, min(int(limit or 20), 100))
+        components: dict[str, dict[str, Any]] = {}
+        alerts: list[dict[str, Any]] = []
+
+        def status_rank(status: str) -> int:
+            return {"pass": 0, "not_configured": 0, "warn": 1, "fail": 2}.get(
+                status,
+                1,
+            )
+
+        def add_component(
+            name: str,
+            *,
+            title: str,
+            report: dict[str, Any],
+            summary: dict[str, Any],
+            handles: dict[str, Any],
+        ) -> None:
+            status = str(report.get("status", "pass") or "pass")
+            components[name] = {
+                "name": name,
+                "title": title,
+                "status": status,
+                "summary": summary,
+                "operator_handles": handles,
+                **({"report": report} if include_details else {}),
+            }
+
+        def add_error_component(name: str, title: str, exc: Exception) -> None:
+            report = {
+                "status": "fail",
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
+            add_component(
+                name,
+                title=title,
+                report=report,
+                summary={"error": str(exc)},
+                handles={},
+            )
+            alerts.append(
+                {
+                    "severity": "high",
+                    "component": name,
+                    "name": "component_failed",
+                    "detail": f"{title} failed: {type(exc).__name__}: {exc}",
+                }
+            )
+
+        try:
+            operational = self.operational_status()
+            add_component(
+                "operational",
+                title="Operational Status",
+                report=operational,
+                summary={
+                    "mode": operational.get("mode", ""),
+                    "warning_count": len(operational.get("warnings", [])),
+                    "failure_count": len(operational.get("failures", [])),
+                },
+                handles={
+                    "http": {"path": "/operational/status"},
+                    "mcp": {"tool": "memory_operational_status"},
+                },
+            )
+            for detail in operational.get("failures", []):
+                alerts.append(
+                    {
+                        "severity": "high",
+                        "component": "operational",
+                        "name": "operational_failure",
+                        "detail": detail,
+                    }
+                )
+            for detail in operational.get("warnings", []):
+                alerts.append(
+                    {
+                        "severity": "warning",
+                        "component": "operational",
+                        "name": "operational_warning",
+                        "detail": detail,
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("operational", "Operational Status", exc)
+
+        try:
+            observability = self.memory_observability_report(
+                scope=scope,
+                thread_id=thread_id,
+                limit=row_limit,
+            )
+            add_component(
+                "observability",
+                title="Observability",
+                report=observability,
+                summary={
+                    "slo_status": observability.get("slo", {}).get("status", ""),
+                    "router_runs": observability.get("router", {}).get("run_count", 0),
+                    "keeper_jobs": observability.get("keeper", {}).get("job_count", 0),
+                    "usage_calls": observability.get("usage", {}).get("call_count", 0),
+                },
+                handles={
+                    "cli": "agent-memory observability --db <db>",
+                    "http": {"path": "/observability"},
+                    "mcp": {"tool": "memory_observability"},
+                },
+            )
+            for item in observability.get("slo", {}).get("alerts", []):
+                alerts.append(
+                    {
+                        "severity": item.get("severity", "warning"),
+                        "component": "observability",
+                        "name": item.get("name", "slo_alert"),
+                        "detail": item.get("detail", "SLO alert"),
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("observability", "Observability", exc)
+
+        try:
+            billing = self.billing_reconciliation_report(
+                scope=scope,
+                thread_id=thread_id,
+                limit=row_limit,
+            )
+            add_component(
+                "billing",
+                title="Billing",
+                report=billing,
+                summary={
+                    "call_count": billing.get("summary", {}).get("call_count", 0),
+                    "anomaly_count": billing.get("summary", {}).get("anomaly_count", 0),
+                    "invoice_line_count": billing.get("provider_invoice", {}).get("line_count", 0),
+                    "reconciliation_status": billing.get("reconciliation", {}).get("status", ""),
+                },
+                handles={
+                    "cli": "agent-memory billing-reconcile --db <db>",
+                    "http": {"path": "/billing/reconcile"},
+                    "mcp": {"tool": "memory_billing_reconcile"},
+                },
+            )
+            for item in billing.get("anomalies", []):
+                alerts.append(
+                    {
+                        "severity": item.get("severity", "warning"),
+                        "component": "billing",
+                        "name": item.get("name", "billing_anomaly"),
+                        "detail": item.get("detail", "Billing anomaly"),
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("billing", "Billing", exc)
+
+        try:
+            worker = self.worker_status_report(
+                scope=scope,
+                stale_after_seconds=stale_after_seconds,
+                limit=row_limit,
+            )
+            add_component(
+                "worker",
+                title="Worker",
+                report=worker,
+                summary={
+                    "queued": worker.get("counts", {}).get("queued", 0),
+                    "failed": worker.get("counts", {}).get("failed", 0),
+                    "stale": len(worker.get("stale_jobs", [])),
+                    "alert_count": len(worker.get("alerts", [])),
+                },
+                handles={
+                    "cli": "agent-memory worker-status --db <db>",
+                    "http": {"path": "/worker/status"},
+                    "mcp": {"tool": "memory_worker_status"},
+                },
+            )
+            for item in worker.get("alerts", []):
+                alerts.append(
+                    {
+                        "severity": item.get("severity", "info"),
+                        "component": "worker",
+                        "name": item.get("name", "worker_alert"),
+                        "detail": item.get("detail", "Worker alert"),
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("worker", "Worker", exc)
+
+        try:
+            recovery = self.list_restore_drill_schedules(
+                status="active",
+                due_only=False,
+                limit=row_limit,
+            )
+            add_component(
+                "recovery",
+                title="Recovery",
+                report=recovery,
+                summary={
+                    "schedule_count": recovery.get("count", 0),
+                    "due_count": recovery.get("due_count", 0),
+                    "overdue_count": recovery.get("overdue_count", 0),
+                },
+                handles={
+                    "cli": "agent-memory restore-drill-schedule --db <db> list --status all",
+                    "http": {"path": "/restore/drill/schedules"},
+                    "mcp": {"tool": "memory_restore_drill_schedules"},
+                },
+            )
+            if int(recovery.get("overdue_count", 0) or 0):
+                alerts.append(
+                    {
+                        "severity": "warning",
+                        "component": "recovery",
+                        "name": "restore_drill_schedule_overdue",
+                        "detail": f"{recovery.get('overdue_count')} restore-drill schedule(s) overdue",
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("recovery", "Recovery", exc)
+
+        try:
+            notifications = self.list_notifications(
+                status="open",
+                scope=scope,
+                limit=row_limit,
+            )
+            escalations = self.notification_escalations(scope=scope, limit=row_limit)
+            severity_counts: dict[str, int] = {}
+            for item in notifications.get("notifications", []):
+                severity = str(item.get("severity", "info"))
+                severity_counts[severity] = severity_counts.get(severity, 0) + 1
+            notification_status = (
+                "warn"
+                if int(escalations.get("count", 0) or 0)
+                or severity_counts.get("high", 0)
+                or severity_counts.get("critical", 0)
+                else "pass"
+            )
+            report = {
+                "version": NOTIFICATION_QUEUE_VERSION,
+                "status": notification_status,
+                "notifications": notifications,
+                "escalations": escalations,
+            }
+            add_component(
+                "notifications",
+                title="Notifications",
+                report=report,
+                summary={
+                    "open_count": notifications.get("count", 0),
+                    "escalation_count": escalations.get("count", 0),
+                    "severity_counts": severity_counts,
+                },
+                handles={
+                    "cli": "agent-memory notifications list --db <db>",
+                    "http": {"path": "/notifications/list"},
+                    "mcp": {"tool": "memory_notifications_list"},
+                },
+            )
+            for item in escalations.get("escalations", []):
+                alerts.append(
+                    {
+                        "severity": "warning",
+                        "component": "notifications",
+                        "name": item.get("reason", "notification_escalation"),
+                        "detail": item.get("reason", "Notification escalation"),
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("notifications", "Notifications", exc)
+
+        overall_status = "pass"
+        if any(status_rank(item["status"]) == 2 for item in components.values()):
+            overall_status = "fail"
+        elif any(status_rank(item["status"]) >= 1 for item in components.values()):
+            overall_status = "warn"
+        severity_order = {"critical": 0, "high": 1, "fail": 1, "warning": 2, "warn": 2, "info": 3}
+        alerts.sort(key=lambda item: severity_order.get(str(item.get("severity", "info")), 3))
+        return {
+            "version": OPERATIONS_DASHBOARD_VERSION,
+            "status": overall_status,
+            "generated_at": now_iso(),
+            "scope": scope or "all",
+            "thread_id": thread_id or "",
+            "component_count": len(components),
+            "components": components,
+            "alerts": alerts[:row_limit],
+            "alert_count": len(alerts),
+            "recommended_commands": {
+                "dashboard": "agent-memory dashboard --db <db>",
+                "run_worker": "agent-memory worker --db <db> --once --limit 10",
+                "run_due_restore_drills": "agent-memory restore-drill-schedule --db <db> run-due --limit 5",
+                "review_notifications": "agent-memory notifications list --db <db> --status open",
+            },
         }
 
     def _observability_slo(

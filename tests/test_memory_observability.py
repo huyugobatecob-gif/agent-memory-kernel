@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from agent_memory_kernel.cli import build_parser
@@ -380,6 +381,97 @@ class MemoryObservabilityTests(unittest.TestCase):
             self.assertEqual(payload["version"], "billing-reconciliation-v0.1")
             self.assertEqual(payload["status"], "pass")
             self.assertEqual(payload["summary"]["call_count"], 1)
+
+    def test_operations_dashboard_aggregates_health_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "memory.db"
+            store = MemoryStore(db)
+            store.init_db()
+            store.record_llm_usage(
+                provider="openai",
+                model="keeper-mini",
+                scope="professional",
+                thread_id="dashboard-thread",
+                prompt_tokens=10,
+                completion_tokens=5,
+                cost=0.01,
+            )
+            store.import_billing_invoice(
+                invoice_id="inv-dashboard",
+                provider="openai",
+                currency="USD",
+                line_items=[
+                    {
+                        "model": "keeper-mini",
+                        "scope": "professional",
+                        "thread_id": "dashboard-thread",
+                        "total_tokens": 15,
+                        "amount": 0.03,
+                    }
+                ],
+            )
+            due_at = (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).replace(microsecond=0).isoformat()
+            store.set_restore_drill_schedule(
+                name="dashboard-nightly",
+                interval_hours=24,
+                scope="professional",
+                start_at=due_at,
+            )
+
+            dashboard = store.operations_dashboard(
+                scope="professional",
+                thread_id="dashboard-thread",
+                include_details=False,
+            )
+            self.assertEqual(dashboard["version"], "operations-dashboard-v0.1")
+            self.assertEqual(dashboard["status"], "warn")
+            self.assertIn("billing", dashboard["components"])
+            self.assertIn("recovery", dashboard["components"])
+            self.assertEqual(
+                dashboard["components"]["billing"]["summary"]["reconciliation_status"],
+                "warn",
+            )
+            self.assertEqual(
+                dashboard["components"]["recovery"]["summary"]["due_count"],
+                1,
+            )
+            self.assertNotIn("report", dashboard["components"]["billing"])
+            self.assertIn("memory_operations_dashboard", {tool["name"] for tool in list_mcp_tools()})
+
+            endpoint = handle_api_request(
+                store,
+                "/operations/dashboard",
+                {
+                    "scope": "professional",
+                    "thread_id": "dashboard-thread",
+                    "include_details": False,
+                },
+            )
+            self.assertEqual(endpoint["status"], "warn")
+
+            parser = build_parser()
+            args = parser.parse_args(
+                [
+                    "dashboard",
+                    "--db",
+                    str(db),
+                    "--scope",
+                    "professional",
+                    "--thread-id",
+                    "dashboard-thread",
+                    "--summary-only",
+                ]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["version"], "operations-dashboard-v0.1")
+            self.assertEqual(payload["status"], "warn")
+            store.close()
 
 
 if __name__ == "__main__":
