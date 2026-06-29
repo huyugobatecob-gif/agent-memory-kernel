@@ -1893,10 +1893,15 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(report["status"], "pass")
             self.assertEqual(report["summary"]["provider_count"], 4)
             self.assertEqual(report["summary"]["failed"], 0)
+            self.assertEqual(report["summary"]["red_team_fixture_count"], 4)
             for provider in report["providers"]:
                 self.assertEqual(provider["status"], "pass")
                 check_names = {check["name"] for check in provider["checks"]}
                 self.assertIn("memory_supplement_not_system", check_names)
+                self.assertIn("hostile_memory_not_system", check_names)
+                self.assertIn("tool_output_not_system", check_names)
+                self.assertIn("assistant_guess_not_system", check_names)
+                self.assertIn("secret_fixture_not_system", check_names)
                 self.assertTrue(all(check["passed"] for check in provider["checks"]))
 
             endpoint = handle_api_request(

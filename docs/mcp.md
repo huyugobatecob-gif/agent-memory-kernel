@@ -122,7 +122,8 @@ Operator and graph tools:
   readiness.
 - `memory_prompt_format_certify`: certify provider prompt formatters against
   prompt-boundary invariants for OpenAI, Anthropic, Gemini/Google, and local
-  prompt shapes.
+  prompt shapes, including hostile memory, tool-output, assistant-guess, and
+  secret-like red-team fixtures.
 - `memory_embedding_certify`: certify the provider-neutral embedding/rerank
   contract and deterministic local fallback.
 - `memory_brain_style_certify`: certify that graph-derived style hints are

@@ -223,6 +223,12 @@ Already present:
   `prompt_envelope.metadata.prompt_budget`; known model families get
   deterministic default/max/reserve memory budgets and unknown models preserve
   requested runtime budgets.
+- Baseline provider prompt formatter certification through
+  `agent-memory prompt-format-certify`, `/prompt-format/certify`, and MCP
+  `memory_prompt_format_certify`; the local certification checks
+  OpenAI/Anthropic/Google/local prompt shapes and provider-shaped red-team
+  fixtures for hostile memory text, tool output, assistant guesses, and
+  secret-like content without live API calls.
 - Baseline Router usefulness feedback and bounded usefulness-learning ranking
   through `router_feedback`, `/router-feedback/record`, `/memory-quality`, and
   `agent-memory memory-quality`; prior feedback adjusts only already-retrieved
@@ -400,12 +406,12 @@ Remaining for full memory:
 - Production current-best-answer resolution beyond the baseline explicit
   conflict resolver, active-memory conflict detector, and conservative
   near-duplicate heuristics.
-- Broader live-provider certification and provider-specific prompt envelope
+- Broader live-provider certification and provider SDK/API prompt envelope
   tests beyond the baseline OpenAI/Anthropic/Google/local prompt formatter
   certification.
-- Broader provider-specific prompt-injection, source trust, export leakage, and
-  secret red-team fixtures beyond the expanded baseline public conformance
-  cases.
+- Broader source-trust, export leakage, and web-document red-team fixtures
+  beyond the expanded baseline public conformance and prompt-formatter
+  certification cases.
 - Production observability beyond the baseline report, latency SLOs, and
   recorded-cost reconciliation, including external provider invoice ingestion,
   hosted retention policies, dashboards, and managed alerts.

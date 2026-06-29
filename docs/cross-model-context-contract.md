@@ -89,8 +89,9 @@ agent-memory prompt-format-certify --providers openai,anthropic,gemini,local
 
 The report checks that system guardrails are preserved, the
 `MEMORY_TREE_SUPPLEMENT` stays outside provider system-instruction surfaces,
-the current request is retained, and the provider-specific top-level shape is
-present.
+hostile memory text, tool output, assistant guesses, and secret-like fixture
+text stay outside provider system-instruction surfaces, the current request is
+retained, and the provider-specific top-level shape is present.
 
 ## Memory Tree Supplement
 

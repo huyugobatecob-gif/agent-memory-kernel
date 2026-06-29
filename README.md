@@ -392,7 +392,9 @@ local badge URL/Markdown snippet suitable for README or CI output.
 payload with adapter metadata, badge, certification summary, and publication
 readiness for a public adapter catalog.
 `prompt-format-certify` separately checks provider prompt shapes and proves the
-memory supplement remains user-context instead of becoming hidden system text.
+memory supplement, hostile memory text, tool output, assistant guesses, and
+secret-like fixture text remain user-context instead of becoming hidden system
+text.
 
 Record profile and usage metadata:
 
