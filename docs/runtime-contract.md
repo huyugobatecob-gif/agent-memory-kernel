@@ -237,7 +237,11 @@ Required behavior:
 - never mutate active memory automatically from feedback alone;
 - link feedback to the Router run and optional memory/branch id;
 - make feedback listable and auditable;
-- aggregate quality signals by scope for Router and memory-quality evals.
+- aggregate quality signals by scope for Router and memory-quality evals;
+- use prior feedback only as a bounded ranking signal for candidates already
+  found by text, graph, semantic, or neighbor retrieval;
+- expose `router_feedback_signal` in selection policy factors whenever
+  feedback exists for a memory.
 
 ## Router Contract
 

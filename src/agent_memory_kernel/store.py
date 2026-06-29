@@ -99,6 +99,7 @@ MIN_BRAIN_STYLE_NODES = 4
 LEFT_BRAIN_STYLE_SHARE = 0.60
 RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
+ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
@@ -225,6 +226,7 @@ READ_TIME_POLICY = {
         "task relevance from active memory text",
         "task relevance from graph node labels and summaries",
         "semantic rerank similarity",
+        "operator usefulness feedback from prior Router runs",
         "graph neighbor expansion",
         "source trust and confidence visibility",
         "recency as tie-breaker",
@@ -2420,6 +2422,17 @@ class MemoryStore:
                 seed_scores[memory_id] = 20
             reasons[memory_id].add(reason)
 
+        feedback_signals = self._memory_feedback_signals(seed_scores.keys())
+        for memory_id, signal in feedback_signals.items():
+            adjustment = float(signal.get("score_adjustment", 0.0) or 0.0)
+            if not adjustment:
+                continue
+            seed_scores[memory_id] = float(seed_scores.get(memory_id, 0.0)) + adjustment
+            reasons[memory_id].add(
+                "router feedback signal: "
+                f"{signal['summary']} adjustment={adjustment:+.2f}"
+            )
+
         current_best = self._apply_current_best_resolution(
             seed_scores,
             reasons,
@@ -2558,6 +2571,16 @@ class MemoryStore:
                 "selection_decisions": selection_decisions,
                 "truncated_count": len(truncated_ids),
                 "current_best": current_best,
+                "feedback_learning": {
+                    "version": ROUTER_FEEDBACK_LEARNING_VERSION,
+                    "applied_count": sum(
+                        1 for signal in feedback_signals.values() if signal.get("feedback_count")
+                    ),
+                    "policy": (
+                        "prior Router feedback only adjusts ranking for already "
+                        "retrieved candidates; it never creates, deletes, or rewrites memory"
+                    ),
+                },
                 "depth": depth,
                 "include_raw": include_raw,
             },
@@ -11486,12 +11509,14 @@ class MemoryStore:
         memory_id: str,
         row: sqlite3.Row | None,
     ) -> dict[str, Any]:
+        router_feedback_signal = self._memory_feedback_signal(memory_id)
         if row is None:
             return {
                 "status": "missing_or_inactive",
                 "prompt_role": "unknown",
                 "conflict_status": self._memory_conflict_status(memory_id),
                 "outcome_signal": self._memory_outcome_signal(memory_id),
+                "router_feedback_signal": router_feedback_signal,
             }
         kind = str(row["kind"] or "fact")
         prompt_role = READ_TIME_POLICY["prompt_roles"].get(kind, "evidence")
@@ -11506,7 +11531,81 @@ class MemoryStore:
             "updated_at": row["updated_at"],
             "conflict_status": self._memory_conflict_status(memory_id),
             "outcome_signal": self._memory_outcome_signal(memory_id),
+            "router_feedback_signal": router_feedback_signal,
         }
+
+    def _memory_feedback_signal(self, memory_id: str) -> dict[str, Any]:
+        return self._memory_feedback_signals([memory_id]).get(
+            memory_id,
+            {
+                "version": ROUTER_FEEDBACK_LEARNING_VERSION,
+                "memory_id": memory_id,
+                "feedback_count": 0,
+                "total_score": 0.0,
+                "ignored_count": 0,
+                "score_adjustment": 0.0,
+                "by_rating": {},
+                "latest_feedback_at": "",
+                "summary": "no feedback",
+            },
+        )
+
+    def _memory_feedback_signals(self, memory_ids: Any) -> dict[str, dict[str, Any]]:
+        ids = sorted({str(memory_id) for memory_id in memory_ids if memory_id})
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT memory_id, rating, COUNT(*) AS count,
+                   SUM(score) AS total_score,
+                   MAX(created_at) AS latest_feedback_at
+            FROM router_feedback
+            WHERE memory_id IN ({placeholders})
+              AND memory_id != ''
+            GROUP BY memory_id, rating
+            """,
+            ids,
+        ).fetchall()
+        signals: dict[str, dict[str, Any]] = {}
+        for memory_id in ids:
+            signals[memory_id] = {
+                "version": ROUTER_FEEDBACK_LEARNING_VERSION,
+                "memory_id": memory_id,
+                "feedback_count": 0,
+                "total_score": 0.0,
+                "ignored_count": 0,
+                "score_adjustment": 0.0,
+                "by_rating": {},
+                "latest_feedback_at": "",
+                "summary": "no feedback",
+            }
+        for row in rows:
+            memory_id = str(row["memory_id"])
+            rating = str(row["rating"] or "neutral")
+            count = int(row["count"] or 0)
+            total_score = float(row["total_score"] or 0.0)
+            signal = signals[memory_id]
+            signal["feedback_count"] = int(signal["feedback_count"]) + count
+            signal["total_score"] = round(float(signal["total_score"]) + total_score, 4)
+            signal["by_rating"][rating] = count
+            if rating == "ignored":
+                signal["ignored_count"] = int(signal["ignored_count"]) + count
+            latest = str(row["latest_feedback_at"] or "")
+            if latest > str(signal["latest_feedback_at"] or ""):
+                signal["latest_feedback_at"] = latest
+        for signal in signals.values():
+            feedback_count = int(signal["feedback_count"])
+            if not feedback_count:
+                continue
+            learning_score = float(signal["total_score"]) - (0.25 * int(signal["ignored_count"]))
+            adjustment = max(-20.0, min(20.0, learning_score * 8.0))
+            signal["score_adjustment"] = round(adjustment, 4)
+            counts = signal["by_rating"]
+            signal["summary"] = ", ".join(
+                f"{rating}={counts[rating]}" for rating in sorted(counts)
+            )
+        return signals
 
     def _active_memory_for_scope(
         self,

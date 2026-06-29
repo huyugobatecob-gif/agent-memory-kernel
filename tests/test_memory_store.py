@@ -1648,6 +1648,78 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(api_changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             store.close()
 
+    def test_router_feedback_adjusts_future_ranking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            generic = store.remember(
+                "Decision: demo-site SEO loop should reuse a generic content refresh.",
+                scope="professional",
+                source_ref="session://generic-loop",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            winning = store.remember(
+                "Decision: demo-site SEO loop should reuse the winning title experiment.",
+                scope="professional",
+                source_ref="session://winning-loop",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            initial = store.before_model_call(
+                "Plan the demo-site SEO loop.",
+                thread_id="thread-feedback-learning",
+                scope="professional",
+                user_id="user-1",
+                agent_id="seo-agent",
+                limit=2,
+            )
+            store.record_router_feedback(
+                initial["router_run_id"],
+                memory_id=generic,
+                rating="harmful",
+                actor="qa",
+                reason="generic loop produced worse results",
+            )
+            store.record_router_feedback(
+                initial["router_run_id"],
+                memory_id=winning,
+                rating="helpful",
+                actor="qa",
+                reason="winning title experiment grounded the next plan",
+            )
+
+            reranked = store.before_model_call(
+                "Plan the demo-site SEO loop.",
+                thread_id="thread-feedback-learning",
+                scope="professional",
+                user_id="user-1",
+                agent_id="seo-agent",
+                limit=1,
+            )
+            decisions = reranked["prompt_envelope"]["metadata"]["selection_decisions"]
+            selected = [item for item in decisions if item.get("decision") == "selected"]
+            self.assertEqual(selected[0]["memory_id"], winning)
+            self.assertIn(
+                "router feedback signal",
+                " ".join(selected[0]["why"]),
+            )
+            feedback_signal = selected[0]["policy_factors"]["router_feedback_signal"]
+            self.assertEqual(feedback_signal["version"], "router-feedback-learning-v0.1")
+            self.assertEqual(feedback_signal["score_adjustment"], 8.0)
+            retrieval = reranked["prompt_envelope"]["metadata"]["read_time_policy"]
+            self.assertIn("operator usefulness feedback", " ".join(retrieval["ranking_order"]))
+            tree = store.retrieve_tree(
+                "Plan the demo-site SEO loop.",
+                scope="professional",
+                limit=2,
+            )
+            self.assertEqual(
+                tree["retrieval"]["feedback_learning"]["version"],
+                "router-feedback-learning-v0.1",
+            )
+            self.assertEqual(tree["retrieval"]["feedback_learning"]["applied_count"], 2)
+            store.close()
+
     def test_prompt_budget_adapter_clamps_known_model_families(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

@@ -212,8 +212,10 @@ Already present:
   `prompt_envelope.metadata.prompt_budget`; known model families get
   deterministic default/max/reserve memory budgets and unknown models preserve
   requested runtime budgets.
-- Baseline Router usefulness feedback through `router_feedback`,
-  `/router-feedback/record`, `/memory-quality`, and `agent-memory memory-quality`.
+- Baseline Router usefulness feedback and bounded usefulness-learning ranking
+  through `router_feedback`, `/router-feedback/record`, `/memory-quality`, and
+  `agent-memory memory-quality`; prior feedback adjusts only already-retrieved
+  candidates and is visible as `router_feedback_signal`.
 - Baseline observability and cost accounting through `memory_observability_report`,
   `agent-memory observability`, `/observability`, Python adapter wrappers,
   and MCP `memory_observability`; the report joins Router selected branches and
@@ -579,9 +581,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. Agents receive useful memory content, not just
 tags or labels, and operators can inspect read-time policy and Router decisions
 with `router-runs`, `router-explain`, `/router-runs`, and `/router-explain`.
-Remaining work is production ranking, automated usefulness learning, automatic
-conflict resolution/current-best heuristics beyond the baseline active-memory
-detector and explicit resolved conflicts, and larger golden evals.
+Baseline usefulness learning is implemented as a bounded feedback adjustment:
+helpful memory rises, harmful or repeatedly ignored memory falls, and every
+adjustment is visible in selection decisions. Remaining work is production
+ranking, richer online learning, automatic conflict resolution/current-best
+heuristics beyond the baseline active-memory detector and explicit resolved
+conflicts, and larger golden evals.
 
 ### Step 7: Add Embeddings And Semantic Reranking
 

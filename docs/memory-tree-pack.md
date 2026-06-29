@@ -69,8 +69,8 @@ the prompt envelope metadata and in `router_runs.metadata_json`.
 The local policy is `read-time-policy-v0.1`. It ranks candidates by task
 relevance, graph-node relevance, semantic similarity, graph-neighbor expansion,
 source trust/confidence visibility, recency tie-breakers, lifecycle filters,
-scope/sensitivity filters, conflict status, outcome signal, and branch/token
-limits.
+scope/sensitivity filters, conflict status, outcome signal, prior Router
+usefulness feedback, and branch/token limits.
 
 Inspect it with:
 
@@ -94,9 +94,11 @@ agent-memory router-feedback record router_xxxxxxxxxxxxxxxx \
 agent-memory memory-quality --scope professional
 ```
 
-Feedback is stored separately from memory content. It is used for quality
-measurement and future ranking work, not as an automatic mutation of active
-memory.
+Feedback is stored separately from memory content. The Router uses it as a
+bounded ranking adjustment for candidates that were already retrieved; it does
+not create, delete, or rewrite active memory. `router-explain` exposes the
+`router_feedback_signal` so operators can see when prior helpful, ignored,
+missing, or harmful ratings changed the order.
 
 ## Persistent Graph Tree
 

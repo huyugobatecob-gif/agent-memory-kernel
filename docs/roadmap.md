@@ -129,9 +129,12 @@ Baseline prompt-budget adapters are implemented through
 `prompt_envelope.metadata.prompt_budget`. Known model families get deterministic
 default/max/reserve memory budgets, while unknown models preserve requested
 runtime budgets.
-Baseline Router usefulness feedback and quality reporting are implemented
+Baseline Router usefulness feedback, quality reporting, and bounded
+usefulness-learning ranking are implemented
 through `agent-memory router-feedback`, `agent-memory memory-quality`,
 `/router-feedback/record`, `/router-feedback/list`, and `/memory-quality`.
+Prior feedback is exposed as `router_feedback_signal` in selection policy
+factors and adjusts only already-retrieved candidates.
 Baseline observability and cost accounting are implemented through
 `agent-memory observability`, `/observability`, Python adapter wrappers,
 and MCP `memory_observability`. The report joins Router selected branches and
