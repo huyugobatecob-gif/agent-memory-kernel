@@ -5555,6 +5555,7 @@ class MemoryStore:
         payload = {
             "profile_notes": self.list_profile_notes(scope=scope),
             "project_profiles": [dict(row) for row in profiles],
+            "memory_policy_state": self._export_memory_policy_state(scope=scope),
             "memory_lifecycle": self._export_memory_lifecycle(scope=scope),
             "memory_tree": {
                 "groups": self.list_graph_groups(scope=scope),
@@ -6106,6 +6107,7 @@ class MemoryStore:
 
     def import_profile(self, payload: dict[str, Any]) -> dict[str, int]:
         counts = defaultdict(int)
+        self._import_memory_policy_state(payload.get("memory_policy_state", {}), counts)
         self._import_memory_lifecycle(payload.get("memory_lifecycle", {}), counts)
 
         for note in payload.get("profile_notes", []):
@@ -6208,6 +6210,143 @@ class MemoryStore:
 
         self.conn.commit()
         return dict(counts)
+
+    def _import_memory_policy_state(self, policy_state: Any, counts: defaultdict[str, int]) -> None:
+        if not isinstance(policy_state, dict):
+            return
+        if policy_state.get("version") != "memory-policy-state-v0.1":
+            counts["skipped_unsupported_policy_state"] += 1
+            return
+
+        for policy in self._importable_rows(policy_state.get("read_policies")):
+            policy_id = str(policy.get("policy_id", ""))
+            agent_id = str(policy.get("agent_id", "*") or "*")
+            scope = str(policy.get("scope", "*") or "*")
+            scope = "*" if scope == "*" else normalize_scope(scope)
+            action = str(policy.get("action", "inject") or "inject").strip().lower()
+            decision = str(policy.get("decision", "allow") or "allow").strip().lower()
+            if not policy_id or decision not in {"allow", "deny"}:
+                counts["skipped_invalid"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_read_policies
+                  (policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    policy_id,
+                    str(policy.get("created_at") or now_iso()),
+                    str(policy.get("updated_at") or policy.get("created_at") or now_iso()),
+                    agent_id,
+                    scope,
+                    action,
+                    decision,
+                    str(policy.get("reason", "")),
+                    self._json_text(policy.get("metadata_json"), "{}"),
+                ),
+            )
+            inserted_count = max(int(inserted.rowcount or 0), 0)
+            counts["memory_read_policies"] += inserted_count
+            if inserted_count:
+                continue
+            updated = self.conn.execute(
+                """
+                UPDATE memory_read_policies
+                SET updated_at = ?, decision = ?, reason = ?, metadata_json = ?
+                WHERE policy_id = ?
+                   OR (agent_id = ? AND scope = ? AND action = ?)
+                """,
+                (
+                    str(policy.get("updated_at") or now_iso()),
+                    decision,
+                    str(policy.get("reason", "")),
+                    self._json_text(policy.get("metadata_json"), "{}"),
+                    policy_id,
+                    agent_id,
+                    scope,
+                    action,
+                ),
+            )
+            counts["memory_read_policies_updated"] += max(int(updated.rowcount or 0), 0)
+
+        for policy in self._importable_rows(policy_state.get("write_policies")):
+            policy_id = str(policy.get("policy_id", ""))
+            agent_id = str(policy.get("agent_id", "*") or "*")
+            scope = str(policy.get("scope", "*") or "*")
+            scope = "*" if scope == "*" else normalize_scope(scope)
+            action = str(policy.get("action", "*") or "*").strip().lower()
+            decision = str(policy.get("decision", "allow") or "allow").strip().lower()
+            if not policy_id or decision not in {"allow", "deny"}:
+                counts["skipped_invalid"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_write_policies
+                  (policy_id, created_at, updated_at, agent_id, scope, action,
+                   decision, reason, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    policy_id,
+                    str(policy.get("created_at") or now_iso()),
+                    str(policy.get("updated_at") or policy.get("created_at") or now_iso()),
+                    agent_id,
+                    scope,
+                    action,
+                    decision,
+                    str(policy.get("reason", "")),
+                    self._json_text(policy.get("metadata_json"), "{}"),
+                ),
+            )
+            inserted_count = max(int(inserted.rowcount or 0), 0)
+            counts["memory_write_policies"] += inserted_count
+            if inserted_count:
+                continue
+            updated = self.conn.execute(
+                """
+                UPDATE memory_write_policies
+                SET updated_at = ?, decision = ?, reason = ?, metadata_json = ?
+                WHERE policy_id = ?
+                   OR (agent_id = ? AND scope = ? AND action = ?)
+                """,
+                (
+                    str(policy.get("updated_at") or now_iso()),
+                    decision,
+                    str(policy.get("reason", "")),
+                    self._json_text(policy.get("metadata_json"), "{}"),
+                    policy_id,
+                    agent_id,
+                    scope,
+                    action,
+                ),
+            )
+            counts["memory_write_policies_updated"] += max(int(updated.rowcount or 0), 0)
+
+        for audit in self._importable_rows(policy_state.get("audit")):
+            audit_id = str(audit.get("audit_id", ""))
+            if not audit_id:
+                counts["skipped_invalid"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO audit_log
+                  (audit_id, created_at, action, target_type, target_id, actor,
+                   details_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    audit_id,
+                    str(audit.get("created_at") or now_iso()),
+                    str(audit.get("action", "")),
+                    str(audit.get("target_type", "")),
+                    str(audit.get("target_id", "")),
+                    str(audit.get("actor", "user")),
+                    self._json_text(audit.get("details_json"), "{}"),
+                ),
+            )
+            counts["policy_audit"] += max(int(inserted.rowcount or 0), 0)
 
     def _import_memory_lifecycle(self, lifecycle: Any, counts: defaultdict[str, int]) -> None:
         if not isinstance(lifecycle, dict):
@@ -13099,6 +13238,86 @@ class MemoryStore:
         return {
             "turns": [dict(row) for row in turn_rows],
             "summaries": [dict(row) for row in summary_rows],
+        }
+
+    def _export_memory_policy_state(self, *, scope: str | None) -> dict[str, Any]:
+        if scope:
+            read_rows = self.conn.execute(
+                """
+                SELECT policy_id, created_at, updated_at, agent_id, scope,
+                       action, decision, reason, metadata_json
+                FROM memory_read_policies
+                WHERE scope IN (?, '*')
+                ORDER BY created_at ASC
+                """,
+                (scope,),
+            ).fetchall()
+            write_rows = self.conn.execute(
+                """
+                SELECT policy_id, created_at, updated_at, agent_id, scope,
+                       action, decision, reason, metadata_json
+                FROM memory_write_policies
+                WHERE scope IN (?, '*')
+                ORDER BY created_at ASC
+                """,
+                (scope,),
+            ).fetchall()
+        else:
+            read_rows = self.conn.execute(
+                """
+                SELECT policy_id, created_at, updated_at, agent_id, scope,
+                       action, decision, reason, metadata_json
+                FROM memory_read_policies
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+            write_rows = self.conn.execute(
+                """
+                SELECT policy_id, created_at, updated_at, agent_id, scope,
+                       action, decision, reason, metadata_json
+                FROM memory_write_policies
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+        read_policies = [dict(row) for row in read_rows]
+        write_policies = [dict(row) for row in write_rows]
+        policy_ids = [
+            str(item["policy_id"])
+            for item in [*read_policies, *write_policies]
+            if str(item.get("policy_id") or "")
+        ]
+        audit: list[dict[str, Any]] = []
+        if policy_ids:
+            placeholders = ",".join("?" for _ in policy_ids)
+            audit = [
+                dict(row)
+                for row in self.conn.execute(
+                    f"""
+                    SELECT audit_id, created_at, actor, action, target_type,
+                           target_id, details_json
+                    FROM audit_log
+                    WHERE target_id IN ({placeholders})
+                      AND target_type IN (
+                        'read_policy',
+                        'memory_read_policy',
+                        'memory_write_policy'
+                      )
+                    ORDER BY created_at ASC
+                    """,
+                    tuple(policy_ids),
+                ).fetchall()
+            ]
+        return {
+            "version": "memory-policy-state-v0.1",
+            "scope": scope or "all",
+            "counts": {
+                "read_policies": len(read_policies),
+                "write_policies": len(write_policies),
+                "audit_events": len(audit),
+            },
+            "read_policies": read_policies,
+            "write_policies": write_policies,
+            "audit": audit,
         }
 
     def _export_memory_lifecycle(self, *, scope: str | None) -> dict[str, Any]:

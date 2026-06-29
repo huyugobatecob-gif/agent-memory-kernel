@@ -171,7 +171,8 @@ These traces prove that a compatible adapter can retrieve both success and
 failure outcome evidence, inspect graph nodes with source previews, share
 profile shape without leaking content-bearing memory fields, preserve inactive
 memory as lifecycle tombstones outside the active tree, restore lifecycle
-tombstones without reactivating them, verify the local SQLite schema before
+tombstones without reactivating them, preserve read/write policy metadata so
+restored denial paths still fail closed, verify the local SQLite schema before
 rollout, keep unsafe or untrusted content out of prompt-facing retrieval until
 review, and prevent personal full-content export without approval.
 `agent-memory conformance certify` and `POST /conformance/certify` wrap those

@@ -73,6 +73,8 @@ Implemented local runtime behavior:
   matched read policy in prompt envelope metadata.
 - denied direct search, context/tree-pack retrieval, and export paths fail
   closed when called with the denied actor and scope.
+- profile export/import preserves applicable read/write policy metadata and
+  policy audit events so restored stores keep fail-closed denial behavior.
 - correction and rollback history is stored in `memory_revisions` so operators
   can inspect and restore prior memory text without erasing audit history.
 

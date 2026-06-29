@@ -504,9 +504,13 @@ with explicit redaction markers. `full` is the default and includes content.
 Profile exports include a `memory_lifecycle` section so inactive memory remains
 auditable as tombstones, revisions, derived invalidations, and audit events
 without re-entering the active memory tree.
+They also include a `memory_policy_state` section with applicable read/write
+policies and policy audit events, so imported stores keep the same deny/allow
+decisions instead of silently widening access.
 Full profile imports restore lifecycle rows, source events, candidates, memory
 items, source references, review actions, revisions, invalidations, and audit
-records while keeping deleted or distrusted memory out of retrieval.
+records plus read/write policy state while keeping deleted or distrusted memory
+out of retrieval.
 When a `full` export includes personal or secret active memory, request and
 approve a one-time export approval before passing `--approval-id`.
 

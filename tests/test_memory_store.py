@@ -251,28 +251,28 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional",
                 auto_approve=True,
             )["candidates"][0]["memory_id"]
-            store.set_read_policy(
+            blocked_search_policy = store.set_read_policy(
                 agent_id="blocked-search",
                 scope="professional",
                 action="read",
                 decision="deny",
                 reason="search requires delegated consent",
             )
-            store.set_read_policy(
+            blocked_inject_policy = store.set_read_policy(
                 agent_id="blocked-inject",
                 scope="professional",
                 action="inject",
                 decision="deny",
                 reason="prompt injection requires delegated consent",
             )
-            store.set_read_policy(
+            blocked_export_policy = store.set_read_policy(
                 agent_id="blocked-export",
                 scope="professional",
                 action="export",
                 decision="deny",
                 reason="export requires delegated consent",
             )
-            store.set_write_policy(
+            blocked_delete_policy = store.set_write_policy(
                 agent_id="blocked-export",
                 scope="professional",
                 action="delete",
@@ -355,6 +355,55 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertTrue(allowed)
             allowed_export = store.export_control_report(actor="allowed-reader", scope="professional")
             self.assertTrue(allowed_export["allowed"])
+
+            profile = store.export_profile(scope="professional", actor="allowed-reader")
+            policy_state = profile["memory_policy_state"]
+            self.assertEqual(policy_state["version"], "memory-policy-state-v0.1")
+            self.assertEqual(policy_state["counts"]["read_policies"], 3)
+            self.assertEqual(policy_state["counts"]["write_policies"], 1)
+            self.assertEqual(
+                {item["policy_id"] for item in policy_state["read_policies"]},
+                {
+                    blocked_search_policy["policy_id"],
+                    blocked_inject_policy["policy_id"],
+                    blocked_export_policy["policy_id"],
+                },
+            )
+            self.assertEqual(
+                {item["policy_id"] for item in policy_state["write_policies"]},
+                {blocked_delete_policy["policy_id"]},
+            )
+
+            imported = MemoryStore(Path(tmp) / "imported-policy.db")
+            imported.init_db()
+            import_counts = imported.import_profile(profile)
+            self.assertEqual(import_counts["memory_read_policies"], 3)
+            self.assertEqual(import_counts["memory_write_policies"], 1)
+            self.assertGreaterEqual(import_counts["policy_audit"], 4)
+
+            restored_report = imported.capability_report(
+                actor="blocked-export",
+                scope="professional",
+            )
+            self.assertEqual(
+                restored_report["read"]["export"]["policy_id"],
+                blocked_export_policy["policy_id"],
+            )
+            self.assertEqual(restored_report["read"]["export"]["decision"], "deny")
+            self.assertEqual(
+                restored_report["write"]["delete"]["policy_id"],
+                blocked_delete_policy["policy_id"],
+            )
+            self.assertEqual(restored_report["write"]["delete"]["decision"], "deny")
+            with self.assertRaises(PermissionError):
+                imported.search("consent-site", scope="professional", actor="blocked-search")
+            with self.assertRaises(PermissionError):
+                imported.memory_tree_pack("consent-site", scope="professional", actor="blocked-inject")
+            with self.assertRaises(PermissionError):
+                imported.export_profile(scope="professional", actor="blocked-export")
+            with self.assertRaises(PermissionError):
+                imported.delete_memory(memory, actor="blocked-export")
+            imported.close()
             store.close()
 
     def test_sensitive_export_requires_one_time_approval(self) -> None:

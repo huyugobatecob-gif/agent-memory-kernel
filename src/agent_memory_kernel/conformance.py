@@ -79,6 +79,7 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_safe_export_redacts_memory_content",
                     "golden_trace_export_preserves_lifecycle_tombstones",
                     "golden_trace_import_restores_lifecycle_tombstones",
+                    "golden_trace_import_preserves_policy_metadata",
                 ],
             },
             {
@@ -234,6 +235,14 @@ def conformance_spec() -> dict[str, Any]:
                     "profile import restores active memory with provenance handles",
                     "inactive memory remains inactive after import",
                     "lifecycle invalidation and audit metadata survive roundtrip",
+                ],
+            },
+            {
+                "id": "golden_trace_import_preserves_policy_metadata",
+                "requires": [
+                    "profile export includes applicable read and write policies",
+                    "profile import restores policy decisions and policy ids",
+                    "restored read/write denials still fail closed",
                 ],
             },
             {
@@ -946,6 +955,7 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         actor="conformance",
     )
     lifecycle = full_export.get("memory_lifecycle", {})
+    policy_state = full_export.get("memory_policy_state", {})
     lifecycle_text = json.dumps(lifecycle, sort_keys=True)
     active_tree_text = json.dumps(full_export.get("memory_tree", {}), sort_keys=True)
     tombstones = lifecycle.get("tombstones", [])
@@ -978,6 +988,31 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         restored_tree_text = json.dumps(restored_export.get("memory_tree", {}), sort_keys=True)
         restored_active = restored.search("Statamic", scope=CONFORMANCE_SCOPE, actor="conformance")
         restored_deleted = restored.search("OldSEO", scope=CONFORMANCE_SCOPE, actor="conformance")
+        restored_capability = restored.capability_report(
+            actor="blocked-conformance-export",
+            scope=CONFORMANCE_SCOPE,
+        )
+        restored_export_blocked = False
+        restored_delete_blocked = False
+        try:
+            restored.export_profile(
+                scope=CONFORMANCE_SCOPE,
+                actor="blocked-conformance-export",
+            )
+        except PermissionError:
+            restored_export_blocked = True
+        try:
+            restored.delete_memory(
+                str(
+                    restored.conn.execute(
+                        "SELECT memory_id FROM memories WHERE scope = ? LIMIT 1",
+                        (CONFORMANCE_SCOPE,),
+                    ).fetchone()["memory_id"]
+                ),
+                actor="blocked-conformance-export",
+            )
+        except PermissionError:
+            restored_delete_blocked = True
         _append_result(
             results,
             "golden_trace_import_restores_lifecycle_tombstones",
@@ -997,6 +1032,28 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "restored_status_counts": restored_lifecycle.get("status_counts", {}),
                 "active_result_count": len(restored_active),
                 "deleted_result_count": len(restored_deleted),
+            },
+        )
+        _append_result(
+            results,
+            "golden_trace_import_preserves_policy_metadata",
+            policy_state.get("version") == "memory-policy-state-v0.1"
+            and policy_state.get("counts", {}).get("read_policies", 0) >= 1
+            and policy_state.get("counts", {}).get("write_policies", 0) >= 1
+            and import_counts.get("memory_read_policies", 0) >= 1
+            and import_counts.get("memory_write_policies", 0) >= 1
+            and restored_capability["read"]["export"]["decision"] == "deny"
+            and restored_capability["write"]["delete"]["decision"] == "deny"
+            and bool(restored_capability["read"]["export"]["policy_id"])
+            and bool(restored_capability["write"]["delete"]["policy_id"])
+            and restored_export_blocked
+            and restored_delete_blocked,
+            {
+                "policy_counts": policy_state.get("counts", {}),
+                "import_counts": import_counts,
+                "restored_denied_actions": restored_capability.get("denied_actions", []),
+                "export_blocked": restored_export_blocked,
+                "delete_blocked": restored_delete_blocked,
             },
         )
     finally:
