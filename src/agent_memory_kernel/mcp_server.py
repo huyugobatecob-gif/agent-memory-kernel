@@ -249,6 +249,15 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_kernel_status": {
+        "endpoint": "/kernel/status",
+        "description": "Report kernel API, contract, schema, bundle, conformance, and compatibility versions.",
+        "inputSchema": _schema(
+            {
+                "integrity_check": _boolean("Run SQLite quick_check.", True),
+            }
+        ),
+    },
     "memory_observability": {
         "endpoint": "/observability",
         "description": "Summarize Router, Keeper, and LLM usage telemetry for memory operations.",

@@ -145,6 +145,7 @@ EXPORT_CUSTODY_VERSION = "export-custody-v0.1"
 VAULT_ADAPTER_VERSION = "vault-adapter-v0.1"
 ENCRYPTED_EXPORT_VERSION = "encrypted-export-v0.1"
 AMK_BUNDLE_VERSION = "amk-bundle-v0.1"
+KERNEL_STATUS_VERSION = "kernel-status-v0.1"
 SCHEMA_VERSION = 1
 EXPORT_REDACTION_PROFILES = {"full", "safe", "metadata"}
 EXPORT_APPROVAL_KINDS = {"profile", "markdown"}
@@ -2369,6 +2370,125 @@ class MemoryStore:
                 "before_model_call": "return no-memory envelope on retrieval failure",
                 "after_saved_turn": "persist turns and mark keeper job failed on extraction failure",
             },
+        }
+
+    def kernel_status(self, *, integrity_check: bool = True) -> dict[str, Any]:
+        """Return the stable local kernel compatibility and version surface."""
+        from .contract import assert_contract_shape, memory_contract
+
+        try:
+            from .conformance import CONFORMANCE_VERSION as conformance_version
+        except Exception:  # pragma: no cover - defensive import boundary
+            conformance_version = "unknown"
+
+        contract = memory_contract()
+        contract_shape = assert_contract_shape(contract)
+        migration = self.migration_status(integrity_check=integrity_check)
+        versions = {
+            "schema": SCHEMA_VERSION,
+            "contract": contract.get("version", ""),
+            "conformance": conformance_version,
+            "bundle": AMK_BUNDLE_VERSION,
+            "kernel_status": KERNEL_STATUS_VERSION,
+            "migration_status": migration.get("version", ""),
+            "migration_changelog": MIGRATION_CHANGELOG_VERSION,
+            "restore_drill": RESTORE_DRILL_VERSION,
+            "restore_drill_schedule": RESTORE_DRILL_SCHEDULE_VERSION,
+            "read_time_policy": READ_TIME_POLICY_VERSION,
+            "capability_consent": CAPABILITY_CONSENT_VERSION,
+            "identity_delegation": IDENTITY_DELEGATION_VERSION,
+            "derived_invalidation": DERIVED_INVALIDATION_VERSION,
+            "derived_lineage": DERIVED_LINEAGE_VERSION,
+            "lifecycle_batch": MEMORY_LIFECYCLE_BATCH_VERSION,
+            "review_inbox": REVIEW_INBOX_VERSION,
+            "review_batch": REVIEW_BATCH_VERSION,
+            "graph_browser": GRAPH_BROWSER_VERSION,
+            "graph_command": GRAPH_COMMAND_VERSION,
+            "prompt_budget_adapter": PROMPT_BUDGET_ADAPTER_VERSION,
+            "prompt_formatter": PROMPT_FORMATTER_VERSION,
+            "prompt_formatter_certification": PROMPT_FORMATTER_CERTIFICATION_VERSION,
+            "operational_failure": OPERATIONAL_FAILURE_VERSION,
+            "export_control": EXPORT_CONTROL_VERSION,
+            "export_redaction": EXPORT_REDACTION_VERSION,
+            "export_approval": EXPORT_APPROVAL_VERSION,
+            "export_retention": EXPORT_RETENTION_VERSION,
+            "export_custody": EXPORT_CUSTODY_VERSION,
+        }
+        extension_versions = {
+            "embedding_contract": "local-deterministic-fallback",
+            "vault_adapter": VAULT_ADAPTER_VERSION,
+            "encrypted_export": ENCRYPTED_EXPORT_VERSION,
+            "notification_queue": NOTIFICATION_QUEUE_VERSION,
+            "notification_delivery": NOTIFICATION_DELIVERY_VERSION,
+            "billing_reconciliation": BILLING_RECONCILIATION_VERSION,
+            "brain_style_certification": BRAIN_STYLE_CERTIFICATION_VERSION,
+        }
+        checks = [
+            {
+                "name": "migration_status",
+                "passed": migration.get("status") == "pass" and bool(migration.get("compatible")),
+                "severity": "fail",
+                "detail": migration.get("status", "unknown"),
+            },
+            {
+                "name": "contract_shape",
+                "passed": contract_shape.get("status") == "pass",
+                "severity": "fail",
+                "detail": contract_shape.get("status", "unknown"),
+            },
+            {
+                "name": "schema_version",
+                "passed": bool(SCHEMA_VERSION),
+                "severity": "fail",
+                "expected": SCHEMA_VERSION,
+                "actual": migration.get("sqlite_user_version"),
+            },
+            {
+                "name": "bundle_version",
+                "passed": bool(AMK_BUNDLE_VERSION),
+                "severity": "fail",
+                "detail": AMK_BUNDLE_VERSION,
+            },
+            {
+                "name": "conformance_version",
+                "passed": conformance_version != "unknown",
+                "severity": "fail",
+                "detail": conformance_version,
+            },
+        ]
+        failures = [
+            check for check in checks if not check["passed"] and check["severity"] == "fail"
+        ]
+        return {
+            "version": KERNEL_STATUS_VERSION,
+            "status": "fail" if failures else "pass",
+            "compatible": not failures,
+            "kernel": {
+                "name": "agent-memory-kernel",
+                "mode": "local-first",
+                "requires_live_provider": False,
+                "requires_hosted_service": False,
+            },
+            "versions": versions,
+            "extension_versions": extension_versions,
+            "surfaces": {
+                "python": ["MemoryStore.kernel_status"],
+                "cli": ["kernel-status"],
+                "http": ["/kernel/status", "/kernel-status"],
+                "mcp": ["memory_kernel_status"],
+            },
+            "capability_levels": [
+                "read-only",
+                "write-capable",
+                "lifecycle-capable",
+                "graph-capable",
+                "export-capable",
+                "prompt-injection-capable",
+            ],
+            "migration": migration,
+            "contract_shape": contract_shape,
+            "checks": checks,
+            "failures": failures,
         }
 
     def migration_status(self, *, integrity_check: bool = True) -> dict[str, Any]:

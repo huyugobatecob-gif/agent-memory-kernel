@@ -77,6 +77,8 @@ Included now:
   distrust, expire, and supersede lifecycle actions.
 - Operational status checks and no-memory/failed-Keeper fallbacks for local
   runtime failures.
+- Kernel status report for local API, contract, schema, bundle, conformance,
+  lifecycle, policy, migration, and compatibility versions.
 - SQLite migration status, migration changelog, backup/restore commands, and
   local restore-drill schedules for recovery supervision.
 - Conflict and supersession records for truth maintenance.

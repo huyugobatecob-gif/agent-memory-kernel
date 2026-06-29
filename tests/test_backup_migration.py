@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from agent_memory_kernel.cli import build_parser
-from agent_memory_kernel.mcp_server import list_mcp_tools
+from agent_memory_kernel.mcp_server import MCPMemoryServer, list_mcp_tools
 from agent_memory_kernel.server import handle_api_request
 from agent_memory_kernel.store import MemoryStore
 
@@ -164,6 +164,22 @@ class BackupMigrationTests(unittest.TestCase):
             status = handle_api_request(store, "/migration/status", {})
             self.assertEqual(status["status"], "pass")
 
+            kernel_status = store.kernel_status()
+            self.assertEqual(kernel_status["version"], "kernel-status-v0.1")
+            self.assertEqual(kernel_status["status"], "pass")
+            self.assertTrue(kernel_status["compatible"])
+            self.assertEqual(kernel_status["versions"]["schema"], 1)
+            self.assertEqual(kernel_status["versions"]["contract"], "memory-contract-v0.2")
+            self.assertEqual(kernel_status["versions"]["bundle"], "amk-bundle-v0.1")
+            self.assertEqual(
+                kernel_status["surfaces"]["mcp"],
+                ["memory_kernel_status"],
+            )
+
+            kernel_endpoint = handle_api_request(store, "/kernel/status", {})
+            self.assertEqual(kernel_endpoint["status"], "pass")
+            self.assertEqual(kernel_endpoint["versions"]["schema"], 1)
+
             backup_result = handle_api_request(
                 store,
                 "/backup",
@@ -228,6 +244,7 @@ class BackupMigrationTests(unittest.TestCase):
             self.assertEqual(api_run_due["processed"], 1)
 
             names = {tool["name"] for tool in list_mcp_tools()}
+            self.assertIn("memory_kernel_status", names)
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_migration_changelog", names)
             self.assertIn("memory_backup_database", names)
@@ -237,7 +254,25 @@ class BackupMigrationTests(unittest.TestCase):
             self.assertIn("memory_restore_drill_schedules", names)
             self.assertIn("memory_restore_drill_schedule_run_due", names)
 
+            kernel_call = MCPMemoryServer(db).handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "method": "tools/call",
+                    "params": {"name": "memory_kernel_status", "arguments": {}},
+                }
+            )
+            self.assertFalse(kernel_call["result"]["isError"])
+            self.assertEqual(kernel_call["result"]["structuredContent"]["status"], "pass")
+
             parser = build_parser()
+            args = parser.parse_args(["kernel-status", "--db", str(db)])
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["version"], "kernel-status-v0.1")
+
             args = parser.parse_args(["migration-status", "--db", str(db)])
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
