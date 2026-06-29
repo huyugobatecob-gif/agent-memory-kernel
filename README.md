@@ -27,6 +27,8 @@ integrations are optional extensions.
 
 The local v1 threat model is defined in
 [docs/threat-model.md](docs/threat-model.md).
+The executable invariant map is tracked in
+[docs/invariant-verifier-map.md](docs/invariant-verifier-map.md).
 
 ## Why this exists
 

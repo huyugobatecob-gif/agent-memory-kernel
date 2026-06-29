@@ -32,7 +32,7 @@ Status labels:
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, graph evidence-chain round trip, `.amk` bundle manifest/checksum round trip with graph evidence and derived invalidations | Expand edge-case fixtures for poisoned imports and partial/redacted bundles. |
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
-| Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Add invariant matrix coverage for remaining kernel laws and extension adapter snapshots. |
+| Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, `docs/invariant-verifier-map.md`, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Expand invariant coverage for remaining edge cases and extension adapter snapshots. |
 | Stable local API/versioning | partial | machine-readable contract, schema migration status, `kernel_status`, conformance scenario, bundle versioning | Add cross-version fixtures and compatibility-edge cases for the status surface. |
 | Threat and recovery model | partial | `docs/threat-model.md`, machine-readable contract threat model, quarantine, prompt-injection-like filtering, backup/migration tests, export controls | Add corrupted-store, interrupted import/export, and audit tamper-evidence fixtures. |
 
@@ -58,8 +58,10 @@ Status labels:
 
 ## Immediate Kernel Gaps
 
-1. Keep `AMK-000` and the invariant matrix mapped to the code path and
-   test/conformance scenario that proves every kernel law.
+1. Harden `AMK-000` and the invariant matrix. `docs/invariant-verifier-map.md`
+   and `memory_contract()["kernel_invariants"]` now map each core law to code
+   paths and verifiers; remaining work is deeper edge-case fixtures for the
+   mapped laws.
 2. Harden the public threat model. `docs/threat-model.md` and
    `memory_contract()["threat_model"]` now map prompt injection, malicious
    bundles, private-lane leakage, retained stale evidence, corrupt stores, and

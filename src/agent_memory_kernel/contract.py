@@ -115,6 +115,166 @@ DERIVED_PROMPT_SURFACES = {
     }
 }
 
+KERNEL_INVARIANTS = [
+    {
+        "id": "deleted_memory_absent_from_retained_evidence",
+        "statement": "Deleted memory cannot reappear from retained source evidence.",
+        "code_paths": [
+            "MemoryStore.delete_memory",
+            "MemoryStore.search",
+            "MemoryStore.before_model_call",
+            "MemoryStore.graph_browser",
+            "MemoryStore.export_profile",
+        ],
+        "verifiers": [
+            "deleted_memory_absent",
+            "derived_invalidation_is_auditable",
+        ],
+    },
+    {
+        "id": "distrusted_sources_do_not_influence_outputs",
+        "statement": "Distrusted or quarantined sources cannot influence retrieval, summaries, graph-derived state, exports, or prompts.",
+        "code_paths": [
+            "MemoryStore.distrust_memory",
+            "MemoryStore.search",
+            "MemoryStore.before_model_call",
+            "MemoryStore.export_profile",
+            "MemoryStore.derived_invalidations",
+        ],
+        "verifiers": [
+            "distrusted_memory_absent_from_summaries_and_derived",
+            "tool_prompt_injection_is_quarantined",
+            "secret_like_memory_is_quarantined",
+        ],
+    },
+    {
+        "id": "scope_lane_namespace_isolation",
+        "statement": "Scope, lane, namespace, personal, or private memory cannot leak across prompts, graph evidence, summaries, browser previews, or exports.",
+        "code_paths": [
+            "resolve_scope_access",
+            "MemoryStore.before_model_call",
+            "MemoryStore.graph_browser",
+            "MemoryStore.export_profile",
+            "MemoryStore.list_semantic_analyses",
+        ],
+        "verifiers": [
+            "personal_lane_is_withheld",
+            "personal_lane_absent_from_derived_surfaces",
+            "personal_lane_absent_from_graph_surfaces",
+            "stored_read_policy_denies_injection",
+        ],
+    },
+    {
+        "id": "lifecycle_mutations_invalidate_derived_memory",
+        "statement": "Correction, rollback, delete, distrust, expire, and supersede invalidate derived memory and prompt/export surfaces.",
+        "code_paths": [
+            "MemoryStore.correct_memory",
+            "MemoryStore.rollback_memory",
+            "MemoryStore.delete_memory",
+            "MemoryStore.distrust_memory",
+            "MemoryStore.expire_memory",
+            "MemoryStore.supersede_memory",
+            "MemoryStore.derived_invalidations",
+        ],
+        "verifiers": [
+            "derived_invalidation_is_auditable",
+            "golden_trace_import_restores_lifecycle_tombstones",
+            "golden_trace_import_preserves_policy_metadata",
+        ],
+    },
+    {
+        "id": "prompt_envelope_selected_budgeted_content_only",
+        "statement": "Prompt envelopes contain selected, policy-filtered, budgeted memory only and never the full graph.",
+        "code_paths": [
+            "MemoryStore.before_model_call",
+            "MemoryStore.context_pack",
+            "MemoryStore.memory_tree_pack",
+            "MemoryStore.format_prompt_envelope",
+        ],
+        "verifiers": [
+            "prompt_envelope_contains_selected_content_only",
+            "golden_trace_prompt_budget_trims_context_pack",
+            "golden_trace_provider_prompt_formatters_preserve_boundaries",
+        ],
+    },
+    {
+        "id": "deterministic_retrieval_without_embeddings",
+        "statement": "Baseline retrieval ranking is deterministic without embeddings or live provider calls.",
+        "code_paths": [
+            "MemoryStore.before_model_call",
+            "MemoryStore.current_best",
+            "MemoryStore.search",
+        ],
+        "verifiers": [
+            "golden_trace_deterministic_ranking_snapshot",
+            "golden_trace_large_history_prompt_is_bounded",
+        ],
+    },
+    {
+        "id": "import_export_preserves_provenance_and_lifecycle",
+        "statement": "Import/export preserves ids, provenance, evidence, tombstones, trust state, review history, policy metadata, and lifecycle state.",
+        "code_paths": [
+            "MemoryStore.export_profile",
+            "MemoryStore.import_profile",
+            "MemoryStore.export_bundle",
+            "MemoryStore.verify_bundle",
+            "MemoryStore.import_bundle",
+        ],
+        "verifiers": [
+            "golden_trace_portable_bundle_manifest_roundtrip",
+            "golden_trace_import_restores_lifecycle_tombstones",
+            "golden_trace_import_preserves_policy_metadata",
+            "golden_trace_import_preserves_graph_evidence_chains",
+        ],
+    },
+    {
+        "id": "auditable_memory_actions",
+        "statement": "Every read, write, inject, export, correction, deletion, denial, and lifecycle change is auditable.",
+        "code_paths": [
+            "MemoryStore.remember",
+            "MemoryStore.before_model_call",
+            "MemoryStore.memory_changes",
+            "MemoryStore.explain_router_run",
+            "MemoryStore.export_profile",
+        ],
+        "verifiers": [
+            "professional_memory_injected_with_provenance",
+            "keeper_change_is_inspectable",
+            "golden_trace_graph_browser_shows_source_previews",
+        ],
+    },
+    {
+        "id": "capability_grants_gate_local_actions",
+        "statement": "Local actors can perform only actions allowed by capability grants and policy.",
+        "code_paths": [
+            "MemoryStore.capability_report",
+            "MemoryStore.set_read_policy",
+            "MemoryStore.set_write_policy",
+            "MemoryStore.before_model_call",
+            "MemoryStore.approve_candidate",
+        ],
+        "verifiers": [
+            "capability_report_blocks_denied_actions",
+            "stored_read_policy_denies_injection",
+        ],
+    },
+    {
+        "id": "large_histories_stay_bounded",
+        "statement": "Large histories remain bounded and predictable for retrieval, prompt budget, export size, and local resource usage.",
+        "code_paths": [
+            "MemoryStore.before_model_call",
+            "MemoryStore.prompt_budget_profile",
+            "MemoryStore.migration_status",
+            "MemoryStore.kernel_status",
+        ],
+        "verifiers": [
+            "golden_trace_large_history_prompt_is_bounded",
+            "golden_trace_prompt_budget_trims_context_pack",
+            "kernel_status_reports_compatible_versions",
+        ],
+    },
+]
+
 THREAT_MODEL = [
     {
         "id": "prompt_injection_memory",
@@ -340,6 +500,7 @@ def memory_contract() -> dict[str, Any]:
         "trust_levels": TRUST_LEVELS,
         "sensitivity_levels": SENSITIVITY_LEVELS,
         "derived_prompt_surfaces": DERIVED_PROMPT_SURFACES,
+        "kernel_invariants": KERNEL_INVARIANTS,
         "threat_model": THREAT_MODEL,
         "acceptance_gates": ACCEPTANCE_GATES,
         "closed_loop": [
@@ -372,6 +533,14 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "operational_failure_model_present": "operational_failure_model" in gate_names,
         "closed_loop_present": len(data.get("closed_loop", [])) >= 6,
         "brain_style_surface_present": "brain_style" in data.get("derived_prompt_surfaces", {}),
+        "kernel_invariants_present": len(data.get("kernel_invariants", [])) >= 10,
+        "kernel_invariants_have_verifiers": all(
+            item.get("id")
+            and item.get("statement")
+            and item.get("code_paths")
+            and item.get("verifiers")
+            for item in data.get("kernel_invariants", [])
+        ),
         "threat_model_present": len(data.get("threat_model", [])) >= 8,
         "threat_model_verifiers_present": all(
             item.get("id")

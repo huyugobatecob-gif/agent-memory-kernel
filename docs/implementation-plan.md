@@ -12,9 +12,10 @@ kernel contract rather than define it.
 The governing documents are [../SPEC.md](../SPEC.md),
 [kernel-charter.md](kernel-charter.md),
 [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md), and
-[backlog-cutover.md](backlog-cutover.md). The v1 threat model is tracked in
-[threat-model.md](threat-model.md). Current implementation state is tracked in
-[core-status-audit.md](core-status-audit.md).
+[backlog-cutover.md](backlog-cutover.md). The executable invariant map is
+tracked in [invariant-verifier-map.md](invariant-verifier-map.md), and the v1
+threat model is tracked in [threat-model.md](threat-model.md). Current
+implementation state is tracked in [core-status-audit.md](core-status-audit.md).
 
 ## Public V1 Outcome
 

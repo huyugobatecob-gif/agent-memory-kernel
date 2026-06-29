@@ -34,6 +34,26 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("project", contract["extension_lanes"])
         self.assertIn("before_model_call runs before a non-incognito main model call", str(contract))
         self.assertIn("revise_or_forget", contract["closed_loop"])
+        invariant_ids = {item["id"] for item in contract["kernel_invariants"]}
+        self.assertTrue(
+            {
+                "deleted_memory_absent_from_retained_evidence",
+                "distrusted_sources_do_not_influence_outputs",
+                "scope_lane_namespace_isolation",
+                "lifecycle_mutations_invalidate_derived_memory",
+                "prompt_envelope_selected_budgeted_content_only",
+                "deterministic_retrieval_without_embeddings",
+                "import_export_preserves_provenance_and_lifecycle",
+                "auditable_memory_actions",
+                "capability_grants_gate_local_actions",
+                "large_histories_stay_bounded",
+            }.issubset(invariant_ids)
+        )
+        self.assertTrue(
+            all(item["code_paths"] and item["verifiers"] for item in contract["kernel_invariants"])
+        )
+        self.assertIn("deleted_memory_absent", str(contract["kernel_invariants"]))
+        self.assertIn("golden_trace_deterministic_ranking_snapshot", str(contract["kernel_invariants"]))
         threat_ids = {item["id"] for item in contract["threat_model"]}
         self.assertTrue(
             {
