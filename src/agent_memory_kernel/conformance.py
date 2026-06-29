@@ -144,6 +144,17 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "kernel_status_compatibility_trace",
+                "steps": [
+                    "initialize a local SQLite memory store",
+                    "run the kernel status compatibility report",
+                    "verify schema, contract, conformance, bundle, migration, and public surface versions are present",
+                ],
+                "expected_scenarios": [
+                    "kernel_status_reports_compatible_versions"
+                ],
+            },
+            {
                 "id": "security_red_team_trace",
                 "steps": [
                     "attempt to store secret-like user text",
@@ -389,6 +400,15 @@ def conformance_spec() -> dict[str, Any]:
                     "migration status reports pass and compatible",
                     "required runtime tables are present with expected columns",
                     "SQLite quick_check passes before adapter rollout",
+                ],
+            },
+            {
+                "id": "kernel_status_reports_compatible_versions",
+                "requires": [
+                    "kernel status reports pass and compatible",
+                    "schema, contract, conformance, and bundle versions are present",
+                    "stable Python, CLI, HTTP, and MCP surfaces are named",
+                    "migration compatibility is embedded in the kernel status report",
                 ],
             },
             {
@@ -1831,6 +1851,31 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "failures": migration.get("failures", []),
         },
     )
+    kernel_status = store.kernel_status()
+    kernel_versions = kernel_status.get("versions", {})
+    kernel_surfaces = kernel_status.get("surfaces", {})
+    _append_result(
+        results,
+        "kernel_status_reports_compatible_versions",
+        kernel_status.get("status") == "pass"
+        and bool(kernel_status.get("compatible"))
+        and kernel_versions.get("schema") == 1
+        and kernel_versions.get("contract") == memory_contract()["version"]
+        and kernel_versions.get("conformance") == CONFORMANCE_VERSION
+        and kernel_versions.get("bundle") == "amk-bundle-v0.1"
+        and kernel_status.get("migration", {}).get("status") == "pass"
+        and "MemoryStore.kernel_status" in kernel_surfaces.get("python", [])
+        and "kernel-status" in kernel_surfaces.get("cli", [])
+        and "/kernel/status" in kernel_surfaces.get("http", [])
+        and "memory_kernel_status" in kernel_surfaces.get("mcp", []),
+        {
+            "status": kernel_status.get("status"),
+            "compatible": kernel_status.get("compatible"),
+            "versions": kernel_versions,
+            "surfaces": kernel_surfaces,
+            "failures": kernel_status.get("failures", []),
+        },
+    )
 
     status = "pass" if all(item["passed"] for item in results) else "fail"
     return {
@@ -2026,6 +2071,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_safe_export_redacts_memory_content",
         "golden_trace_import_preserves_graph_evidence_chains",
         "migration_status_is_compatible",
+        "kernel_status_reports_compatible_versions",
         "secret_like_memory_is_quarantined",
         "tool_prompt_injection_is_quarantined",
         "untrusted_tool_claim_stays_reviewable",

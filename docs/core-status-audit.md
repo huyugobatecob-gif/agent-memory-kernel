@@ -33,7 +33,7 @@ Status labels:
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, graph evidence-chain round trip, `.amk` bundle manifest/checksum round trip with graph evidence and derived invalidations | Expand edge-case fixtures for poisoned imports and partial/redacted bundles. |
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Add invariant matrix coverage for remaining kernel laws and extension adapter snapshots. |
-| Stable local API/versioning | partial | machine-readable contract, schema migration status, `kernel_status`, conformance versioning, bundle versioning | Add conformance coverage and cross-version fixtures for the compatibility/status surface. |
+| Stable local API/versioning | partial | machine-readable contract, schema migration status, `kernel_status`, conformance scenario, bundle versioning | Add cross-version fixtures and compatibility-edge cases for the status surface. |
 | Threat and recovery model | partial | quarantine, prompt-injection-like filtering, backup/migration tests, export controls | Document and verify malicious bundle/import behavior, corrupted store handling, partial writes, audit tampering risk, and failed recovery paths. |
 
 ## Not Core
@@ -66,8 +66,8 @@ Status labels:
    tampering risk.
 3. Harden the stable local API/versioning status surface. `kernel_status` now
    reports schema, contract, conformance, bundle, lifecycle, policy,
-   capability, migration, and compatibility state; remaining work is
-   conformance coverage and cross-version fixtures.
+   capability, migration, and compatibility state and has conformance coverage;
+   remaining work is cross-version fixtures.
 4. Expand scope/lane/namespace isolation coverage across summaries, semantic
    analyses, graph branches, graph browser previews, graph evidence,
    selected-content prompt envelopes, and optional adapter boundaries.
