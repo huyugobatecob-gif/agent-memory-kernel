@@ -129,6 +129,7 @@ def conformance_spec() -> dict[str, Any]:
                     "golden_trace_import_restores_lifecycle_tombstones",
                     "golden_trace_import_preserves_policy_metadata",
                     "golden_trace_import_preserves_review_history",
+                    "golden_trace_import_preserves_rejected_review_queue",
                     "golden_trace_import_preserves_graph_evidence_chains",
                     "golden_trace_portable_bundle_manifest_roundtrip",
                 ],
@@ -454,6 +455,14 @@ def conformance_spec() -> dict[str, Any]:
                     "profile export includes review actions for memory-linked candidates",
                     "profile import restores review actor, action, reason, and candidate linkage",
                     "restored exports expose the same review history for operator audit",
+                ],
+            },
+            {
+                "id": "golden_trace_import_preserves_rejected_review_queue",
+                "requires": [
+                    "profile export includes pending and rejected candidates without active memories",
+                    "profile import restores rejected candidates and pending candidates as review inbox items",
+                    "restored review queue candidates remain absent from active search and prompt-facing retrieval",
                 ],
             },
             {
@@ -1726,6 +1735,23 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         actor="reviewer",
         reason="portable review history",
     )
+    rejected_queue_candidate_id = store.remember(
+        "Rule: conformance-site rejected queue item remains rejected after import.",
+        scope=CONFORMANCE_SCOPE,
+        source_ref="conformance://review-queue-rejected",
+        auto_approve=False,
+    )["candidates"][0]["candidate_id"]
+    pending_queue_candidate_id = store.remember(
+        "Rule: conformance-site pending queue item remains reviewable after import.",
+        scope=CONFORMANCE_SCOPE,
+        source_ref="conformance://review-queue-pending",
+        auto_approve=False,
+    )["candidates"][0]["candidate_id"]
+    store.reject_candidate(
+        rejected_queue_candidate_id,
+        actor="reviewer",
+        reason="not durable memory",
+    )
     full_export = store.export_profile(
         scope=CONFORMANCE_SCOPE,
         actor="conformance",
@@ -1860,6 +1886,53 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 "imported_review_actions": import_counts.get("review_actions", 0),
                 "exported_review_keys": sorted(exported_review_keys),
                 "restored_review_keys": sorted(restored_review_keys),
+            },
+        )
+        restored_queue_candidates = restored_lifecycle.get("review_queue_candidates", [])
+        restored_queue_ids = {
+            str(item.get("candidate_id", ""))
+            for item in restored_queue_candidates
+        }
+        restored_open_inbox = restored.review_inbox(status="open", scope=CONFORMANCE_SCOPE)
+        restored_rejected_inbox = restored.review_inbox(status="rejected", scope=CONFORMANCE_SCOPE)
+        restored_open_ids = {
+            str(item.get("candidate", {}).get("candidate_id", ""))
+            for item in restored_open_inbox.get("items", [])
+        }
+        restored_rejected_ids = {
+            str(item.get("candidate", {}).get("candidate_id", ""))
+            for item in restored_rejected_inbox.get("items", [])
+        }
+        restored_rejected_search = restored.search(
+            "rejected queue item",
+            scope=CONFORMANCE_SCOPE,
+            actor="conformance",
+        )
+        restored_pending_search = restored.search(
+            "pending queue item",
+            scope=CONFORMANCE_SCOPE,
+            actor="conformance",
+        )
+        _append_result(
+            results,
+            "golden_trace_import_preserves_rejected_review_queue",
+            {rejected_queue_candidate_id, pending_queue_candidate_id}.issubset(
+                restored_queue_ids
+            )
+            and pending_queue_candidate_id in restored_open_ids
+            and rejected_queue_candidate_id in restored_rejected_ids
+            and not restored_rejected_search
+            and not restored_pending_search,
+            {
+                "restored_queue_ids": sorted(restored_queue_ids),
+                "open_inbox_ids": sorted(restored_open_ids),
+                "rejected_inbox_ids": sorted(restored_rejected_ids),
+                "rejected_search_count": len(restored_rejected_search),
+                "pending_search_count": len(restored_pending_search),
+                "restored_queue_count": restored_lifecycle.get("counts", {}).get(
+                    "review_queue_candidates",
+                    0,
+                ),
             },
         )
         exported_tree = full_export.get("memory_tree", {})
@@ -2412,6 +2485,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_safe_export_redacts_memory_content",
         "golden_trace_import_preserves_graph_evidence_chains",
         "golden_trace_import_preserves_review_history",
+        "golden_trace_import_preserves_rejected_review_queue",
         "migration_status_is_compatible",
         "kernel_status_reports_compatible_versions",
         "secret_like_memory_is_quarantined",

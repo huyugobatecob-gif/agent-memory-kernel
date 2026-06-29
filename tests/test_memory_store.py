@@ -795,6 +795,16 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional",
                 auto_approve=True,
             )["candidates"][0]["memory_id"]
+            rejected_candidate_id = store.remember(
+                "Rule: lifecycle-site rejected queue item should not become memory.",
+                scope="professional",
+                auto_approve=False,
+            )["candidates"][0]["candidate_id"]
+            pending_candidate_id = store.remember(
+                "Rule: lifecycle-site pending queue item remains reviewable.",
+                scope="professional",
+                auto_approve=False,
+            )["candidates"][0]["candidate_id"]
 
             store.correct_memory(
                 active_id,
@@ -804,6 +814,11 @@ class MemoryStoreTests(unittest.TestCase):
             )
             store.delete_memory(deleted_id, actor="reviewer", reason="plugin retired")
             store.distrust_memory(distrusted_id, actor="reviewer", reason="source unreliable")
+            store.reject_candidate(
+                rejected_candidate_id,
+                actor="reviewer",
+                reason="not durable memory",
+            )
 
             self.assertEqual(store.search("GhostMarker", scope="professional"), [])
             self.assertEqual(store.search("BadSource", scope="professional"), [])
@@ -837,6 +852,15 @@ class MemoryStoreTests(unittest.TestCase):
                 reviewed_candidate_id,
                 {item["candidate_id"] for item in lifecycle["review_actions"]},
             )
+            self.assertEqual(lifecycle["counts"]["review_queue_candidates"], 2)
+            self.assertEqual(
+                {item["candidate_id"] for item in lifecycle["review_queue_candidates"]},
+                {rejected_candidate_id, pending_candidate_id},
+            )
+            self.assertIn(
+                rejected_candidate_id,
+                {item["candidate_id"] for item in lifecycle["review_actions"]},
+            )
             invalidation_actions = {
                 item["action"] for item in lifecycle["derived_invalidations"]
             }
@@ -858,11 +882,11 @@ class MemoryStoreTests(unittest.TestCase):
             imported = MemoryStore(Path(tmp) / "imported.db")
             imported.init_db()
             import_counts = imported.import_profile(profile)
-            self.assertEqual(import_counts["source_events"], 4)
-            self.assertEqual(import_counts["candidate_memories"], 4)
+            self.assertEqual(import_counts["source_events"], 6)
+            self.assertEqual(import_counts["candidate_memories"], 6)
             self.assertEqual(import_counts["memories"], 4)
             self.assertEqual(import_counts["memory_items"], 4)
-            self.assertEqual(import_counts["review_actions"], 1)
+            self.assertEqual(import_counts["review_actions"], 2)
             self.assertGreaterEqual(import_counts["memory_revisions"], 1)
             self.assertGreaterEqual(import_counts["derived_invalidations"], 3)
             self.assertGreaterEqual(import_counts["audit_log"], 3)
@@ -870,11 +894,33 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional"
             )["memory_lifecycle"]
             restored_reviews = restored_lifecycle_for_review["review_actions"]
-            self.assertEqual(len(restored_reviews), 1)
-            self.assertEqual(restored_reviews[0]["candidate_id"], reviewed_candidate_id)
-            self.assertEqual(restored_reviews[0]["action"], "approve")
-            self.assertEqual(restored_reviews[0]["actor"], "reviewer")
-            self.assertEqual(restored_reviews[0]["reason"], "portable memory review")
+            review_by_candidate = {item["candidate_id"]: item for item in restored_reviews}
+            self.assertEqual(review_by_candidate[reviewed_candidate_id]["action"], "approve")
+            self.assertEqual(review_by_candidate[reviewed_candidate_id]["actor"], "reviewer")
+            self.assertEqual(
+                review_by_candidate[reviewed_candidate_id]["reason"],
+                "portable memory review",
+            )
+            self.assertEqual(review_by_candidate[rejected_candidate_id]["action"], "reject")
+            self.assertEqual(
+                review_by_candidate[rejected_candidate_id]["reason"],
+                "not durable memory",
+            )
+            restored_queue = restored_lifecycle_for_review["review_queue_candidates"]
+            self.assertEqual(
+                {item["candidate_id"] for item in restored_queue},
+                {rejected_candidate_id, pending_candidate_id},
+            )
+            inbox_open = imported.review_inbox(status="open", scope="professional")
+            self.assertEqual(
+                {item["candidate"]["candidate_id"] for item in inbox_open["items"]},
+                {pending_candidate_id},
+            )
+            inbox_rejected = imported.review_inbox(status="rejected", scope="professional")
+            self.assertEqual(
+                {item["candidate"]["candidate_id"] for item in inbox_rejected["items"]},
+                {rejected_candidate_id},
+            )
 
             restored_results = imported.search("DuckDB", scope="professional")
             self.assertEqual(len(restored_results), 1)
@@ -885,6 +931,14 @@ class MemoryStoreTests(unittest.TestCase):
             )
             self.assertEqual(imported.search("GhostMarker", scope="professional"), [])
             self.assertEqual(imported.search("BadSource", scope="professional"), [])
+            self.assertEqual(
+                imported.search("rejected queue item", scope="professional"),
+                [],
+            )
+            self.assertEqual(
+                imported.search("pending queue item", scope="professional"),
+                [],
+            )
             restored_prompt = imported.before_model_call(
                 "lifecycle-site memory status",
                 scope="professional",

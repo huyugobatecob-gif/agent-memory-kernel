@@ -14181,11 +14181,35 @@ class MemoryStore:
             (scope, scope),
         ).fetchall()
         memory_ids = [str(row["memory_id"]) for row in memory_rows]
-        candidate_ids = sorted(
+        memory_candidate_ids = sorted(
             {
                 str(row["candidate_id"])
                 for row in memory_rows
                 if str(row["candidate_id"] or "")
+            }
+        )
+        review_queue_rows = self.conn.execute(
+            """
+            SELECT cm.candidate_id, cm.event_id, cm.created_at, cm.proposed_text,
+                   cm.kind, cm.scope, cm.confidence, cm.sensitivity,
+                   cm.source_trust, cm.status, cm.reason, cm.extraction_json
+            FROM candidate_memories cm
+            LEFT JOIN memories m ON m.candidate_id = cm.candidate_id
+            WHERE (? IS NULL OR cm.scope = ?)
+              AND m.memory_id IS NULL
+            ORDER BY cm.created_at ASC
+            """,
+            (scope, scope),
+        ).fetchall()
+        review_queue_candidates = [dict(row) for row in review_queue_rows]
+        candidate_ids = sorted(
+            {
+                *memory_candidate_ids,
+                *[
+                    str(row["candidate_id"])
+                    for row in review_queue_candidates
+                    if str(row.get("candidate_id") or "")
+                ],
             }
         )
 
@@ -14319,6 +14343,7 @@ class MemoryStore:
                 "tombstones": len(tombstones),
                 "source_events": len(source_events),
                 "candidate_memories": len(candidate_rows),
+                "review_queue_candidates": len(review_queue_candidates),
                 "memory_items": len(memory_items),
                 "sources": len(sources),
                 "review_actions": len(review_actions),
@@ -14329,6 +14354,7 @@ class MemoryStore:
             "status_counts": status_counts,
             "source_events": source_events,
             "candidate_memories": candidate_rows,
+            "review_queue_candidates": review_queue_candidates,
             "memories": memories,
             "memory_items": memory_items,
             "sources": sources,
