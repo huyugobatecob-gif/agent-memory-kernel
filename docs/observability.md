@@ -18,6 +18,7 @@ healthy enough to keep enabled for a live agent path:
 agent-memory observability --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
 agent-memory observability --db .memory/demo.db --router-latency-slo-ms 750 --keeper-latency-slo-ms 2500
+agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 ```
 
 The same report is exposed through:
@@ -39,7 +40,17 @@ The report returns:
   Router or Keeper runs that exceed configured thresholds;
 - usage totals and cost grouped by provider/model and currency.
 
-This is a baseline local report with local latency SLO checks. Production
-deployments should still add supervisor metrics, provider billing
-reconciliation, dashboards, managed alerts, and hosted retention policy
-enforcement beyond the local export retention ledger.
+For provider billing checks, use `billing-reconcile`. It reads the same
+recorded `llm_usage_stats` rows and returns provider/model/currency totals,
+cost-per-1K-token summaries, expected-cost deltas, suspicious usage rows, and
+latest usage samples. It is exposed through:
+
+- CLI: `agent-memory billing-reconcile`
+- HTTP: `POST /billing/reconcile`
+- MCP: `memory_billing_reconcile`
+- Python adapter wrapper: `billing_reconciliation_report()`
+
+This is a baseline local report with local latency SLO checks and recorded-cost
+reconciliation. Production deployments should still add supervisor metrics,
+external provider invoice ingestion, dashboards, managed alerts, and hosted
+retention policy enforcement beyond the local export retention ledger.

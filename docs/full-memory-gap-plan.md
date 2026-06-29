@@ -389,8 +389,9 @@ Remaining for full memory:
   certification.
 - Broader provider-specific prompt-injection, source trust, and secret
   red-team fixtures beyond the baseline public conformance cases.
-- Production observability beyond the baseline report, including latency SLOs,
-  provider billing reconciliation, retention policies, dashboards, and alerts.
+- Production observability beyond the baseline report, latency SLOs, and
+  recorded-cost reconciliation, including external provider invoice ingestion,
+  hosted retention policies, dashboards, and managed alerts.
 - Production operational failure behavior beyond the local baseline for slow,
   unavailable, corrupted, partially migrated, or oversized memory stores,
   including latency budgets, encrypted off-host backups, restore drills,
@@ -860,8 +861,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 estimates, selected branches, Router/Keeper wall-clock duration, Keeper job
 health, LLM usage tokens/cost, and local latency SLO alerts through
 `agent-memory observability`, `/observability`, the Hermes provider example,
-and MCP `memory_observability`. Remaining work is provider billing
-reconciliation, dashboards, hosted retention policy, and managed alerts.
+and MCP `memory_observability`. Baseline provider billing reconciliation is
+implemented through `agent-memory billing-reconcile`, `/billing/reconcile`,
+the Python provider example, and MCP `memory_billing_reconcile`. Remaining work
+is external provider invoice ingestion, dashboards, hosted retention policy,
+and managed alerts.
 
 ### Step 16: Add End-To-End Demos
 

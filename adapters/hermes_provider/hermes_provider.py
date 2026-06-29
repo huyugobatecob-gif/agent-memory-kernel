@@ -210,6 +210,35 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def billing_reconciliation_report(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        provider: str | None = None,
+        currency: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        expected_cost: float | None = None,
+        expected_currency: str = "USD",
+        tolerance: float = 0.01,
+        max_cost_per_1k: float | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return self.store.billing_reconciliation_report(
+            scope=scope,
+            thread_id=thread_id,
+            provider=provider,
+            currency=currency,
+            since=since,
+            until=until,
+            expected_cost=expected_cost,
+            expected_currency=expected_currency,
+            tolerance=tolerance,
+            max_cost_per_1k=max_cost_per_1k,
+            limit=limit,
+        )
+
     def current_best_report(
         self,
         query: str = "",

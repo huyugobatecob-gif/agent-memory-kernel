@@ -45,6 +45,13 @@ def _integer(description: str, default: int | None = None) -> dict[str, Any]:
     return schema
 
 
+def _number(description: str, default: float | None = None) -> dict[str, Any]:
+    schema: dict[str, Any] = {"type": "number", "description": description}
+    if default is not None:
+        schema["default"] = default
+    return schema
+
+
 def _boolean(description: str, default: bool | None = None) -> dict[str, Any]:
     schema: dict[str, Any] = {"type": "boolean", "description": description}
     if default is not None:
@@ -240,6 +247,25 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "limit": _integer("Maximum recent Router/Keeper/usage rows.", 20),
                 "router_latency_slo_ms": _integer("Router latency SLO in milliseconds.", 750),
                 "keeper_latency_slo_ms": _integer("Keeper latency SLO in milliseconds.", 2500),
+            }
+        ),
+    },
+    "memory_billing_reconcile": {
+        "endpoint": "/billing/reconcile",
+        "description": "Reconcile recorded memory LLM usage costs with expected billing.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Optional memory scope/lane.", ""),
+                "thread_id": _string("Optional thread id.", ""),
+                "provider": _string("Optional provider filter.", ""),
+                "currency": _string("Optional currency filter.", ""),
+                "since": _string("Inclusive created_at lower bound.", ""),
+                "until": _string("Inclusive created_at upper bound.", ""),
+                "expected_cost": _number("Expected invoice or budget amount."),
+                "expected_currency": _string("Currency for expected_cost.", "USD"),
+                "tolerance": _number("Allowed absolute delta before warning.", 0.01),
+                "max_cost_per_1k": _number("Warn above this cost per 1K tokens."),
+                "limit": _integer("Maximum latest usage/anomaly rows.", 20),
             }
         ),
     },

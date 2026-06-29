@@ -146,6 +146,121 @@ class MemoryObservabilityTests(unittest.TestCase):
             self.assertEqual(payload["slo"]["thresholds"]["router_latency_slo_ms"], 100.0)
             self.assertEqual(payload["usage"]["total_tokens"], 15)
 
+    def test_billing_reconciliation_report_flags_cost_anomalies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "memory.db"
+            store = MemoryStore(db)
+            store.init_db()
+            store.record_llm_usage(
+                provider="openai",
+                model="keeper-mini",
+                scope="professional",
+                thread_id="billing-thread",
+                prompt_tokens=100,
+                completion_tokens=100,
+                cost=0.02,
+            )
+            store.record_llm_usage(
+                provider="openai",
+                model="expensive-memory",
+                scope="professional",
+                thread_id="billing-thread",
+                prompt_tokens=1,
+                completion_tokens=0,
+                cost=0.10,
+            )
+            store.record_llm_usage(
+                provider="local",
+                model="free-router",
+                scope="professional",
+                thread_id="billing-thread",
+                prompt_tokens=20,
+                completion_tokens=10,
+                cost=0.0,
+            )
+
+            report = store.billing_reconciliation_report(
+                scope="professional",
+                thread_id="billing-thread",
+                expected_cost=0.10,
+                expected_currency="USD",
+                tolerance=0.001,
+                max_cost_per_1k=50.0,
+            )
+
+            self.assertEqual(report["version"], "billing-reconciliation-v0.1")
+            self.assertEqual(report["status"], "warn")
+            self.assertEqual(report["summary"]["call_count"], 3)
+            self.assertEqual(report["totals"]["cost_by_currency"]["USD"], 0.12)
+            self.assertEqual(report["by_provider"]["openai"]["calls"], 2)
+            self.assertEqual(
+                report["by_model"]["openai:expensive-memory"]["cost_per_1k_tokens_by_currency"]["USD"],
+                100.0,
+            )
+            self.assertEqual(report["reconciliation"]["status"], "warn")
+            names = {item["name"] for item in report["anomalies"]}
+            self.assertIn("expected_cost_mismatch", names)
+            self.assertIn("high_cost_per_1k", names)
+            self.assertIn("tokens_without_cost", names)
+
+            endpoint = handle_api_request(
+                store,
+                "/billing/reconcile",
+                {
+                    "scope": "professional",
+                    "thread_id": "billing-thread",
+                    "expected_cost": 0.12,
+                    "tolerance": 0,
+                    "max_cost_per_1k": 50.0,
+                },
+            )
+            self.assertEqual(endpoint["reconciliation"]["status"], "pass")
+            mcp_names = {tool["name"] for tool in list_mcp_tools()}
+            self.assertIn("memory_billing_reconcile", mcp_names)
+            store.close()
+
+    def test_billing_reconciliation_cli_outputs_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "memory.db")
+            store = MemoryStore(db)
+            store.init_db()
+            store.record_llm_usage(
+                provider="openai",
+                model="keeper-mini",
+                scope="professional",
+                thread_id="billing-cli-thread",
+                prompt_tokens=10,
+                completion_tokens=5,
+                cost=0.001,
+            )
+            store.close()
+
+            parser = build_parser()
+            args = parser.parse_args(
+                [
+                    "billing-reconcile",
+                    "--db",
+                    db,
+                    "--scope",
+                    "professional",
+                    "--thread-id",
+                    "billing-cli-thread",
+                    "--expected-cost",
+                    "0.001",
+                    "--tolerance",
+                    "0",
+                ]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["version"], "billing-reconciliation-v0.1")
+            self.assertEqual(payload["status"], "pass")
+            self.assertEqual(payload["summary"]["call_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

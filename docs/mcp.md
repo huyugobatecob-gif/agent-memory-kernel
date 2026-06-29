@@ -60,6 +60,8 @@ Runtime tools:
   behavior.
 - `memory_observability`: summarize Router runs, Keeper jobs, LLM usage
   tokens/cost, and local latency SLO alerts for memory operations.
+- `memory_billing_reconcile`: reconcile recorded memory LLM usage costs with
+  expected billing and flag suspicious usage rows.
 - `memory_worker_status`: report queued, stale, and failed Keeper worker jobs
   for supervisors and operators.
 - `memory_outcome_compare`: compare success/failure outcome records and return

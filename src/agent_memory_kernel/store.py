@@ -107,6 +107,7 @@ OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
+BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -3697,6 +3698,289 @@ class MemoryStore:
                 "by_currency": usage_by_currency,
                 "latest_usage": usage_rows,
             },
+        }
+
+    def billing_reconciliation_report(
+        self,
+        *,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        provider: str | None = None,
+        currency: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        expected_cost: float | None = None,
+        expected_currency: str = "USD",
+        tolerance: float = 0.01,
+        max_cost_per_1k: float | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Reconcile recorded memory LLM usage with expected provider billing."""
+        scope = normalize_scope(scope) if scope else None
+        thread_id = (thread_id or "").strip() or None
+        provider = (provider or "").strip() or None
+        currency = (currency or "").strip().upper() or None
+        since = (since or "").strip() or None
+        until = (until or "").strip() or None
+        expected_currency = (expected_currency or "USD").strip().upper() or "USD"
+        tolerance_value = max(0.0, self._safe_float(tolerance, 0.01))
+        cost_per_1k_limit = (
+            None
+            if max_cost_per_1k is None
+            else max(0.0, self._safe_float(max_cost_per_1k, 0.0))
+        )
+        row_limit = max(1, min(int(limit or 20), 100))
+
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        if thread_id:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if provider:
+            clauses.append("LOWER(provider) = LOWER(?)")
+            params.append(provider)
+        if currency:
+            clauses.append("UPPER(currency) = ?")
+            params.append(currency)
+        if since:
+            clauses.append("created_at >= ?")
+            params.append(since)
+        if until:
+            clauses.append("created_at <= ?")
+            params.append(until)
+
+        rows = self.conn.execute(
+            f"""
+            SELECT usage_id, created_at, provider, model, scope, thread_id,
+                   prompt_tokens, completion_tokens, total_tokens, cost,
+                   currency, metadata_json
+            FROM llm_usage_stats
+            WHERE {' AND '.join(clauses)}
+            ORDER BY created_at DESC
+            """,
+            params,
+        ).fetchall()
+
+        def usage_item(row: sqlite3.Row) -> dict[str, Any]:
+            return {
+                "usage_id": row["usage_id"],
+                "created_at": row["created_at"],
+                "provider": row["provider"] or "unknown",
+                "model": row["model"] or "unknown",
+                "scope": row["scope"],
+                "thread_id": row["thread_id"],
+                "prompt_tokens": int(row["prompt_tokens"] or 0),
+                "completion_tokens": int(row["completion_tokens"] or 0),
+                "total_tokens": int(row["total_tokens"] or 0),
+                "cost": round(float(row["cost"] or 0), 6),
+                "currency": str(row["currency"] or "USD").upper(),
+                "metadata": self._loads_json(row["metadata_json"], {}),
+            }
+
+        items = [usage_item(row) for row in rows]
+        totals: dict[str, Any] = {
+            "call_count": len(items),
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_by_currency": {},
+        }
+        by_provider: dict[str, dict[str, Any]] = {}
+        by_model: dict[str, dict[str, Any]] = {}
+        by_currency: dict[str, dict[str, Any]] = {}
+        anomalies: list[dict[str, Any]] = []
+
+        def new_bucket() -> dict[str, Any]:
+            return {
+                "calls": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost_by_currency": {},
+                "_tokens_by_currency": {},
+            }
+
+        def bump_bucket(bucket: dict[str, Any], item: dict[str, Any]) -> None:
+            cur = item["currency"]
+            bucket["calls"] += 1
+            bucket["prompt_tokens"] += item["prompt_tokens"]
+            bucket["completion_tokens"] += item["completion_tokens"]
+            bucket["total_tokens"] += item["total_tokens"]
+            bucket["cost_by_currency"][cur] = round(
+                float(bucket["cost_by_currency"].get(cur, 0.0)) + item["cost"],
+                6,
+            )
+            bucket["_tokens_by_currency"][cur] = (
+                int(bucket["_tokens_by_currency"].get(cur, 0)) + item["total_tokens"]
+            )
+
+        def finish_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+            cost_per_1k = {}
+            for cur, cost in bucket["cost_by_currency"].items():
+                tokens = int(bucket["_tokens_by_currency"].get(cur, 0))
+                cost_per_1k[cur] = round((float(cost) * 1000 / tokens), 6) if tokens else 0.0
+            bucket["cost_per_1k_tokens_by_currency"] = cost_per_1k
+            bucket.pop("_tokens_by_currency", None)
+            return bucket
+
+        def add_anomaly(
+            severity: str,
+            name: str,
+            detail: str,
+            item: dict[str, Any] | None = None,
+            extra: dict[str, Any] | None = None,
+        ) -> None:
+            anomaly: dict[str, Any] = {"severity": severity, "name": name, "detail": detail}
+            if item:
+                anomaly.update(
+                    {
+                        "usage_id": item["usage_id"],
+                        "provider": item["provider"],
+                        "model": item["model"],
+                        "currency": item["currency"],
+                    }
+                )
+            if extra:
+                anomaly.update(extra)
+            anomalies.append(anomaly)
+
+        for item in items:
+            cur = item["currency"]
+            totals["prompt_tokens"] += item["prompt_tokens"]
+            totals["completion_tokens"] += item["completion_tokens"]
+            totals["total_tokens"] += item["total_tokens"]
+            totals["cost_by_currency"][cur] = round(
+                float(totals["cost_by_currency"].get(cur, 0.0)) + item["cost"],
+                6,
+            )
+
+            provider_bucket = by_provider.setdefault(item["provider"], new_bucket())
+            provider_bucket.setdefault("models", set()).add(item["model"])
+            bump_bucket(provider_bucket, item)
+
+            model_key = f"{item['provider']}:{item['model']}"
+            bump_bucket(by_model.setdefault(model_key, new_bucket()), item)
+
+            currency_bucket = by_currency.setdefault(
+                cur,
+                {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0},
+            )
+            currency_bucket["calls"] += 1
+            currency_bucket["prompt_tokens"] += item["prompt_tokens"]
+            currency_bucket["completion_tokens"] += item["completion_tokens"]
+            currency_bucket["total_tokens"] += item["total_tokens"]
+            currency_bucket["cost"] = round(float(currency_bucket["cost"]) + item["cost"], 6)
+
+            expected_total = item["prompt_tokens"] + item["completion_tokens"]
+            if item["cost"] < 0:
+                add_anomaly("high", "negative_cost", "Recorded usage cost is negative.", item)
+            if item["prompt_tokens"] < 0 or item["completion_tokens"] < 0 or item["total_tokens"] < 0:
+                add_anomaly("high", "negative_tokens", "Recorded token count is negative.", item)
+            if item["total_tokens"] != expected_total:
+                add_anomaly(
+                    "warn",
+                    "token_total_mismatch",
+                    "Total tokens do not equal prompt plus completion tokens.",
+                    item,
+                    {"expected_total_tokens": expected_total, "recorded_total_tokens": item["total_tokens"]},
+                )
+            if item["total_tokens"] == 0 and item["cost"] > 0:
+                add_anomaly("warn", "cost_without_tokens", "Cost exists but tokens are zero.", item)
+            if item["total_tokens"] > 0 and item["cost"] == 0:
+                add_anomaly("info", "tokens_without_cost", "Tokens exist but recorded cost is zero.", item)
+            if cost_per_1k_limit is not None and item["total_tokens"] > 0 and item["cost"] > 0:
+                cost_per_1k = round(item["cost"] * 1000 / item["total_tokens"], 6)
+                if cost_per_1k > cost_per_1k_limit:
+                    add_anomaly(
+                        "warn",
+                        "high_cost_per_1k",
+                        "Usage cost per 1K tokens exceeds configured threshold.",
+                        item,
+                        {
+                            "cost_per_1k_tokens": cost_per_1k,
+                            "max_cost_per_1k": cost_per_1k_limit,
+                        },
+                    )
+
+        for provider_key, bucket in by_provider.items():
+            bucket["models"] = sorted(bucket.get("models", set()))
+            by_provider[provider_key] = finish_bucket(bucket)
+        by_model = {key: finish_bucket(bucket) for key, bucket in by_model.items()}
+        for cur, bucket in by_currency.items():
+            tokens = int(bucket["total_tokens"])
+            bucket["cost_per_1k_tokens"] = (
+                round(float(bucket["cost"]) * 1000 / tokens, 6) if tokens else 0.0
+            )
+            by_currency[cur] = bucket
+
+        reconciliation: dict[str, Any] = {
+            "status": "not_configured",
+            "expected_cost": None,
+            "expected_currency": expected_currency,
+            "observed_cost": totals["cost_by_currency"].get(expected_currency, 0.0),
+            "delta": 0.0,
+            "tolerance": tolerance_value,
+        }
+        if expected_cost is not None:
+            expected = round(float(expected_cost), 6)
+            observed = round(float(totals["cost_by_currency"].get(expected_currency, 0.0)), 6)
+            delta = round(observed - expected, 6)
+            passed = abs(delta) <= tolerance_value
+            reconciliation.update(
+                {
+                    "status": "pass" if passed else "warn",
+                    "expected_cost": expected,
+                    "observed_cost": observed,
+                    "delta": delta,
+                }
+            )
+            if not passed:
+                add_anomaly(
+                    "warn",
+                    "expected_cost_mismatch",
+                    "Observed recorded cost differs from expected billing amount.",
+                    extra={
+                        "expected_cost": expected,
+                        "observed_cost": observed,
+                        "delta": delta,
+                        "currency": expected_currency,
+                        "tolerance": tolerance_value,
+                    },
+                )
+
+        status = (
+            "fail"
+            if any(item["severity"] == "high" for item in anomalies)
+            else "warn"
+            if any(item["severity"] == "warn" for item in anomalies)
+            else "pass"
+        )
+        return {
+            "version": BILLING_RECONCILIATION_VERSION,
+            "status": status,
+            "filters": {
+                "scope": scope or "all",
+                "thread_id": thread_id or "",
+                "provider": provider or "",
+                "currency": currency or "",
+                "since": since or "",
+                "until": until or "",
+            },
+            "summary": {
+                "call_count": len(items),
+                "anomaly_count": len(anomalies),
+                "status": status,
+            },
+            "reconciliation": reconciliation,
+            "totals": totals,
+            "by_provider": by_provider,
+            "by_model": by_model,
+            "by_currency": by_currency,
+            "anomalies": anomalies[:row_limit],
+            "latest_usage": items[:row_limit],
         }
 
     def _observability_slo(

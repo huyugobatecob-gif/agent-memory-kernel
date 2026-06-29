@@ -154,6 +154,27 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
                 2500.0 if keeper_latency_slo in {None, ""} else float(keeper_latency_slo)
             ),
         )
+    if path in {"/billing/reconcile", "/billing-reconcile"}:
+        expected_cost = payload.get("expected_cost")
+        max_cost_per_1k = payload.get("max_cost_per_1k")
+        tolerance = payload.get("tolerance", 0.01)
+        return store.billing_reconciliation_report(
+            scope=payload.get("scope"),
+            thread_id=payload.get("thread_id"),
+            provider=payload.get("provider"),
+            currency=payload.get("currency"),
+            since=payload.get("since"),
+            until=payload.get("until"),
+            expected_cost=(
+                None if expected_cost is None or expected_cost == "" else float(expected_cost)
+            ),
+            expected_currency=str(payload.get("expected_currency", "USD") or "USD"),
+            tolerance=0.01 if tolerance is None or tolerance == "" else float(tolerance),
+            max_cost_per_1k=(
+                None if max_cost_per_1k is None or max_cost_per_1k == "" else float(max_cost_per_1k)
+            ),
+            limit=int(payload.get("limit", 20) or 20),
+        )
     if path in {"/migration/status", "/migration-status"}:
         return store.migration_status(
             integrity_check=bool(payload.get("integrity_check", True)),

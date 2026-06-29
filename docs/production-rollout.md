@@ -243,6 +243,7 @@ After live traffic starts, check:
 ```bash
 agent-memory operational-status --db .memory/agent-memory.db
 agent-memory observability --db .memory/agent-memory.db --scope professional --thread-id seo-demo
+agent-memory billing-reconcile --db .memory/agent-memory.db --scope professional --expected-cost 0.25 --tolerance 0.01
 agent-memory router-runs --db .memory/agent-memory.db --thread-id seo-demo
 agent-memory memory-quality --db .memory/agent-memory.db --scope professional
 agent-memory notifications --db .memory/agent-memory.db --status open --scope professional
@@ -251,6 +252,7 @@ agent-memory notifications --db .memory/agent-memory.db --status open --scope pr
 Production readiness means:
 
 - no memory-unavailable warnings for normal traffic;
+- recorded memory LLM cost stays inside the expected billing tolerance;
 - selected branches include relevant source IDs;
 - personal memory is absent from professional-only prompts;
 - unsafe candidates are quarantined;

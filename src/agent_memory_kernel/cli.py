@@ -502,6 +502,28 @@ def cmd_observability(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_billing_reconcile(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.billing_reconciliation_report(
+            scope=args.scope,
+            thread_id=args.thread_id,
+            provider=args.provider,
+            currency=args.currency,
+            since=args.since,
+            until=args.until,
+            expected_cost=args.expected_cost,
+            expected_currency=args.expected_currency,
+            tolerance=args.tolerance,
+            max_cost_per_1k=args.max_cost_per_1k,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_migration_status(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1860,6 +1882,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--router-latency-slo-ms", type=float, default=750.0)
     p.add_argument("--keeper-latency-slo-ms", type=float, default=2500.0)
     p.set_defaults(func=cmd_observability)
+
+    p = sub.add_parser("billing-reconcile", help="Reconcile recorded LLM usage costs")
+    add_common_db(p)
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--thread-id")
+    p.add_argument("--provider")
+    p.add_argument("--currency")
+    p.add_argument("--since", help="Inclusive created_at lower bound, ISO timestamp recommended")
+    p.add_argument("--until", help="Inclusive created_at upper bound, ISO timestamp recommended")
+    p.add_argument("--expected-cost", type=float)
+    p.add_argument("--expected-currency", default="USD")
+    p.add_argument("--tolerance", type=float, default=0.01)
+    p.add_argument("--max-cost-per-1k", type=float)
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_billing_reconcile)
 
     p = sub.add_parser("migration-status", help="Check local schema and migration compatibility")
     add_common_db(p)

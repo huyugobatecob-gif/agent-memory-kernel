@@ -88,6 +88,8 @@ Included now:
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report with token, cost,
   wall-clock duration, and local latency SLO alert telemetry.
+- Billing reconciliation report for recorded memory LLM usage, provider/model
+  cost grouping, expected-cost deltas, and suspicious usage rows.
 - Prompt-budget adapter for model-family memory budgets across OpenAI, Claude,
   Gemini, and local model families.
 - Provider prompt formatters for OpenAI, Anthropic, Google/Gemini, and local
@@ -338,6 +340,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --scope professional
+agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
 agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates --scope professional
@@ -385,6 +388,7 @@ agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO
 agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
 agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
+agent-memory billing-reconcile --db .memory/demo.db --thread-id seo-demo --max-cost-per-1k 0.05
 agent-memory migration-status --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
@@ -813,9 +817,10 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_export_retention_purge`,
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_operational_status`, `memory_observability`,
+`memory_billing_reconcile`,
 `memory_migration_status`, `memory_backup_database`,
 `memory_restore_database`, `memory_graph_nodes`, `memory_graph_edges`, and
-`memory_worker_run`.
+`memory_worker_run`, `memory_worker_status`.
 
 ## Implementation Plan
 

@@ -369,6 +369,7 @@ Useful endpoints:
 - `POST /router-feedback/list`
 - `POST /memory-quality`
 - `POST /observability`
+- `POST /billing/reconcile`
 - `POST /current-best`
 - `POST /memory-changes`
 - `POST /memory/lifecycle-batch`
