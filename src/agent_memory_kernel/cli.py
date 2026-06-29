@@ -945,6 +945,14 @@ def cmd_graph_brain_style(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_brain_style_certify(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.brain_style_certification_report(scope=args.scope))
+    store.close()
+    return 0
+
+
 def cmd_graph_tree(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2184,6 +2192,11 @@ def build_parser() -> argparse.ArgumentParser:
     gp = graph_sub.add_parser("brain-style", help="Show guarded Digital Brain style append")
     gp.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
     gp.set_defaults(func=cmd_graph_brain_style)
+
+    p = sub.add_parser("brain-style-certify", help="Certify guarded graph-derived style behavior")
+    add_common_db(p)
+    p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    p.set_defaults(func=cmd_brain_style_certify)
 
     gp = graph_sub.add_parser("tree", help="Build a Memory Tree Pack from graph nodes")
     gp.add_argument("query")

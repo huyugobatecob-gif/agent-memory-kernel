@@ -76,6 +76,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_conformance_certify", names)
             self.assertIn("memory_prompt_format_certify", names)
             self.assertIn("memory_embedding_certify", names)
+            self.assertIn("memory_brain_style_certify", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
             self.assertIn("memory_review_inbox", names)
@@ -124,6 +125,23 @@ class MCPServerTests(unittest.TestCase):
             self.assertEqual(
                 prompt_budget["result"]["structuredContent"]["effective_token_budget"],
                 4000,
+            )
+
+            brain_style_cert = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 32,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_brain_style_certify",
+                        "arguments": {"scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(brain_style_cert["result"]["isError"])
+            self.assertEqual(
+                brain_style_cert["result"]["structuredContent"]["status"],
+                "pass",
             )
 
             conflict_detect = server.handle_message(

@@ -22,6 +22,7 @@ Status: implemented in this template.
 - Encrypted profile export/import envelopes.
 - Graph groups, optimization runs, and Digital Brain calibration.
 - Guarded Digital Brain style append in prompt envelopes.
+- Brain/style certification for guarded prompt behavior.
 - Context packs.
 - Memory Tree Packs.
 - Context builder packs.
@@ -105,7 +106,7 @@ tested:
 Current status: the first local runtime hook slice exists through
 `before-model-call`, `after-saved-turn`, `MemoryStore.before_model_call()`,
 `MemoryStore.after_saved_turn()`, `MemoryOrchestrator`, and optional Python
-adapter wrappers such as Hermes. It proves the Router/envelope/Keeper candidate loop and exposes a
+adapter wrappers. It proves the Router/envelope/Keeper candidate loop and exposes a
 single service facade for `before_turn`, `build_prompt_context`,
 `retrieve_context`, `record_turn`, `keeper_analyze_turn`, `ingest_graph`, and
 `after_turn`. Local Python runtimes can also use `run_agent_turn()` to wrap
@@ -284,8 +285,8 @@ passphrase environment configuration, off-host artifact reference, retention,
 and zero secret storage in SQLite. Hosted KMS integrations and managed
 off-host backup recipes are still backlog.
 The provider-neutral runtime loop is covered by tests and
-`examples/reference-loop-demo`. The optional Hermes policy/review adapter path
-is covered by tests and `examples/hermes-e2e-demo`.
+`examples/reference-loop-demo`. One optional adapter-specific policy/review
+path is covered by tests and `examples/hermes-e2e-demo`.
 Queued Keeper jobs, `agent-memory worker --once`, and `agent-memory worker
 --daemon` are implemented for background post-turn processing. Daemon mode can
 poll continuously under an external supervisor and supports bounded
@@ -349,7 +350,7 @@ Goal: let agent frameworks use the kernel without copy-pasting logic.
 
 Implemented now:
 
-- Hermes provider adapter;
+- one runtime provider adapter example;
 - simple HTTP API;
 - dependency-free stdio MCP server;
 - OpenAI-compatible lightweight extractor adapter;

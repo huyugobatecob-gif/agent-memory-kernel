@@ -176,7 +176,7 @@ Already present:
 - Agent write-policy table and enforcement for record, auto-approve, review,
   lifecycle, outcome, conflict, and supersession paths.
 - Baseline capability and consent reporting through `agent-memory capability`,
-  `/capability/check`, Python adapter wrappers such as Hermes, and MCP
+  `/capability/check`, Python adapter wrappers, and MCP
   `memory_capability_check`, with read/export enforcement on direct retrieval
   and export surfaces.
 - Baseline derived-memory invalidation ledger through `agent-memory
@@ -203,6 +203,11 @@ Already present:
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
+- Baseline brain/style certification through `agent-memory
+  brain-style-certify`, `/brain/style/certify`, and MCP
+  `memory_brain_style_certify`; the report verifies guardrail text, metadata
+  visibility, runtime disable behavior, and denial when memory access is
+  blocked.
 - Baseline versioned LLM Keeper extraction contract through
   `LLMKeeperExtractor`, `keeper-extraction-v0.1`, local schema validation,
   deterministic fallback, and candidate extraction metadata.
@@ -318,7 +323,7 @@ Already present:
   professional/personal lane separation, poisoning quarantine, and
   success/failure outcome recall with active memory provenance.
 - Basic prompt-injection-like quarantine.
-- Optional Hermes provider example with `context_pack`, `tree_pack`,
+- Optional runtime provider example with `context_pack`, `tree_pack`,
   `context_builder_pack`, `record_turn`, `remember`, graph inspection, profile,
   and usage methods.
 - Local stdlib HTTP API service for runtime hooks, review/list operations, and
@@ -365,7 +370,8 @@ Remaining for full memory:
 - Deeper prompt budget adapters beyond the baseline deterministic model-family
   profiles, including live provider context-window discovery and provider
   formatter certification.
-- Production evals for guarded brain/style append across real prompt adapters.
+- Broader live-adapter evals for guarded brain/style append beyond the
+  baseline local certification gate.
 - Production runtime adapter hooks that call memory before and after agent work.
 - Production Router/Keeper eval suites built from reviewed real shadow traces.
 - Broader conformance traces for migration, adapter compatibility, and
@@ -666,12 +672,14 @@ messages ready for a main model call.
 **Result:** Baseline implemented in `before_model_call`: runtime adapters can
 pass one prepared context object to any main model, and graph-derived style
 hints are guarded, advisory, omitted on denied memory access, and visible in
-prompt metadata.
+prompt metadata. Baseline certification is exposed through `agent-memory
+brain-style-certify`, `/brain/style/certify`, and MCP
+`memory_brain_style_certify`; broader live-adapter evals remain backlog.
 
-### Step 9: Add Runtime Adapter Hooks And Hermes Example
+### Step 9: Add Runtime Adapter Hooks And Thin Adapter Example
 
-**What we do:** expose practical lifecycle hooks and keep Hermes as one optional
-adapter example for runtimes that want a Python wrapper.
+**What we do:** expose practical lifecycle hooks and keep the bundled provider
+example thin for runtimes that want a Python wrapper.
 
 **Files:**
 
@@ -689,8 +697,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Verification:** `before_agent_turn()` returns prompt envelope data from the Router. `after_agent_turn()` records the turn and enqueues or runs Keeper analysis. `run_agent_turn()` calls a supplied main agent with the selected prompt envelope and returns Router/Keeper audit IDs. The main agent never receives the full graph, only the selected memory supplement and surrounding context.
 
 **Result:** Runtime adapters can make agents memory-aware without each agent
-implementing memory logic. Hermes remains a concrete optional adapter example,
-not the core target.
+implementing memory logic. Adapter examples remain thin and optional, not the
+core target.
 
 ### Step 10: Add API And MCP Service Mode
 
@@ -727,8 +735,8 @@ optional bearer-token protection for HTTP, and tests for MCP `initialize`,
 stdio MCP deployment and private HTTP/tunnel guidance for remote agents.
 Remaining work is hosted multi-user auth/RBAC, a first-class hosted remote MCP
 server, and broader production adapter certification.
-Agent runtimes such as Hermes, Codex, Claude, browser agents, and local tools
-are examples of clients that can share the same memory kernel.
+Any runtime client, MCP client, browser agent, CLI, or hosted orchestrator can
+share the same memory kernel through these adapter surfaces.
 
 ### Step 11: Add Background Keeper Worker
 
@@ -873,7 +881,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Result:** Baseline implemented. Users can inspect Router prompt token
 estimates, selected branches, Router/Keeper wall-clock duration, Keeper job
 health, LLM usage tokens/cost, and local latency SLO alerts through
-`agent-memory observability`, `/observability`, the Hermes provider example,
+`agent-memory observability`, `/observability`, the Python provider example,
 and MCP `memory_observability`. Baseline provider billing reconciliation is
 implemented through `agent-memory billing-reconcile`, `/billing/reconcile`,
 the Python provider example, and MCP `memory_billing_reconcile`. Remaining work

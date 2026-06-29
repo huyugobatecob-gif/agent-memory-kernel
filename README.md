@@ -11,7 +11,7 @@ private workflow. It starts with two default memory lanes:
 
 Teams can extend those lanes into project-specific graph trees, success/failure
 loops, runtime adapters, CRM memory, SEO project memory, support memory, or
-any other domain-specific layer. Hermes is one optional adapter example, not a
+any other domain-specific layer. Bundled adapter examples are optional, not a
 requirement of the kernel.
 
 ## Why this exists
@@ -84,7 +84,7 @@ Included now:
 - OpenAI-compatible lightweight extractor adapter with deterministic fallback
   for contract tests and local operation.
 - Offline Keeper extraction eval harness: `keeper-eval`, `/keeper-eval/run`,
-  MCP `memory_keeper_eval`, and adapter wrappers such as Hermes `keeper_eval()`.
+  MCP `memory_keeper_eval`, and thin runtime adapter wrappers.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
 - Combined Router/Keeper/usage observability report with token, cost,
   wall-clock duration, and local latency SLO alert telemetry.
@@ -113,6 +113,8 @@ Included now:
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
   coordinates.
 - Guarded Digital Brain style append in provider-neutral prompt envelopes.
+- Brain/style certification for guarded prompt behavior across CLI, HTTP, and
+  MCP surfaces.
 - Memory Tree Packs with branches, graph nodes, relationships, and raw provenance.
 - Router read-time policy, explainability, usefulness feedback, and memory
   quality reports.
@@ -282,6 +284,7 @@ agent-memory graph --db .memory/demo.db groups --scope professional
 agent-memory graph --db .memory/demo.db analyses --scope professional
 agent-memory graph --db .memory/demo.db keeper-runs
 agent-memory graph --db .memory/demo.db brain-style --scope professional
+agent-memory brain-style-certify --db .memory/demo.db --scope professional
 agent-memory graph --db .memory/demo.db optimize --mode record_linkage --scope professional
 ```
 
@@ -698,8 +701,8 @@ Recommended shape:
    chats.
 
 See [docs/production-rollout.md](docs/production-rollout.md) for the generic
-runtime rollout playbook. Hermes is kept as an optional adapter example in
-[docs/hermes-integration.md](docs/hermes-integration.md).
+runtime rollout playbook. Adapter-specific examples, including Hermes, live in
+their own docs and examples instead of defining the kernel.
 
 For a provider-neutral executable loop, run:
 
@@ -783,8 +786,7 @@ Use `--daemon` for a long-running polling worker under a process supervisor;
 `--max-iterations` and `--stop-when-idle` are available for bounded test or
 maintenance runs.
 
-For a CLI walkthrough of the full policy/review loop with an optional Hermes
-adapter example, see
+For an adapter-specific CLI walkthrough of the full policy/review loop, see
 [examples/hermes-e2e-demo/README.md](examples/hermes-e2e-demo/README.md).
 
 Use `shadow-turn` before a production rollout. It links one Router run and one
@@ -807,7 +809,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_before_model_call`, `memory_before_turn`,
 `memory_build_prompt_context`, `memory_after_saved_turn`, `memory_after_turn`,
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
-`memory_search`, `memory_tree_pack`, `memory_review_list`,
+`memory_search`, `memory_tree_pack`, `memory_brain_style_certify`,
+`memory_review_list`,
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,
 `memory_notifications_list`, `memory_notification_assign`, `memory_notification_ack`,
 `memory_notification_resolve`, `memory_notification_escalations`,

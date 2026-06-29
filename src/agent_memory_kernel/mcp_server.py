@@ -336,6 +336,15 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_brain_style_certify": {
+        "endpoint": "/brain/style/certify",
+        "description": "Certify guarded graph-derived style prompt behavior.",
+        "inputSchema": _schema(
+            {
+                "scope": _string("Memory scope/lane.", "professional"),
+            }
+        ),
+    },
     "memory_backup_database": {
         "endpoint": "/backup",
         "description": "Create a SQLite backup of the memory database.",

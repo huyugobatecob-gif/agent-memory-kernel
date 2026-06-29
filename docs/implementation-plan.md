@@ -33,7 +33,7 @@ are implemented and verified:
 
 This gate keeps the open-source template universal: basic users can keep the
 personal/professional memory model, while runtime adapters can add automatic
-memory on top. Hermes is one optional adapter example.
+memory on top. Bundled adapter examples are optional and must stay thin.
 
 ## Phase 0: Repository Baseline
 
@@ -213,7 +213,8 @@ Done when:
 ## Phase 4: Runtime Adapter Example
 
 Goal: show how an external runtime can use the kernel without owning memory.
-The bundled Hermes provider is one concrete optional example.
+The bundled Hermes provider is one concrete optional example, not a required
+architecture dependency.
 
 Files:
 

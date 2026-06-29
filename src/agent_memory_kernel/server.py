@@ -490,6 +490,10 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return {"tree": store.memory_tree_pack(query, **payload)}
     if path == "/brain/style":
         return store.brain_style_append(scope=str(payload.get("scope", "professional")))
+    if path in {"/brain/style/certify", "/brain-style/certify"}:
+        return store.brain_style_certification_report(
+            scope=str(payload.get("scope", "professional")),
+        )
     if path == "/export/profile":
         return store.export_profile(
             scope=payload.get("scope"),

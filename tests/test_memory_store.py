@@ -2103,6 +2103,18 @@ class MemoryStoreTests(unittest.TestCase):
                 disabled["prompt_envelope"]["metadata"]["brain_style"]["reason"],
                 "brain style disabled by runtime policy",
             )
+
+            cert = store.brain_style_certification_report(scope="professional")
+            self.assertEqual(cert["version"], "brain-style-certification-v0.1")
+            self.assertEqual(cert["status"], "pass")
+            cert_names = {check["name"] for check in cert["checks"]}
+            self.assertIn("style_append_has_guardrail", cert_names)
+            self.assertIn("prompt_includes_style_when_enabled", cert_names)
+            self.assertIn("runtime_can_disable_style", cert_names)
+            self.assertIn("style_suppressed_when_memory_denied", cert_names)
+
+            endpoint = handle_api_request(store, "/brain/style/certify", {"scope": "professional"})
+            self.assertEqual(endpoint["status"], "pass")
             store.close()
 
     def test_before_model_call_enforces_scope_access_policy(self) -> None:

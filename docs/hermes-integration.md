@@ -415,6 +415,7 @@ Useful endpoints:
 - `POST /memory/expire`
 - `POST /notifications/transport`
 - `POST /brain/style`
+- `POST /brain/style/certify`
 - `POST /conflict/record`
 - `POST /conflict/list`
 - `POST /conflict/detect`
@@ -490,14 +491,20 @@ suppressed stale loser memories.
 When graph-level Digital Brain state has enough classified nodes and a clear
 skew, `prompt_envelope.system` also includes a guarded advisory style append.
 The decision is visible in `prompt_envelope.metadata.brain_style`, and no style
-append is emitted when memory access is denied or Hermes disables graph-derived
-style for that call:
+append is emitted when memory access is denied or the runtime disables
+graph-derived style for that call:
 
 ```bash
 agent-memory before-model-call "planning SEO content refresh loop" \
   --scope professional \
   --allowed-scopes professional \
   --disable-brain-style
+```
+
+Adapters can certify the same guardrails without live traffic:
+
+```bash
+agent-memory brain-style-certify --scope professional
 ```
 
 To explain a live Router decision:

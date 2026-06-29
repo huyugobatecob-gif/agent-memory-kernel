@@ -118,6 +118,15 @@ Rules:
 - never let it override explicit user instructions, safety, factual accuracy,
   or requested output format.
 
+The baseline certification gate is:
+
+```bash
+agent-memory brain-style-certify --scope professional
+```
+
+HTTP and MCP integrations can call `POST /brain/style/certify` or
+`memory_brain_style_certify` to verify the same invariants without a live model.
+
 ## Acceptance Gates
 
 The built-in acceptance harness is the minimum deterministic gate:

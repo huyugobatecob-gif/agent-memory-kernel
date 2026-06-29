@@ -115,6 +115,7 @@ MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
+BRAIN_STYLE_CERTIFICATION_VERSION = "brain-style-certification-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -4858,6 +4859,120 @@ class MemoryStore:
         """
         scope = normalize_scope(scope)
         return self._brain_style_append(scope=scope, memory_allowed=True)
+
+    def brain_style_certification_report(self, *, scope: str = "professional") -> dict[str, Any]:
+        """Certify guarded graph-derived style behavior in an isolated store."""
+        scope = normalize_scope(scope)
+        checks: list[dict[str, Any]] = []
+
+        def add_check(name: str, passed: bool, detail: str, metadata: dict[str, Any] | None = None) -> None:
+            checks.append(
+                {
+                    "name": name,
+                    "passed": bool(passed),
+                    "detail": detail,
+                    "metadata": metadata or {},
+                }
+            )
+
+        probe = MemoryStore(":memory:")
+        try:
+            probe.init_db()
+            ts = now_iso()
+            probe.conn.execute(
+                """
+                INSERT INTO digital_brain_state
+                  (state_id, created_at, updated_at, scope, left_count,
+                   right_count, calibration_json, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    new_id("brain"),
+                    ts,
+                    ts,
+                    scope,
+                    6,
+                    1,
+                    json.dumps({"certification": True}, sort_keys=True),
+                    json.dumps({"source": BRAIN_STYLE_CERTIFICATION_VERSION}, sort_keys=True),
+                ),
+            )
+            probe.conn.commit()
+
+            style = probe._brain_style_append(scope=scope, memory_allowed=True)
+            append = str(style.get("append", ""))
+            add_check(
+                "style_append_has_guardrail",
+                bool(style.get("enabled"))
+                and "MEMORY-DERIVED STYLE PREFERENCE" in append
+                and "Never let it reduce accuracy" in append,
+                "Enabled style append includes explicit guardrail language.",
+                {"skew": style.get("skew"), "reason": style.get("reason")},
+            )
+
+            enabled = probe.before_model_call(
+                "Plan guarded style certification.",
+                scope=scope,
+                enable_brain_style=True,
+            )
+            enabled_system = str(enabled["prompt_envelope"]["system"])
+            enabled_meta = enabled["prompt_envelope"]["metadata"]["brain_style"]
+            add_check(
+                "prompt_includes_style_when_enabled",
+                "MEMORY-DERIVED STYLE PREFERENCE" in enabled_system
+                and enabled_meta.get("enabled") is True
+                and "append" not in enabled_meta,
+                "Prompt includes style only as guarded system text and metadata omits raw append.",
+                enabled_meta,
+            )
+
+            disabled = probe.before_model_call(
+                "Plan guarded style certification.",
+                scope=scope,
+                enable_brain_style=False,
+            )
+            disabled_system = str(disabled["prompt_envelope"]["system"])
+            disabled_meta = disabled["prompt_envelope"]["metadata"]["brain_style"]
+            add_check(
+                "runtime_can_disable_style",
+                "MEMORY-DERIVED STYLE PREFERENCE" not in disabled_system
+                and disabled_meta.get("enabled") is False
+                and disabled_meta.get("reason") == "brain style disabled by runtime policy",
+                "Runtime disable flag suppresses graph-derived style.",
+                disabled_meta,
+            )
+
+            denied = probe.before_model_call(
+                "Plan guarded style certification.",
+                scope=scope,
+                denied_scopes=[scope],
+                enable_brain_style=True,
+            )
+            denied_system = str(denied["prompt_envelope"]["system"])
+            denied_meta = denied["prompt_envelope"]["metadata"]["brain_style"]
+            add_check(
+                "style_suppressed_when_memory_denied",
+                "MEMORY-DERIVED STYLE PREFERENCE" not in denied_system
+                and denied["prompt_envelope"]["metadata"].get("memory_allowed") is False
+                and denied_meta.get("enabled") is False
+                and denied_meta.get("reason") == "memory access denied",
+                "Denied memory access suppresses graph-derived style.",
+                denied_meta,
+            )
+        finally:
+            probe.close()
+
+        failed = [item for item in checks if not item["passed"]]
+        return {
+            "version": BRAIN_STYLE_CERTIFICATION_VERSION,
+            "status": "fail" if failed else "pass",
+            "scope": scope,
+            "summary": {
+                "check_count": len(checks),
+                "failed_count": len(failed),
+            },
+            "checks": checks,
+        }
 
     def context_builder_pack(
         self,

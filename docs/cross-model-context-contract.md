@@ -140,12 +140,14 @@ The local implementation exposes this via:
 
 ```bash
 agent-memory graph brain-style --scope professional
+agent-memory brain-style-certify --scope professional
 ```
 
 and:
 
 ```text
 POST /brain/style
+POST /brain/style/certify
 ```
 
 Runtime prompt calls can suppress this layer:
