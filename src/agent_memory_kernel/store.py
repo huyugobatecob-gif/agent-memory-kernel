@@ -6418,7 +6418,11 @@ class MemoryStore:
             if not content or self._is_redaction_marker(content):
                 counts["skipped_redacted"] += 1
                 continue
+            if self._import_text_blocked(content, counts=counts, sensitivity="internal"):
+                continue
             title = str(note.get("title", ""))
+            if title and self._import_text_blocked(title, counts=counts, sensitivity="internal"):
+                continue
             self.upsert_profile_note(
                 content,
                 scope=str(note.get("scope", "professional")),
@@ -6460,6 +6464,8 @@ class MemoryStore:
             content = str(turn.get("content", ""))
             if self._is_redaction_marker(content):
                 counts["skipped_redacted"] += 1
+                continue
+            if self._import_text_blocked(content, counts=counts, sensitivity="internal"):
                 continue
             turn_id = str(turn.get("turn_id", "")) or new_id("turn")
             exists = self.conn.execute(
@@ -6694,6 +6700,21 @@ class MemoryStore:
             if not candidate_id or not self._row_exists("events", "event_id", event_id):
                 counts["skipped_missing_provenance"] += 1
                 continue
+            import_policy = admission_policy(
+                proposed_text,
+                source_type="import",
+                sensitivity=str(candidate.get("sensitivity", "internal")),
+                auto_approve=False,
+            )
+            imported_status = str(candidate.get("status", "pending"))
+            imported_sensitivity = str(candidate.get("sensitivity", "internal"))
+            imported_source_trust = str(candidate.get("source_trust", "untrusted"))
+            imported_reason = str(candidate.get("reason", ""))
+            if import_policy.status == "quarantined":
+                imported_status = "quarantined"
+                imported_sensitivity = import_policy.sensitivity
+                imported_source_trust = import_policy.source_trust
+                imported_reason = import_policy.reason
             inserted = self.conn.execute(
                 """
                 INSERT OR IGNORE INTO candidate_memories
@@ -6710,19 +6731,28 @@ class MemoryStore:
                     str(candidate.get("kind", "fact")),
                     normalize_scope(str(candidate.get("scope", "professional"))),
                     normalize_confidence(str(candidate.get("confidence", "medium"))),
-                    str(candidate.get("sensitivity", "internal")),
-                    str(candidate.get("source_trust", "untrusted")),
-                    str(candidate.get("status", "pending")),
-                    str(candidate.get("reason", "")),
+                    imported_sensitivity,
+                    imported_source_trust,
+                    imported_status,
+                    imported_reason,
                     self._json_text(candidate.get("extraction_json"), "{}"),
                 ),
             )
-            counts["candidate_memories"] += max(int(inserted.rowcount or 0), 0)
+            inserted_count = max(int(inserted.rowcount or 0), 0)
+            counts["candidate_memories"] += inserted_count
+            if inserted_count and imported_status == "quarantined":
+                counts["import_quarantined_candidates"] += inserted_count
 
         for memory in self._importable_rows(lifecycle.get("memories")):
             text = str(memory.get("text", ""))
             if self._is_redaction_marker(text):
                 counts["skipped_redacted"] += 1
+                continue
+            if self._import_text_blocked(
+                text,
+                counts=counts,
+                sensitivity=str(memory.get("sensitivity", "internal")),
+            ):
                 continue
             memory_id = str(memory.get("memory_id", ""))
             if not memory_id:
@@ -6760,6 +6790,12 @@ class MemoryStore:
             text = str(item.get("text", ""))
             if self._is_redaction_marker(text):
                 counts["skipped_redacted"] += 1
+                continue
+            if self._import_text_blocked(
+                text,
+                counts=counts,
+                sensitivity=str(item.get("sensitivity", "internal")),
+            ):
                 continue
             item_id = str(item.get("item_id", ""))
             memory_id = str(item.get("memory_id", ""))
@@ -6946,6 +6982,12 @@ class MemoryStore:
             if not exported_node_id or not label or self._is_redaction_marker(label):
                 counts["skipped_invalid"] += 1
                 continue
+            if self._import_text_blocked(label, counts=counts, sensitivity="internal"):
+                continue
+            if self._import_text_blocked(str(node.get("blob", "")), counts=counts, sensitivity="internal"):
+                continue
+            if self._import_text_blocked(str(node.get("summary", "")), counts=counts, sensitivity="internal"):
+                continue
             node_type = self._normalize_graph_node_type(str(node.get("node_type", "fact")))
             scope = normalize_scope(str(node.get("scope", "professional")))
             touched_scopes.add(scope)
@@ -7030,6 +7072,9 @@ class MemoryStore:
                 memory_id=str(edge.get("source_memory_id", "")),
             )
             edge_type = str(edge.get("edge_type") or "relates_to")
+            edge_label = str(edge.get("label", ""))
+            if self._import_text_blocked(edge_label, counts=counts, sensitivity="internal"):
+                continue
             if not source_node_id or not target_node_id:
                 counts["skipped_missing_provenance"] += 1
                 continue
@@ -7076,7 +7121,7 @@ class MemoryStore:
                     source_node_id,
                     target_node_id,
                     edge_type,
-                    "" if self._is_redaction_marker(edge.get("label", "")) else str(edge.get("label", "")),
+                    "" if self._is_redaction_marker(edge_label) else edge_label,
                     self._safe_float(edge.get("weight"), 1.0),
                     normalize_confidence(str(edge.get("confidence", "medium"))),
                     str(edge.get("status") or "active"),
@@ -7096,6 +7141,8 @@ class MemoryStore:
             graph_node_id = node_id_map.get(exported_node_id, exported_node_id)
             if self._is_redaction_marker(quote):
                 counts["skipped_redacted"] += 1
+                continue
+            if self._import_text_blocked(quote, counts=counts, sensitivity="internal"):
                 continue
             if not self._graph_evidence_provenance_exists(
                 graph_ref=graph_node_id,
@@ -7134,6 +7181,8 @@ class MemoryStore:
             graph_edge_id = edge_id_map.get(exported_edge_id, exported_edge_id)
             if self._is_redaction_marker(quote):
                 counts["skipped_redacted"] += 1
+                continue
+            if self._import_text_blocked(quote, counts=counts, sensitivity="internal"):
                 continue
             if not self._graph_evidence_provenance_exists(
                 graph_ref=graph_edge_id,
@@ -13603,6 +13652,31 @@ class MemoryStore:
     @staticmethod
     def _is_redaction_marker(value: Any) -> bool:
         return isinstance(value, str) and value.startswith("[redacted:")
+
+    def _import_text_blocked(
+        self,
+        value: Any,
+        *,
+        counts: defaultdict[str, int],
+        sensitivity: str = "internal",
+    ) -> bool:
+        text = str(value or "")
+        if not text.strip() or self._is_redaction_marker(text):
+            return False
+        policy = admission_policy(
+            text,
+            source_type="import",
+            sensitivity=sensitivity,
+            auto_approve=False,
+        )
+        if policy.status != "quarantined":
+            return False
+        counts["skipped_poisoned_import"] += 1
+        if policy.sensitivity == "secret":
+            counts["skipped_secret_import"] += 1
+        elif "prompt-injection" in policy.reason:
+            counts["skipped_prompt_injection_import"] += 1
+        return True
 
     @staticmethod
     def _count_redaction_markers(value: Any) -> int:

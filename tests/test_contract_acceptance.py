@@ -72,6 +72,10 @@ class ContractAcceptanceTests(unittest.TestCase):
         )
         self.assertIn("tool_prompt_injection_is_quarantined", str(contract["threat_model"]))
         self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", str(contract["threat_model"]))
+        self.assertIn(
+            "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+            str(contract["threat_model"]),
+        )
 
     def test_acceptance_suite_passes_seeded_full_memory_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -122,6 +126,10 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("golden_trace_import_preserves_policy_metadata", scenario_ids)
         self.assertIn("golden_trace_import_preserves_graph_evidence_chains", scenario_ids)
         self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", scenario_ids)
+        self.assertIn(
+            "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+            scenario_ids,
+        )
         self.assertIn("migration_status_is_compatible", scenario_ids)
         self.assertIn("kernel_status_reports_compatible_versions", scenario_ids)
         self.assertIn("secret_like_memory_is_quarantined", scenario_ids)
@@ -174,6 +182,10 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("golden_trace_import_preserves_policy_metadata", passed)
             self.assertIn("golden_trace_import_preserves_graph_evidence_chains", passed)
             self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", passed)
+            self.assertIn(
+                "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
+                passed,
+            )
             self.assertIn("migration_status_is_compatible", passed)
             self.assertIn("kernel_status_reports_compatible_versions", passed)
             self.assertIn("secret_like_memory_is_quarantined", passed)

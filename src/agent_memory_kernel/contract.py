@@ -222,6 +222,7 @@ KERNEL_INVARIANTS = [
         ],
         "verifiers": [
             "golden_trace_portable_bundle_manifest_roundtrip",
+            "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
             "golden_trace_import_restores_lifecycle_tombstones",
             "golden_trace_import_preserves_policy_metadata",
             "golden_trace_import_preserves_graph_evidence_chains",
@@ -340,11 +341,13 @@ THREAT_MODEL = [
         "threat": "A bundle, profile, vault, or imported source changes payloads, revives inactive memory, strips provenance, or bypasses policies.",
         "required_controls": [
             "portable_bundles_verify_manifest_digest_before_import",
+            "digest_valid_imported_text_is_screened_before_activation",
             "imports_preserve_lifecycle_and_policy_state",
             "redacted_imports_cannot_restore_hidden_content",
         ],
         "verifiers": [
             "golden_trace_portable_bundle_manifest_roundtrip",
+            "golden_trace_poisoned_bundle_import_quarantines_prompt_injection",
             "golden_trace_import_restores_lifecycle_tombstones",
             "golden_trace_import_preserves_policy_metadata",
             "golden_trace_import_preserves_graph_evidence_chains",
