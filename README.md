@@ -25,6 +25,9 @@ envelopes, provenance, portability, and conformance. Runtime adapters, domain
 packs, hosted services, vector search, Memory Tree renderers, and provider
 integrations are optional extensions.
 
+The local v1 threat model is defined in
+[docs/threat-model.md](docs/threat-model.md).
+
 ## Why this exists
 
 Most agent memory is either too opaque or too thin:

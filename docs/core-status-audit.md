@@ -34,7 +34,7 @@ Status labels:
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Add invariant matrix coverage for remaining kernel laws and extension adapter snapshots. |
 | Stable local API/versioning | partial | machine-readable contract, schema migration status, `kernel_status`, conformance scenario, bundle versioning | Add cross-version fixtures and compatibility-edge cases for the status surface. |
-| Threat and recovery model | partial | quarantine, prompt-injection-like filtering, backup/migration tests, export controls | Document and verify malicious bundle/import behavior, corrupted store handling, partial writes, audit tampering risk, and failed recovery paths. |
+| Threat and recovery model | partial | `docs/threat-model.md`, machine-readable contract threat model, quarantine, prompt-injection-like filtering, backup/migration tests, export controls | Add corrupted-store, interrupted import/export, and audit tamper-evidence fixtures. |
 
 ## Not Core
 
@@ -60,10 +60,12 @@ Status labels:
 
 1. Keep `AMK-000` and the invariant matrix mapped to the code path and
    test/conformance scenario that proves every kernel law.
-2. Add a public threat model and executable fixtures for poisoned imports,
-   malicious bundles, prompt-injection-like memory, private-lane leakage,
-   retained stale evidence, partial writes, corrupted stores, and audit
-   tampering risk.
+2. Harden the public threat model. `docs/threat-model.md` and
+   `memory_contract()["threat_model"]` now map prompt injection, malicious
+   bundles, private-lane leakage, retained stale evidence, corrupt stores, and
+   audit blind spots to controls and verifiers; remaining work is deeper
+   corrupted-store, interrupted import/export, and audit tamper-evidence
+   fixtures.
 3. Harden the stable local API/versioning status surface. `kernel_status` now
    reports schema, contract, conformance, bundle, lifecycle, policy,
    capability, migration, and compatibility state and has conformance coverage;

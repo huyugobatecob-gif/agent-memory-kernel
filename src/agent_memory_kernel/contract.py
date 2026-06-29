@@ -115,6 +115,124 @@ DERIVED_PROMPT_SURFACES = {
     }
 }
 
+THREAT_MODEL = [
+    {
+        "id": "prompt_injection_memory",
+        "threat": "User, tool, web, log, or imported text tries to store instructions for future models.",
+        "required_controls": [
+            "secret_or_injection_like_content_is_quarantined",
+            "untrusted_sources_stay_reviewable_by_default",
+            "prompt_envelope_uses_selected_memory_only",
+        ],
+        "verifiers": [
+            "secret_like_memory_is_quarantined",
+            "tool_prompt_injection_is_quarantined",
+            "prompt_envelope_contains_selected_content_only",
+        ],
+    },
+    {
+        "id": "untrusted_claim_promotion",
+        "threat": "Assistant guesses, tool output, or external documents become trusted facts without review.",
+        "required_controls": [
+            "assistant_tool_web_claims_require_review",
+            "write_policy_can_deny_auto_approval",
+            "keeper_changes_are_inspectable",
+        ],
+        "verifiers": [
+            "untrusted_tool_claim_stays_reviewable",
+            "assistant_guess_stays_reviewable",
+            "keeper_write_is_reviewable",
+            "capability_report_blocks_denied_actions",
+        ],
+    },
+    {
+        "id": "private_lane_leak",
+        "threat": "Personal/private memory appears in professional, project, export, graph, or summary surfaces.",
+        "required_controls": [
+            "scope_lane_namespace_filtering_before_retrieval",
+            "derived_surfaces_inherit_source_policy",
+            "prompt_metadata_records_access_decisions",
+        ],
+        "verifiers": [
+            "personal_lane_is_withheld",
+            "personal_lane_absent_from_derived_surfaces",
+            "personal_lane_absent_from_graph_surfaces",
+            "stored_read_policy_denies_injection",
+        ],
+    },
+    {
+        "id": "stale_or_inactive_evidence_revival",
+        "threat": "Deleted, distrusted, corrected, expired, superseded, or stale evidence re-enters retrieval through graph, summary, export, or prompt caches.",
+        "required_controls": [
+            "inactive_memory_filtered_before_prompt_and_export",
+            "derived_memory_invalidates_on_lifecycle_mutation",
+            "current_best_suppresses_resolved_losers",
+        ],
+        "verifiers": [
+            "deleted_memory_absent",
+            "distrusted_memory_absent_from_summaries_and_derived",
+            "derived_invalidation_is_auditable",
+            "resolved_conflict_suppresses_loser",
+        ],
+    },
+    {
+        "id": "malicious_or_poisoned_import",
+        "threat": "A bundle, profile, vault, or imported source changes payloads, revives inactive memory, strips provenance, or bypasses policies.",
+        "required_controls": [
+            "portable_bundles_verify_manifest_digest_before_import",
+            "imports_preserve_lifecycle_and_policy_state",
+            "redacted_imports_cannot_restore_hidden_content",
+        ],
+        "verifiers": [
+            "golden_trace_portable_bundle_manifest_roundtrip",
+            "golden_trace_import_restores_lifecycle_tombstones",
+            "golden_trace_import_preserves_policy_metadata",
+            "golden_trace_import_preserves_graph_evidence_chains",
+        ],
+    },
+    {
+        "id": "provider_prompt_boundary_failure",
+        "threat": "Adapter formatting places memory in a higher-priority provider system surface or hides memory provenance.",
+        "required_controls": [
+            "provider_formatters_preserve_memory_boundaries",
+            "memory_tree_supplement_stays_out_of_system_surface",
+            "formatter_metadata_records_provider_shape",
+        ],
+        "verifiers": [
+            "golden_trace_provider_prompt_formatters_preserve_boundaries",
+            "golden_trace_prompt_budget_trims_context_pack",
+        ],
+    },
+    {
+        "id": "corrupt_or_partial_store",
+        "threat": "Partially migrated, corrupted, oversized, interrupted, or unavailable local stores silently return unsafe memory.",
+        "required_controls": [
+            "migration_status_is_visible",
+            "sqlite_integrity_check_can_fail_closed",
+            "no_memory_fallback_is_explicit",
+        ],
+        "verifiers": [
+            "migration_status_is_compatible",
+            "kernel_status_reports_compatible_versions",
+        ],
+    },
+    {
+        "id": "audit_tampering_or_blind_spots",
+        "threat": "Operators cannot reconstruct who wrote, changed, retrieved, denied, exported, or injected memory.",
+        "required_controls": [
+            "retrieval_and_lifecycle_actions_emit_audit_metadata",
+            "why_remembered_and_why_injected_are_available",
+            "export_and_import_preserve_review_history_and_provenance",
+        ],
+        "verifiers": [
+            "keeper_change_is_inspectable",
+            "professional_memory_injected_with_provenance",
+            "golden_trace_graph_browser_shows_source_previews",
+            "golden_trace_portable_bundle_manifest_roundtrip",
+        ],
+    },
+]
+
 ACCEPTANCE_GATES = [
     {
         "gate": "automatic_runtime_loop",
@@ -222,6 +340,7 @@ def memory_contract() -> dict[str, Any]:
         "trust_levels": TRUST_LEVELS,
         "sensitivity_levels": SENSITIVITY_LEVELS,
         "derived_prompt_surfaces": DERIVED_PROMPT_SURFACES,
+        "threat_model": THREAT_MODEL,
         "acceptance_gates": ACCEPTANCE_GATES,
         "closed_loop": [
             "observe",
@@ -253,6 +372,13 @@ def assert_contract_shape(contract: dict[str, Any] | None = None) -> dict[str, A
         "operational_failure_model_present": "operational_failure_model" in gate_names,
         "closed_loop_present": len(data.get("closed_loop", [])) >= 6,
         "brain_style_surface_present": "brain_style" in data.get("derived_prompt_surfaces", {}),
+        "threat_model_present": len(data.get("threat_model", [])) >= 8,
+        "threat_model_verifiers_present": all(
+            item.get("id")
+            and item.get("required_controls")
+            and item.get("verifiers")
+            for item in data.get("threat_model", [])
+        ),
     }
     failed = [name for name, passed in checks.items() if not passed]
     return {

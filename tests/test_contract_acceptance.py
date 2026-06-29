@@ -34,6 +34,24 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("project", contract["extension_lanes"])
         self.assertIn("before_model_call runs before a non-incognito main model call", str(contract))
         self.assertIn("revise_or_forget", contract["closed_loop"])
+        threat_ids = {item["id"] for item in contract["threat_model"]}
+        self.assertTrue(
+            {
+                "prompt_injection_memory",
+                "untrusted_claim_promotion",
+                "private_lane_leak",
+                "stale_or_inactive_evidence_revival",
+                "malicious_or_poisoned_import",
+                "provider_prompt_boundary_failure",
+                "corrupt_or_partial_store",
+                "audit_tampering_or_blind_spots",
+            }.issubset(threat_ids)
+        )
+        self.assertTrue(
+            all(item["required_controls"] and item["verifiers"] for item in contract["threat_model"])
+        )
+        self.assertIn("tool_prompt_injection_is_quarantined", str(contract["threat_model"]))
+        self.assertIn("golden_trace_portable_bundle_manifest_roundtrip", str(contract["threat_model"]))
 
     def test_acceptance_suite_passes_seeded_full_memory_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
