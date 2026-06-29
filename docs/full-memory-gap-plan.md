@@ -212,7 +212,8 @@ Already present:
 - Baseline observability and cost accounting through `memory_observability_report`,
   `agent-memory observability`, `/observability`, Python adapter wrappers,
   and MCP `memory_observability`; the report joins Router selected branches and
-  prompt token estimates, Keeper job status/warnings, and LLM usage tokens/cost.
+  prompt token estimates, Router/Keeper wall-clock durations, Keeper job
+  status/warnings, and LLM usage tokens/cost.
 - Baseline post-turn change inspection through `agent-memory memory-changes`
   and `/memory-changes`, including saved turns, Keeper event, candidates,
   promoted memories, affected surfaces, handles, and audit trail.
@@ -373,9 +374,8 @@ Remaining for full memory:
 - Broader provider adapters for the prompt envelope.
 - Broader provider-specific prompt-injection, source trust, and secret
   red-team fixtures beyond the baseline public conformance cases.
-- Production observability beyond the baseline report, including wall-clock
-  latency, provider billing reconciliation, retention policies, dashboards, and
-  alerts.
+- Production observability beyond the baseline report, including latency SLOs,
+  provider billing reconciliation, retention policies, dashboards, and alerts.
 - Production operational failure behavior beyond the local baseline for slow,
   unavailable, corrupted, partially migrated, or oversized memory stores,
   including latency budgets, encrypted off-host backups, restore drills,
@@ -834,10 +834,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Verification:** Every Keeper and Router run can be audited by thread, turn, model, cost, and selected graph branches.
 
 **Result:** Baseline implemented. Users can inspect Router prompt token
-estimates and selected branches, Keeper job health, and LLM usage tokens/cost
-through `agent-memory observability`, `/observability`, the Hermes provider
-example, and MCP `memory_observability`. Remaining work is wall-clock latency,
-provider billing reconciliation, dashboards, retention policy, and alerts.
+estimates, selected branches, Router/Keeper wall-clock duration, Keeper job
+health, and LLM usage tokens/cost through `agent-memory observability`,
+`/observability`, the Hermes provider example, and MCP
+`memory_observability`. Remaining work is latency SLOs, provider billing
+reconciliation, dashboards, retention policy, and alerts.
 
 ### Step 16: Add End-To-End Demos
 

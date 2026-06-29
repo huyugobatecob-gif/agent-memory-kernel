@@ -382,7 +382,8 @@ Baseline implementation:
   crashing the worker path.
 - `agent-memory observability`, `/observability`, and MCP
   `memory_observability` summarize Router token estimates, selected branches,
-  Keeper job status, warnings, and LLM usage tokens/cost.
+  Router/Keeper wall-clock duration, Keeper job status, warnings, and LLM usage
+  tokens/cost.
 - `agent-memory migration-status`, `agent-memory backup`, and
   `agent-memory restore` provide local SQLite schema checks and backup/restore
   recovery using the SQLite backup API.

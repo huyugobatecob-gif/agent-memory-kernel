@@ -1908,14 +1908,19 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(processed["jobs"][0]["keeper_job_id"], queued["keeper_job_id"])
             self.assertEqual(processed["jobs"][0]["status"], "completed")
             self.assertTrue(processed["jobs"][0]["candidate_ids"])
+            self.assertIn("duration_ms", processed["jobs"][0])
+            self.assertGreaterEqual(processed["jobs"][0]["duration_ms"], 0)
             self.assertTrue(store.list_candidates("pending"))
             job_row = store.conn.execute(
-                "SELECT status, event_id, candidate_ids_json FROM keeper_jobs WHERE keeper_job_id = ?",
+                "SELECT status, event_id, candidate_ids_json, metadata_json FROM keeper_jobs WHERE keeper_job_id = ?",
                 (queued["keeper_job_id"],),
             ).fetchone()
             self.assertEqual(job_row["status"], "completed")
             self.assertTrue(job_row["event_id"].startswith("evt_"))
             self.assertIn("cand_", job_row["candidate_ids_json"])
+            job_metadata = json.loads(job_row["metadata_json"])
+            self.assertEqual(job_metadata["duration_source"], "process_keeper_jobs")
+            self.assertGreaterEqual(job_metadata["duration_ms"], 0)
 
             second = store.process_keeper_jobs(limit=1, actor="test-worker")
             self.assertEqual(second["processed"], 0)

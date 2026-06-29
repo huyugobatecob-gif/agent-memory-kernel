@@ -11,6 +11,7 @@ import re
 import secrets
 import sqlite3
 import struct
+import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -3195,6 +3196,11 @@ class MemoryStore:
             int(run.get("metadata", {}).get("token_estimate", 0) or 0)
             for run in router_runs
         ]
+        router_durations = [
+            self._safe_float(run.get("metadata", {}).get("duration_ms"))
+            for run in router_runs
+            if "duration_ms" in run.get("metadata", {})
+        ]
         router_selected_total = sum(len(run.get("selected_branch_ids", [])) for run in router_runs)
         router_warning_runs = sum(1 for run in router_runs if run.get("warnings"))
         no_memory_runs = sum(
@@ -3209,6 +3215,11 @@ class MemoryStore:
             keeper_status_counts[status] = keeper_status_counts.get(status, 0) + 1
             if change.get("warnings"):
                 keeper_warning_jobs += 1
+        keeper_durations = [
+            self._safe_float(change.get("duration_ms"))
+            for change in keeper_changes
+            if "duration_ms" in change
+        ]
 
         usage_by_model: dict[str, dict[str, Any]] = {}
         usage_by_currency: dict[str, dict[str, Any]] = {}
@@ -3259,6 +3270,11 @@ class MemoryStore:
                     if router_token_estimates
                     else 0
                 ),
+                "average_duration_ms": (
+                    round(sum(router_durations) / len(router_durations), 3)
+                    if router_durations
+                    else 0
+                ),
                 "latest_runs": [
                     {
                         "router_run_id": run["router_run_id"],
@@ -3271,6 +3287,9 @@ class MemoryStore:
                         "selected_branch_ids": run["selected_branch_ids"],
                         "token_estimate": int(
                             run.get("metadata", {}).get("token_estimate", 0) or 0
+                        ),
+                        "duration_ms": self._safe_float(
+                            run.get("metadata", {}).get("duration_ms")
                         ),
                         "memory_allowed": bool(run.get("metadata", {}).get("memory_allowed", True)),
                         "warnings": run["warnings"],
@@ -3287,6 +3306,11 @@ class MemoryStore:
                 ),
                 "promoted_memory_count": sum(
                     len(change.get("promoted_memory_ids", [])) for change in keeper_changes
+                ),
+                "average_duration_ms": (
+                    round(sum(keeper_durations) / len(keeper_durations), 3)
+                    if keeper_durations
+                    else 0
                 ),
                 "latest_jobs": keeper_changes,
             },
@@ -4247,6 +4271,7 @@ class MemoryStore:
         fallback_on_error: bool = True,
     ) -> dict[str, Any]:
         """Build the provider-neutral memory envelope before a model call."""
+        started_at = time.perf_counter()
         query = (query or "").strip()
         if not query:
             raise ValueError("query must not be empty")
@@ -4412,7 +4437,11 @@ class MemoryStore:
                 warnings=warnings,
                 read_policy=read_policy,
                 exc=exc,
+                duration_ms=self._elapsed_ms(started_at),
             )
+        duration_ms = self._elapsed_ms(started_at)
+        prompt_envelope["metadata"]["duration_ms"] = duration_ms
+        prompt_envelope["metadata"]["duration_source"] = "before_model_call"
         router_run_id = new_id("router")
         self.conn.execute(
             """
@@ -4477,6 +4506,7 @@ class MemoryStore:
         warnings: list[str],
         read_policy: dict[str, Any],
         exc: Exception,
+        duration_ms: float,
     ) -> dict[str, Any]:
         failure = {
             "version": OPERATIONAL_FAILURE_VERSION,
@@ -4561,6 +4591,8 @@ class MemoryStore:
                     "reason": "memory unavailable",
                 },
                 "operational_failure": failure,
+                "duration_ms": duration_ms,
+                "duration_source": "before_model_call",
             },
         }
         router_run_id = new_id("router")
@@ -4627,6 +4659,7 @@ class MemoryStore:
         fallback_on_error: bool = True,
     ) -> dict[str, Any]:
         """Persist an exchange and run the conservative post-turn Keeper path."""
+        started_at = time.perf_counter()
         scope = normalize_scope(scope)
         user_text = (user_text or "").strip()
         assistant_text = (assistant_text or "").strip()
@@ -4695,6 +4728,8 @@ class MemoryStore:
                 "auto_approve": bool(auto_approve),
                 "keeper_mode": "queued",
                 "source_ref": source_ref,
+                "duration_ms": self._elapsed_ms(started_at),
+                "duration_source": "after_saved_turn_enqueue",
             }
             self.conn.execute(
                 """
@@ -4741,6 +4776,7 @@ class MemoryStore:
                 "warnings": [],
                 "idempotent_replay": False,
                 "idempotency_key": idempotency_key,
+                "duration_ms": job_metadata["duration_ms"],
             }
 
         keeper_text = self._keeper_exchange_text(user_text, assistant_text, turn_id=turn_id)
@@ -4799,6 +4835,8 @@ class MemoryStore:
             and all("quarantined" in warning for warning in warnings)
         ):
             status = "quarantined"
+        job_metadata["duration_ms"] = self._elapsed_ms(started_at)
+        job_metadata["duration_source"] = "after_saved_turn_sync"
         self.conn.execute(
             """
             INSERT INTO keeper_jobs
@@ -4849,6 +4887,7 @@ class MemoryStore:
             "warnings": sorted(set(warnings)),
             "idempotent_replay": False,
             "idempotency_key": idempotency_key,
+            "duration_ms": job_metadata["duration_ms"],
         }
 
     def shadow_turn(
@@ -5738,6 +5777,7 @@ class MemoryStore:
         ).fetchall()
         jobs = []
         for row in rows:
+            started_at = time.perf_counter()
             job_id = str(row["keeper_job_id"])
             metadata = self._loads_json(row["metadata_json"], {})
             turn_ids = [str(item) for item in self._loads_json(row["turn_ids_json"], [])]
@@ -5798,6 +5838,7 @@ class MemoryStore:
                 status = "empty"
                 warnings.append("queued keeper job had no readable turns")
 
+            duration_ms = self._elapsed_ms(started_at)
             self.conn.execute(
                 """
                 UPDATE keeper_jobs
@@ -5810,7 +5851,15 @@ class MemoryStore:
                     json.dumps(candidate_ids, sort_keys=True),
                     status,
                     json.dumps(sorted(set(warnings)), sort_keys=True),
-                    json.dumps({**metadata, "processed_by": actor}, sort_keys=True),
+                    json.dumps(
+                        {
+                            **metadata,
+                            "processed_by": actor,
+                            "duration_ms": duration_ms,
+                            "duration_source": "process_keeper_jobs",
+                        },
+                        sort_keys=True,
+                    ),
                     job_id,
                 ),
             )
@@ -5833,6 +5882,7 @@ class MemoryStore:
                     "candidate_ids": candidate_ids,
                     "memory": memory_result,
                     "warnings": sorted(set(warnings)),
+                    "duration_ms": duration_ms,
                 }
             )
         self.conn.commit()
@@ -5905,6 +5955,7 @@ class MemoryStore:
             "warnings": self._loads_json(row["warnings_json"], []),
             "idempotent_replay": bool(idempotent_replay),
             "idempotency_key": row["idempotency_key"],
+            "duration_ms": self._safe_float(metadata.get("duration_ms")),
         }
 
     def correct_memory(
@@ -9425,6 +9476,17 @@ class MemoryStore:
         except (TypeError, json.JSONDecodeError):
             return fallback
 
+    @staticmethod
+    def _elapsed_ms(started_at: float) -> float:
+        return round(max(0.0, (time.perf_counter() - started_at) * 1000), 3)
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
     def _resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
         actor = (actor or "user").strip() or "user"
         scope = "*" if scope == "*" else normalize_scope(scope)
@@ -9750,6 +9812,8 @@ class MemoryStore:
             "promoted_memory_ids": [item["memory_id"] for item in memories],
             "warnings": job["warnings"],
             "idempotency_key": job["idempotency_key"],
+            "duration_ms": self._safe_float(job.get("metadata", {}).get("duration_ms")),
+            "duration_source": str(job.get("metadata", {}).get("duration_source", "")),
         }
 
     def _memory_change_detail(self, row: sqlite3.Row) -> dict[str, Any]:

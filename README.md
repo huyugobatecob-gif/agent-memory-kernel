@@ -83,7 +83,8 @@ Included now:
 - Offline Keeper extraction eval harness: `keeper-eval`, `/keeper-eval/run`,
   MCP `memory_keeper_eval`, and adapter wrappers such as Hermes `keeper_eval()`.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
-- Combined Router/Keeper/usage observability report for memory operations.
+- Combined Router/Keeper/usage observability report with token, cost, and
+  wall-clock duration telemetry for memory operations.
 - Operator review inbox with source previews, risk flags, inline
   possible-conflict warnings, graph previews, audit trail, and CLI/HTTP/MCP
   action handles.

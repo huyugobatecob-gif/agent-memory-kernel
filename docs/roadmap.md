@@ -130,9 +130,10 @@ through `agent-memory router-feedback`, `agent-memory memory-quality`,
 Baseline observability and cost accounting are implemented through
 `agent-memory observability`, `/observability`, Python adapter wrappers,
 and MCP `memory_observability`. The report joins Router selected branches and
-prompt token estimates, Keeper status/warnings, and LLM usage tokens/cost.
-Production latency, billing reconciliation, dashboards, retention policy, and
-alerts are still backlog.
+prompt token estimates, Router/Keeper wall-clock durations, Keeper
+status/warnings, and LLM usage tokens/cost. Production latency SLOs, provider
+billing reconciliation, dashboards, retention policy, and alerts are still
+backlog.
 Baseline LLM Keeper extraction is implemented through `LLMKeeperExtractor`,
 `keeper-extraction-v0.1`, local schema validation, deterministic fallback,
 candidate extraction metadata, and offline Keeper evals through
