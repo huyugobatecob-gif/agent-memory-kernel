@@ -370,7 +370,9 @@ Remaining for full memory:
   stdio and private HTTP/tunnel guidance.
 - Approximate-nearest-neighbor indexes, live embedding provider certification,
   and production semantic reranking beyond the provider-neutral local contract.
-- Richer outcome comparison, scoring, and automatic lesson extraction.
+- Production-grade outcome comparison beyond the baseline score summaries and
+  deterministic lesson extraction, including cross-project clustering and
+  LLM-reviewed lesson quality.
 - Richer browser batch editing queues, deeper graph exploration views, and
   managed push/email/web delivery beyond the baseline browser review, graph,
   and conflict pages, machine-readable review inbox with inline conflict
@@ -753,8 +755,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 **Verification:** A new loop plan retrieves active successful and failed
 outcomes with cause, lesson, next recommendation, and linked memory provenance.
 
-**Result:** Baseline implemented. Remaining work is richer similarity scoring,
-automatic lesson extraction, and project-level comparison reports.
+**Result:** Baseline implemented. Outcome records, packs, and comparison
+reports can surface success/failure counts, score summaries, reusable lessons,
+failure anti-patterns, contrasting causes/actions, and recommended next actions.
+Remaining work is richer similarity scoring, cross-project clustering, and
+LLM-reviewed lesson quality.
 
 ### Step 13: Add Review Inbox And Correction Flow
 

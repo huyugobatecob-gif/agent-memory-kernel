@@ -65,6 +65,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_export_retention_purge", names)
             self.assertIn("memory_derived_invalidations", names)
             self.assertIn("memory_observability", names)
+            self.assertIn("memory_outcome_compare", names)
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_conformance_certify", names)
             self.assertIn("memory_backup_database", names)

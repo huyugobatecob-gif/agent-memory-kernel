@@ -695,6 +695,20 @@ def cmd_outcome_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_outcome_compare(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.outcome_compare(
+            project=args.project,
+            scope=args.scope,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_tree_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1925,6 +1939,12 @@ def build_parser() -> argparse.ArgumentParser:
     op.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
     op.add_argument("--limit", type=int, default=8)
     op.set_defaults(func=cmd_outcome_pack)
+
+    op = outcome_sub.add_parser("compare", help="Compare success/failure outcomes and extract lessons")
+    op.add_argument("--project", required=True)
+    op.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
+    op.add_argument("--limit", type=int, default=50)
+    op.set_defaults(func=cmd_outcome_compare)
 
     p = sub.add_parser("tree-pack", help="Build a branch-oriented memory tree pack for an agent")
     add_common_db(p)

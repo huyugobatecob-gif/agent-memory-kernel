@@ -52,10 +52,13 @@ This is the layer that makes loops powerful for SEO projects, QA projects,
 research projects, and agent optimization.
 
 Current status: baseline outcome records are implemented through
-`agent-memory outcome record/list/pack`, `/outcome/record`, `/outcome/list`,
-`/outcome/pack`, and Python adapter wrappers. Outcome records store
-project, loop id, status, hypothesis, action, result, cause, lesson, next
-recommendation, score, and links to candidate/active memory.
+`agent-memory outcome record/list/pack/compare`, `/outcome/record`,
+`/outcome/list`, `/outcome/pack`, `/outcome/compare`, and Python adapter
+wrappers. Outcome records store project, loop id, status, hypothesis, action,
+result, cause, lesson, next recommendation, score, and links to
+candidate/active memory. The comparison report extracts reusable success
+lessons, avoid-lessons from failures, score summaries, contrasting causes, and
+next actions.
 
 ## v0.2 Full Memory Gap
 

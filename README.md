@@ -243,6 +243,7 @@ agent-memory outcome --db .memory/demo.db record \
   --approve
 
 agent-memory outcome --db .memory/demo.db pack --project demo-site
+agent-memory outcome --db .memory/demo.db compare --project demo-site
 ```
 
 Outcome records keep structured attempt/result/cause/lesson fields and can also
@@ -654,8 +655,11 @@ attempt -> failed_because -> gotcha
 attempt -> succeeded_because -> pattern
 ```
 
-The starter implementation exposes this as `agent-memory outcome record/list/pack`
-and `/outcome/record`, `/outcome/list`, `/outcome/pack`.
+The starter implementation exposes this as
+`agent-memory outcome record/list/pack/compare` and `/outcome/record`,
+`/outcome/list`, `/outcome/pack`, `/outcome/compare`. The comparison report
+extracts reusable `reuse` lessons, failure `avoid` lessons, score summaries,
+contrasting success/failure causes, and recommended next actions.
 
 See [examples/agent-loop-demo/README.md](examples/agent-loop-demo/README.md).
 

@@ -273,6 +273,9 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/outcome/pack":
         project = str(payload.pop("project"))
         return {"pack": store.outcome_pack(project=project, **payload)}
+    if path == "/outcome/compare":
+        project = str(payload.pop("project"))
+        return store.outcome_compare(project=project, **payload)
     if path == "/remember":
         text = str(payload.pop("text"))
         return store.remember(text, **payload)

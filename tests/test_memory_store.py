@@ -1093,6 +1093,40 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("Do not publish thin pages without internal links", pack)
             self.assertNotIn("Needs review before becoming active", pack)
 
+            comparison = store.outcome_compare(project="outcome-site")
+            self.assertEqual(comparison["version"], "outcome-comparison-v0.1")
+            self.assertEqual(comparison["score_summary"]["success"]["count"], 1)
+            self.assertEqual(comparison["score_summary"]["failure"]["count"], 1)
+            self.assertIn(
+                "Search intent matched the page better.",
+                comparison["contrast"]["success_causes"],
+            )
+            self.assertIn(
+                "Pages lacked supporting internal links.",
+                comparison["contrast"]["failure_causes"],
+            )
+            self.assertEqual(
+                comparison["lessons"]["reuse"][0]["lesson"],
+                "Refresh intent and internal links together.",
+            )
+            self.assertEqual(
+                comparison["lessons"]["avoid"][0]["lesson"],
+                "Do not publish thin pages without internal links.",
+            )
+            self.assertIn(
+                "Reuse this refresh pattern on similar pages.",
+                comparison["recommended_next_actions"],
+            )
+            self.assertTrue(
+                any(rule["type"] == "reuse" for rule in comparison["derived_rules"])
+            )
+            api_comparison = handle_api_request(
+                store,
+                "/outcome/compare",
+                {"project": "outcome-site", "scope": "professional"},
+            )
+            self.assertEqual(api_comparison["record_count"], 2)
+
             graph_labels = "\n".join(
                 node["label"] for node in store.list_graph_nodes(scope="professional")
             )

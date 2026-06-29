@@ -251,6 +251,18 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_outcome_compare": {
+        "endpoint": "/outcome/compare",
+        "description": "Compare success/failure outcome records and extract reusable loop lessons.",
+        "inputSchema": _schema(
+            {
+                "project": _string("Project name to compare."),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "limit": _integer("Maximum outcome records to compare.", 50),
+            },
+            ["project"],
+        ),
+    },
     "memory_conformance_certify": {
         "endpoint": "/conformance/certify",
         "description": "Run public conformance scenarios and return an adapter compatibility badge report.",

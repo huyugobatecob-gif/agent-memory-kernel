@@ -421,6 +421,7 @@ Useful endpoints:
 - `POST /outcome/record`
 - `POST /outcome/list`
 - `POST /outcome/pack`
+- `POST /outcome/compare`
 - `POST /slice/seed`, `/slice/run`, `/slice/assert`
 - `POST /acceptance/seed`, `/acceptance/run`, `/acceptance/assert`
 - `POST /conformance/seed`, `/conformance/run`, `/conformance/assert`

@@ -114,6 +114,7 @@ NOTIFICATION_TRANSPORT_VERSION = "notification-transport-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
+OUTCOME_COMPARISON_VERSION = "outcome-comparison-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
 EXPORT_REDACTION_VERSION = "export-redaction-v0.1"
 EXPORT_APPROVAL_VERSION = "export-approval-v0.1"
@@ -1244,6 +1245,132 @@ class MemoryStore:
                 if item["memory_id"]:
                     lines.append(f"  Memory: {item['memory_id']}")
         return "\n".join(lines)
+
+    def outcome_compare(
+        self,
+        *,
+        project: str,
+        scope: str = "professional",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Compare success/failure outcomes and extract reusable loop lessons."""
+        project = (project or "").strip()
+        if not project:
+            raise ValueError("project must not be empty")
+        scope = normalize_scope(scope)
+        outcomes = self.list_outcomes(
+            project=project,
+            scope=scope,
+            status="active",
+            limit=max(1, min(int(limit or 50), 200)),
+        )
+        by_status: dict[str, list[dict[str, Any]]] = {
+            "success": [],
+            "failure": [],
+            "mixed": [],
+            "unknown": [],
+        }
+        for item in outcomes:
+            by_status.setdefault(str(item["outcome_status"]), []).append(item)
+
+        def score_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+            scores = [float(item.get("score") or 0.0) for item in items]
+            best = max(items, key=lambda item: float(item.get("score") or 0.0), default=None)
+            return {
+                "count": len(items),
+                "average_score": round(sum(scores) / len(scores), 4) if scores else 0.0,
+                "best_outcome_id": best["outcome_id"] if best else "",
+                "best_score": float(best["score"]) if best else 0.0,
+            }
+
+        def lesson_item(item: dict[str, Any]) -> dict[str, Any]:
+            lesson = self._derive_outcome_lesson(item)
+            return {
+                "outcome_id": item["outcome_id"],
+                "loop_id": item["loop_id"],
+                "outcome_status": item["outcome_status"],
+                "score": item["score"],
+                "action": item["action"],
+                "result": item["result"],
+                "cause": item["cause"],
+                "lesson": lesson,
+                "next_recommendation": item["next_recommendation"],
+                "memory_id": item["memory_id"],
+            }
+
+        successes = sorted(by_status["success"], key=lambda item: float(item["score"] or 0), reverse=True)
+        failures = sorted(by_status["failure"], key=lambda item: float(item["score"] or 0))
+        mixed = sorted(by_status["mixed"], key=lambda item: float(item["score"] or 0), reverse=True)
+        success_lessons = [lesson_item(item) for item in successes[:8]]
+        failure_lessons = [lesson_item(item) for item in failures[:8]]
+        mixed_lessons = [lesson_item(item) for item in mixed[:4]]
+        next_actions = self._dedupe_texts(
+            [
+                item["next_recommendation"]
+                for item in successes + failures + mixed
+                if item.get("next_recommendation")
+            ],
+            limit=10,
+        )
+        reusable_rules = []
+        for item in success_lessons:
+            if item["lesson"]:
+                reusable_rules.append(
+                    {
+                        "type": "reuse",
+                        "outcome_id": item["outcome_id"],
+                        "rule": f"Reuse when similar: {item['lesson']}",
+                    }
+                )
+        for item in failure_lessons:
+            if item["lesson"]:
+                reusable_rules.append(
+                    {
+                        "type": "avoid",
+                        "outcome_id": item["outcome_id"],
+                        "rule": f"Avoid or mitigate when similar: {item['lesson']}",
+                    }
+                )
+        return {
+            "version": OUTCOME_COMPARISON_VERSION,
+            "project": project,
+            "scope": scope,
+            "record_count": len(outcomes),
+            "score_summary": {
+                status: score_summary(items) for status, items in by_status.items()
+            },
+            "contrast": {
+                "success_causes": self._dedupe_texts(
+                    [item["cause"] for item in successes if item.get("cause")],
+                    limit=8,
+                ),
+                "failure_causes": self._dedupe_texts(
+                    [item["cause"] for item in failures if item.get("cause")],
+                    limit=8,
+                ),
+                "success_actions": self._dedupe_texts(
+                    [item["action"] for item in successes if item.get("action")],
+                    limit=8,
+                ),
+                "failure_actions": self._dedupe_texts(
+                    [item["action"] for item in failures if item.get("action")],
+                    limit=8,
+                ),
+            },
+            "lessons": {
+                "reuse": success_lessons,
+                "avoid": failure_lessons,
+                "mixed": mixed_lessons,
+            },
+            "derived_rules": reusable_rules[:16],
+            "recommended_next_actions": next_actions,
+            "gaps": {
+                "has_success": bool(successes),
+                "has_failure": bool(failures),
+                "needs_success_evidence": not bool(successes),
+                "needs_failure_evidence": not bool(failures),
+            },
+        }
 
     def list_candidates(self, status: str = "pending") -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -9945,6 +10072,42 @@ class MemoryStore:
         if next_recommendation:
             parts.append(f"Next recommendation: {next_recommendation}")
         return " ".join(part.strip() for part in parts if part.strip())
+
+    @staticmethod
+    def _derive_outcome_lesson(item: dict[str, Any]) -> str:
+        explicit = str(item.get("lesson") or "").strip()
+        if explicit:
+            return explicit
+        status = str(item.get("outcome_status") or "unknown")
+        cause = str(item.get("cause") or "").strip()
+        result = str(item.get("result") or "").strip()
+        action = str(item.get("action") or "").strip()
+        if status == "success" and cause:
+            return f"Repeat the causal factor: {cause}"
+        if status == "failure" and cause:
+            return f"Do not repeat without mitigation: {cause}"
+        if result:
+            return f"Use observed result as evidence: {result}"
+        if action:
+            return f"Review whether this action should be reused: {action}"
+        return ""
+
+    @staticmethod
+    def _dedupe_texts(values: list[str], *, limit: int) -> list[str]:
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for value in values:
+            text = " ".join(str(value or "").strip().split())
+            if not text:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(text)
+            if len(deduped) >= max(1, limit):
+                break
+        return deduped
 
     def _outcome_dict(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
