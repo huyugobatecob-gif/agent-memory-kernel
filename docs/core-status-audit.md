@@ -26,13 +26,13 @@ Status labels:
 | Scope/lane/namespace isolation | partial | default scopes, read policies, lane isolation tests, derived summary/semantic fixtures, graph/evidence scope fixtures, selected-content and budget-trim prompt snapshots | Continue hardening provider-shaped prompt envelopes and namespace fixtures. |
 | Graph nodes, edges, and evidence | partial | graph node/edge/evidence tables, browser data, graph commands, same-scope evidence filters | Expand graph conformance with correction/delete round trips across imported profiles. |
 | Keeper contract | partial | deterministic extractor, LLM Keeper contract, queued worker | Expand conformance for false-positive writes, retries, and reviewable unsafe claims. |
-| Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content snapshot, deterministic ranking snapshot, budget-trim prompt snapshot | Expand large-history ranking and adapter budget fixtures. |
+| Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content snapshot, deterministic ranking snapshot, budget-trim snapshot, large-history bounded prompt snapshot | Expand adapter budget fixtures and latency/resource measurements. |
 | Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, budget-trim conformance scenario, Memory Tree renderer | Add broader provider-shaped prompt-envelope snapshots and keep renderers behind the read contract. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across evidence chains and derived invalidation records. |
-| Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance | Expand budget-trimming and large-history ranking fixtures. |
-| Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness | Add invariant matrix coverage for every kernel law and prompt-envelope snapshots. |
+| Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
+| Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, budget-trim trace, large-history bounded prompt trace | Add invariant matrix coverage for remaining kernel laws and provider-shaped prompt-envelope snapshots. |
 
 ## Not Core
 
@@ -64,7 +64,8 @@ Status labels:
    state, review history, policy metadata, evidence chains, and derived
    invalidation records.
 5. Add remaining kernel-contract coverage for local API/versioning, capability
-   grants, budget-aware ranking, portable bundles, and performance/resource
-   budgets.
+   grants, adapter budget fixtures, portable bundles, and latency/resource
+   measurements. Large-history bounded selection now has local and conformance
+   fixtures.
 6. Keep examples universal until the kernel gates pass; runtime/domain examples
    must consume the kernel contract rather than shaping it.

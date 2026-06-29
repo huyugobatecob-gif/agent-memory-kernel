@@ -67,7 +67,7 @@ Those items can exist as adapters, packs, examples, or later hosted work.
 | Import/export preserves ids, provenance, evidence, tombstones, trust state, review history, policy metadata, and lifecycle state. | Portable bundle round-trip test. |
 | Every read, write, inject, export, correction, deletion, denial, and lifecycle change is auditable. | Audit log fixture and explainability assertion. |
 | Local actors can perform only actions allowed by capability grants and policy. | Policy simulator and denied-action conformance fixture. |
-| Large histories remain bounded and predictable. | Performance fixture covering index use, retrieval latency, export size, and compaction/retention behavior. |
+| Large histories remain bounded and predictable. | Bounded-selection prompt fixture plus performance fixture covering index use, retrieval latency, export size, and compaction/retention behavior. |
 
 ## Lifecycle State Machine
 
@@ -174,6 +174,7 @@ The canonical conformance corpus must include:
 - poisoned imports and prompt-injection evidence;
 - deterministic ranking fixtures;
 - budget-trim prompt envelope fixtures;
+- large-history bounded prompt fixtures;
 - provider-shaped prompt envelope snapshots;
 - import/export round trips;
 - migration and recovery checks;

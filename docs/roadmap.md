@@ -79,7 +79,8 @@ Core work:
   or supersession;
 - exports preserve provenance, tombstones, trust state, policy metadata, review
   history, and evidence chains;
-- prompt envelopes contain selected memory only, never the full graph;
+- prompt envelopes contain selected, policy-filtered, budgeted memory only,
+  never the full graph;
 - local actors cannot bypass capability grants;
 - local histories stay bounded and predictable.
 - maintain an invariant matrix that maps each law to code paths and executable
@@ -91,7 +92,8 @@ Evidence required:
 - conformance golden traces;
 - lifecycle mutation reports;
 - export/import fixtures;
-- prompt-envelope fixtures.
+- prompt-envelope fixtures;
+- bounded-selection fixtures;
 - latency/resource fixtures.
 
 ## v0.4: Reference Loop And Explainability
@@ -129,7 +131,7 @@ Core work:
 - policy simulator and dry-run behavior for read/write/inject/export/lifecycle;
 - deterministic ranking spec with stable tie-breakers;
 - local capability grants for actors and adapters;
-- performance/resource budgets for large histories.
+- latency/resource budgets for large histories beyond bounded selection.
 
 Evidence required:
 
@@ -137,6 +139,7 @@ Evidence required:
 - policy dry-run fixtures;
 - ranking golden traces;
 - API/versioning checks;
+- bounded-selection golden traces;
 - latency/resource fixtures.
 
 ## v0.6: Adapter Contracts

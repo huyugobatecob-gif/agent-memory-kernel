@@ -21,6 +21,7 @@ ADAPTER_REGISTRY_ENTRY_VERSION = "agent-memory-adapter-registry-entry-v0.1"
 CONFORMANCE_SCOPE = "professional"
 CONFORMANCE_THREAD_ID = "conformance-thread"
 CONFORMANCE_PROJECT = "conformance-site"
+CONFORMANCE_LARGE_HISTORY_QUERY = "bounded history site archive memory"
 
 
 def _adapter_registry_id(adapter_name: str, adapter_version: str = "") -> str:
@@ -88,6 +89,18 @@ def conformance_spec() -> dict[str, Any]:
                 ],
                 "expected_scenarios": [
                     "golden_trace_prompt_budget_trims_context_pack"
+                ],
+            },
+            {
+                "id": "large_history_resource_budget_trace",
+                "steps": [
+                    "seed a large local history with many memories matching one query",
+                    "build a prompt envelope with a small branch limit",
+                    "verify Router selects only the bounded working set",
+                    "verify lower-ranked matches are truncated into audit metadata instead of prompt content",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_large_history_prompt_is_bounded"
                 ],
             },
             {
@@ -160,6 +173,15 @@ def conformance_spec() -> dict[str, Any]:
                     "large non-selected context-pack content is trimmed with an explicit marker",
                     "selected Memory Tree Supplement remains in a separate prompt message",
                     "Router audit stores the same effective budget used for the envelope",
+                ],
+            },
+            {
+                "id": "golden_trace_large_history_prompt_is_bounded",
+                "requires": [
+                    "large local histories are searched without injecting every match",
+                    "prompt metadata records selected and truncated candidates",
+                    "Memory Tree Supplement contains no more than the requested branch limit",
+                    "unrelated history remains absent from prompt-facing content",
                 ],
             },
             {
@@ -609,6 +631,30 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         actor="conformance",
         auto_approve=True,
     )
+    large_history_ids: list[str] = []
+    for index in range(45):
+        unique_tokens = " ".join(
+            f"unique{index:02d}{suffix:02d}" for suffix in range(10)
+        )
+        large_history = _approved_memory(
+            store,
+            (
+                "Decision: bounded history site archive memory "
+                f"{index:02d} stores {unique_tokens} "
+                f"bounded-history-marker-{index:02d}."
+            ),
+            f"conformance://large-history/{index:02d}",
+        )
+        large_history_ids.append(large_history["memory_id"])
+    for index in range(8):
+        _approved_memory(
+            store,
+            (
+                "Decision: unrelated local archive note "
+                f"{index:02d} unrelated-large-history-marker."
+            ),
+            f"conformance://unrelated-history/{index:02d}",
+        )
     return {
         "status": "seeded",
         "version": CONFORMANCE_VERSION,
@@ -636,6 +682,7 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
             "success_outcome_memory_id": success_outcome["memory_id"],
             "failure_outcome_id": failure_outcome["outcome_id"],
             "failure_outcome_memory_id": failure_outcome["memory_id"],
+            "large_history_count": len(large_history_ids),
         },
     }
 
@@ -754,6 +801,59 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "router_token_budget": (
                 int(budget_router_row["token_budget"]) if budget_router_row else None
             ),
+        },
+    )
+    large_history_prompt = store.before_model_call(
+        CONFORMANCE_LARGE_HISTORY_QUERY,
+        thread_id=CONFORMANCE_THREAD_ID,
+        scope=CONFORMANCE_SCOPE,
+        allowed_scopes=[CONFORMANCE_SCOPE],
+        agent_id="conformance-large-history-agent",
+        model_id="unknown-model",
+        token_budget=6000,
+        limit=5,
+    )
+    large_history_envelope = large_history_prompt["prompt_envelope"]
+    large_history_metadata = large_history_envelope.get("metadata", {})
+    large_history_decisions = list(large_history_metadata.get("selection_decisions", []))
+    large_history_selected = [
+        item for item in large_history_decisions if item.get("decision") == "selected"
+    ]
+    large_history_truncated = [
+        item for item in large_history_decisions if item.get("decision") == "truncated"
+    ]
+    large_history_summary = [
+        item for item in large_history_decisions if item.get("decision") == "truncated_summary"
+    ]
+    large_history_messages = [
+        str(message.get("content") or "")
+        for message in large_history_envelope.get("messages", [])
+    ]
+    large_history_supplement = large_history_messages[1] if len(large_history_messages) > 1 else ""
+    large_history_marker_count = sum(
+        f"bounded-history-marker-{index:02d}" in large_history_supplement
+        for index in range(45)
+    )
+    _append_result(
+        results,
+        "golden_trace_large_history_prompt_is_bounded",
+        len(large_history_selected) == 5
+        and len(large_history_truncated) >= 1
+        and bool(large_history_summary)
+        and int(large_history_metadata.get("truncated_branch_count", 0) or 0) >= 20
+        and large_history_metadata.get("read_time_policy", {}).get("runtime", {}).get("branch_limit")
+        == 5
+        and large_history_marker_count <= 5
+        and "unrelated-large-history-marker" not in large_history_supplement,
+        {
+            "selected_count": len(large_history_selected),
+            "truncated_decision_count": len(large_history_truncated),
+            "truncated_summary": large_history_summary[:1],
+            "truncated_branch_count": large_history_metadata.get("truncated_branch_count", 0),
+            "marker_count": large_history_marker_count,
+            "branch_limit": large_history_metadata.get("read_time_policy", {})
+            .get("runtime", {})
+            .get("branch_limit"),
         },
     )
     _append_result(
@@ -1778,6 +1878,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_graph_browser_shows_source_previews",
         "golden_trace_deterministic_ranking_snapshot",
         "golden_trace_prompt_budget_trims_context_pack",
+        "golden_trace_large_history_prompt_is_bounded",
         "golden_trace_safe_export_redacts_memory_content",
         "migration_status_is_compatible",
         "secret_like_memory_is_quarantined",

@@ -120,7 +120,7 @@ can claim completion.
 | Prompt envelopes contain selected, filtered, budgeted content only | Router, context builder, prompt formatter, renderer | deterministic selected-content and budget-trim envelope snapshots |
 | Local actors cannot bypass capability grants | read/write/export/inject/lifecycle policies, policy simulator | denied-action trace plus dry-run report |
 | Retrieval is deterministic without live providers | lexical/rule ranking, current-best resolver, tie-breakers | ranking fixture and golden prompt snapshot |
-| Local histories stay bounded and predictable | indexes, compaction/retention, retrieval/export paths | latency/resource fixture |
+| Local histories stay bounded and predictable | indexes, compaction/retention, retrieval/export paths | bounded-selection fixture plus latency/resource fixture |
 
 This matrix is an implementation gate. A feature is not considered done when it
 has a table or command; it is done when the relevant invariant has executable

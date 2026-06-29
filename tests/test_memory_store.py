@@ -2067,6 +2067,68 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("deterministic", first["retrieval"]["mode"])
             store.close()
 
+    def test_before_model_call_keeps_large_local_history_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            for index in range(45):
+                unique_tokens = " ".join(
+                    f"unique{index:02d}{suffix:02d}" for suffix in range(10)
+                )
+                store.remember(
+                    (
+                        "Decision: bounded history site archive memory "
+                        f"{index:02d} stores {unique_tokens} "
+                        f"bounded-history-marker-{index:02d}."
+                    ),
+                    scope="professional",
+                    source_ref=f"fixture://bounded-history/{index:02d}",
+                    auto_approve=True,
+                )
+            for index in range(8):
+                store.remember(
+                    (
+                        "Decision: unrelated local archive note "
+                        f"{index:02d} unrelated-large-history-marker."
+                    ),
+                    scope="professional",
+                    source_ref=f"fixture://unrelated-history/{index:02d}",
+                    auto_approve=True,
+                )
+
+            before = store.before_model_call(
+                "bounded history site archive memory",
+                scope="professional",
+                agent_id="bounded-history-agent",
+                model_id="unknown-model",
+                token_budget=6000,
+                limit=5,
+            )
+            envelope = before["prompt_envelope"]
+            metadata = envelope["metadata"]
+            decisions = metadata["selection_decisions"]
+            selected = [item for item in decisions if item.get("decision") == "selected"]
+            truncated = [item for item in decisions if item.get("decision") == "truncated"]
+            truncated_summary = [
+                item for item in decisions if item.get("decision") == "truncated_summary"
+            ]
+            supplement = envelope["messages"][1]["content"]
+            marker_count = sum(
+                f"bounded-history-marker-{index:02d}" in supplement
+                for index in range(45)
+            )
+
+            self.assertEqual(metadata["read_time_policy"]["runtime"]["branch_limit"], 5)
+            self.assertEqual(len(selected), 5)
+            self.assertGreaterEqual(len(truncated), 1)
+            self.assertTrue(truncated_summary)
+            self.assertGreaterEqual(metadata["truncated_branch_count"], 20)
+            self.assertLessEqual(marker_count, 5)
+            self.assertNotIn("unrelated-large-history-marker", supplement)
+            self.assertEqual(envelope["messages"][2]["content"], "bounded history site archive memory")
+            store.close()
+
     def test_conversation_turn_context_builder_and_graph_lists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
