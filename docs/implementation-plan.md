@@ -1,6 +1,7 @@
 # Implementation Plan
 
-This is the v1 implementation plan for Agent Memory Kernel.
+This is the internal local-kernel implementation plan behind the public
+`v0.1.0 alpha` package.
 
 Agent Memory Kernel is a universal, local-first, auditable memory kernel. It is
 not a Hermes rollout, not an SEO workflow, not a hosted SaaS, and not an agent
@@ -8,9 +9,9 @@ runtime. Adapters, domain packs, UIs, hosted services, provider integrations,
 embeddings, MCP/HTTP surfaces, dashboards, and demos may exist, but they must
 consume the kernel contract instead of defining it.
 
-The plan is gate-driven. V1 is not complete because a feature exists; it is
-complete only when the local kernel proves the required memory behavior through
-deterministic tests, golden traces, and conformance scenarios.
+The plan is gate-driven. A local-kernel gate is not complete because a feature
+exists; it is complete only when the local kernel proves the required memory
+behavior through deterministic tests, golden traces, and conformance scenarios.
 
 ## Governing Documents
 
@@ -34,7 +35,7 @@ machine-readable contract are the source of truth.
 Every file, API, command, example, and roadmap item should be labeled mentally
 as one of these artifact classes before it becomes release work.
 
-| Class | Meaning | V1 release blocker |
+| Class | Meaning | Local alpha blocker |
 | --- | --- | --- |
 | `core spec` | Required kernel behavior and public semantics. | Yes |
 | `reference implementation` | Local SQLite implementation of the core spec. | Yes, when it proves core behavior |
@@ -46,11 +47,12 @@ gravity. HTTP/MCP, browser UI, notifications, billing, Digital Brain UX,
 embeddings, Hermes, SEO packs, hosted mode, provider formatters, and demos are
 extension examples unless they are used only as thin conformance consumers.
 
-## V1 Core Manifest
+## Local Kernel Core Manifest
 
-V1 core includes only behavior required to own local memory truth safely.
+The local kernel core includes only behavior required to own local memory truth
+safely.
 
-| Area | Artifact class | Required v1 behavior |
+| Area | Artifact class | Required local behavior |
 | --- | --- | --- |
 | Local store | `reference implementation` | SQLite source of truth, migrations, transactions, status. |
 | Source events and saved turns | `core spec` + `reference implementation` | Append observed evidence and saved exchanges before memory extraction. |
@@ -69,11 +71,11 @@ V1 core includes only behavior required to own local memory truth safely.
 | Versioning and recovery | `core spec` + `reference implementation` | Version schema/contract/bundles, handle migrations, backups, corrupted stores, interrupted writes, and cross-version imports. |
 | Conformance | `conformance fixture` | Provider-free golden traces prove the full loop and safety invariants. |
 
-## V1 Acceptance Loop
+## Local Acceptance Loop
 
-V1 is complete when a fresh local store can prove this loop without a live
-model provider, hosted service, private runtime, domain project, or extension
-adapter:
+The local kernel gate is complete when a fresh local store can prove this loop
+without a live model provider, hosted service, private runtime, domain project,
+or extension adapter:
 
 ```text
 source event
@@ -97,7 +99,7 @@ Required proof:
 
 ## Non-Negotiable Invariants
 
-These are the release laws for v1:
+These are the release laws for the local kernel:
 
 1. The main agent never scans raw memory or the full graph.
 2. Router output is selected, policy-filtered, budgeted, and explainable.
@@ -114,7 +116,7 @@ These are the release laws for v1:
 8. Import/export is atomic, versioned, provenance-preserving, and fail-closed
    under partial, hostile, redacted, corrupted, or cross-version inputs.
 9. Deterministic local retrieval works without embeddings or provider rerankers.
-10. V1 claims are backed by conformance fixtures, not prose.
+10. Public alpha claims are backed by conformance fixtures, not prose.
 
 ## Core Gates
 
@@ -131,7 +133,8 @@ Tasks:
 1. Keep `core spec`, `reference implementation`, `conformance fixture`, and
    `extension example` labels consistent in docs and roadmap language.
 2. Keep Hermes, SEO, hosted, UI, MCP/HTTP deployment, provider, billing,
-   notification, embedding, and dashboard work out of v1 completion criteria.
+   notification, embedding, and dashboard work out of local v0.1.0 completion
+   criteria.
 3. Keep personal/professional as starter fixtures over generic lane policy.
 4. Keep Memory Tree and Digital Brain language as optional renderers over
    selected memory, not the kernel ontology.
@@ -390,7 +393,7 @@ Verification:
 PYTHONPATH=src python3 -m unittest tests.test_contract_acceptance tests.test_mcp_server tests.test_http_auth
 ```
 
-### Gate 9: Public V1 Package
+### Gate 9: Public Alpha Package
 
 Goal: make the repository shareable as a kernel.
 
@@ -403,14 +406,15 @@ Tasks:
 3. Publish a release checklist: conformance, migrations, recovery, prompt
    snapshots, export/import, latency/resource fixture, and docs links.
 4. Ensure examples can be removed without changing the kernel contract.
-5. Keep hosted/platform/domain/provider items out of v1 completion criteria.
+5. Keep hosted/platform/domain/provider items out of local alpha completion
+   criteria.
 
 Done when:
 
 - a public user can install, initialize, record, review, retrieve, explain,
   correct, delete, export/import, and run conformance locally;
 - the README points to the core spec before optional extensions;
-- every v1 claim is backed by a command or test.
+- every public alpha claim is backed by a command or test.
 
 Verification:
 
@@ -422,7 +426,7 @@ PYTHONPATH=src python3 -m agent_memory_kernel.cli conformance spec-assert
 
 ## Deferred Extensions
 
-The following tracks are useful, but they are not v1 core blockers:
+The following tracks are useful, but they are not local alpha core blockers:
 
 - Hermes, Codex, chat-agent, coding-agent, LangGraph, AutoGen, CrewAI, and
   OpenAI Agents SDK adapters.
@@ -443,7 +447,7 @@ Extension rules:
 
 1. Extensions consume the kernel contract.
 2. Extensions run after policy and lifecycle filtering.
-3. Extensions are not required for deterministic v1 conformance.
+3. Extensions are not required for deterministic local conformance.
 4. Extensions cannot weaken AMK-000 invariants.
 5. Hosted work stays in [hosted-roadmap.md](hosted-roadmap.md).
 
@@ -454,8 +458,8 @@ core gate is closed.
 
 1. Freeze this implementation plan and keep [core-status-audit.md](core-status-audit.md)
    synchronized with gate status.
-2. Add or update conformance scenarios for the full v1 loop before adding more
-   feature code.
+2. Add or update conformance scenarios for the full local-kernel loop before
+   adding more feature code.
 3. Close lifecycle propagation gaps.
 4. Close scope/lane/namespace isolation gaps.
 5. Add stable why-remembered, why-rejected, why-retrieved, why-omitted, and
@@ -471,7 +475,8 @@ core gate is closed.
 
 ## Release Checklist
 
-V1 can be claimed only when these commands pass from a clean checkout:
+The public alpha can be claimed only when these commands pass from a clean
+checkout:
 
 ```bash
 PYTHONPATH=src python3 -m agent_memory_kernel.cli contract assert
@@ -488,6 +493,7 @@ Manual release review:
 
 - README states the kernel promise before extension features.
 - SPEC and machine-readable contract describe the same lifecycle and policy.
-- Invariant verifier map has no unmapped v1 law.
-- Core status audit has no `missing` or unresolved `partial` item for v1 gates.
-- Extension docs cannot be mistaken for v1 requirements.
+- Invariant verifier map has no unmapped local kernel law.
+- Core status audit has no local-kernel blockers and uses the current status
+  labels: `done`, `extension`, `later-hosted`, and post-v0.1.0 hardening.
+- Extension docs cannot be mistaken for local alpha requirements.

@@ -1,17 +1,27 @@
 # Core Status Audit
 
-This audit states the current v1 target and tracks whether the repository proves
-that target with code, tests, conformance fixtures, and documentation.
+This audit tracks the internal local-kernel gate status for the public
+`v0.1.0 alpha` package. In this document, `done` means the local reference
+implementation has deterministic evidence for the gate. It does not mean the
+project is a hosted platform, a final ecosystem standard, or a managed memory
+service.
 
-## Factual V1 Goal
+Public wording:
 
-Agent Memory Kernel v1 is a universal, local-first, auditable memory kernel. It
+```text
+v0.1.0 alpha: kernel-complete local reference implementation with executable
+conformance contracts.
+```
+
+## Internal Local-Kernel Goal
+
+Agent Memory Kernel aims to be a universal, local-first, auditable memory kernel. It
 must let any runtime record observed events, propose reviewable memory, promote
 safe memory, retrieve selected context before a model call, save the resulting
 turn, and propose the next memory update after the turn.
 
-V1 is not a Hermes rollout, SEO workflow, hosted SaaS, vector-search product,
-dashboard, billing system, or runtime orchestrator. Those may exist as
+The kernel is not a Hermes rollout, SEO workflow, hosted SaaS, vector-search
+product, dashboard, billing system, or runtime orchestrator. Those may exist as
 extensions, adapters, demos, or later hosted work, but they cannot define the
 kernel contract.
 
@@ -51,15 +61,17 @@ it agrees with the charter, AMK-000, and the machine-readable contract.
   CLI assertions, or other deterministic local evidence.
 - `extension`: optional adapter, pack, UI, provider, domain, or local operator
   workflow that consumes the kernel contract.
-- `later-hosted`: future hosted/platform layer that must not block local v1.
+- `later-hosted`: future hosted/platform layer that must not block local
+  v0.1.0.
 
-There are no current `missing` v1 blockers in this audit. Remaining work is
-classified as post-v1 hardening unless a future change alters kernel truth,
-lifecycle, policy, retrieval, prompt boundaries, import/export, or conformance.
+There are no current `missing` local-kernel blockers in this audit. Remaining
+work is classified as post-v0.1.0 hardening unless a future change alters
+kernel truth, lifecycle, policy, retrieval, prompt boundaries, import/export,
+or conformance.
 
 ## Core Gate Status
 
-| Gate | Status | Current evidence | Post-v1 hardening |
+| Gate | Status | Current evidence | Post-v0.1.0 hardening |
 | --- | --- | --- | --- |
 | Gate 0: Normative boundary | done | README, SPEC, `kernel-charter.md`, `implementation-plan.md`, `backlog-cutover.md`, `hosted-roadmap.md`; reference slice now uses a generic project iteration fixture instead of a domain workflow. | Keep future roadmap items labeled `core`, `extension`, or `later-hosted`. |
 | Gate 1: Core loop golden trace | done | `slice seed/run/assert`, `acceptance seed/assert`, `tests/test_memory_store.py::test_executable_vertical_slice_seed_run_assert`, `tests/test_contract_acceptance.py`. | Add more domain-neutral examples only after they pass the same slice contract. |
@@ -70,7 +82,7 @@ lifecycle, policy, retrieval, prompt boundaries, import/export, or conformance.
 | Gate 6: Keeper safety | done | deterministic extractor, `LLMKeeperExtractor` contract, reviewable Keeper writes, idempotent retry, false-trust fixtures for tool output and assistant guesses, secret/prompt-injection quarantine. | Add provider-specific Keeper prompts and tuning as extensions. |
 | Gate 7: Portability, recovery, and versioning | done | profile export/import, `.amk` bundle manifest/checksum, lifecycle tombstone restore, review queue restore, policy metadata restore, graph evidence-chain restore, poisoned bundle screening, interrupted import rollback, migration/kernel status. | Add interrupted non-bundle import, interrupted export, stale backup, and cross-version bundle matrices. |
 | Gate 8: Public local surface | done | Python API, CLI, local HTTP, stdio MCP, `contract assert`, `conformance spec-assert`, adapter capability contract, kernel status, certification and registry-entry output. | Keep HTTP/MCP as mirrors over the same local contract; do not make them separate truth paths. |
-| Gate 9: Public v1 package | done | README points to the kernel spec and reference loop, runtime/domain examples are optional, conformance commands are documented, tests cover installable local behavior. | Release publishing, hosted registry, and live runtime rollout remain outside local v1. |
+| Gate 9: Public alpha package | done | README points to the kernel spec, quickstart, evidence matrix, trust model, adapter certification, and reference loop. Runtime/domain examples are optional. Conformance commands are documented and CI runs local proof commands. | Release publishing, hosted registry, and live runtime rollout remain outside local v0.1.0. |
 
 ## Kernel Capability Map
 
@@ -108,9 +120,9 @@ lifecycle, policy, retrieval, prompt boundaries, import/export, or conformance.
 | Markdown vault/document importers | extension | Import/export bridges that must preserve provenance and review. |
 | Hosted identity, tenancy, RBAC, dashboards, registry, KMS, sync | later-hosted | Future hosted/platform layer. |
 
-## Post-V1 Hardening Backlog
+## Post-v0.1.0 Hardening Backlog
 
-These items are useful, but they are not unresolved local v1 blockers:
+These items are useful, but they are not unresolved local v0.1.0 blockers:
 
 1. Add wider namespace adversarial fixtures for third-party packs, agent roles,
    import packages, and bundle namespaces.
@@ -128,8 +140,8 @@ These items are useful, but they are not unresolved local v1 blockers:
 
 ## Verification Evidence
 
-The current local v1 gate is the release checklist in
-[implementation-plan.md](implementation-plan.md):
+The current local alpha proof is the release checklist in
+[release-checklist.md](release-checklist.md). The core commands are:
 
 ```bash
 PYTHONPATH=src python3 -m agent_memory_kernel.cli contract assert

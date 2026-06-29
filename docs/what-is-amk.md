@@ -68,9 +68,10 @@ These are defaults, not a hardcoded ontology. Teams can add project, agent,
 session, research, support, CRM, QA, SEO, or custom lanes without changing the
 kernel model.
 
-## V1 Promise
+## Public Alpha Promise
 
-V1 is trustworthy only when the local conformance suite proves that:
+The public alpha is trustworthy only when the local conformance suite proves
+that:
 
 - deleted or distrusted memory cannot reappear through old evidence;
 - personal/private memory does not leak into professional prompts by default;

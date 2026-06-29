@@ -1,189 +1,124 @@
 # Roadmap
 
 This roadmap follows the [Kernel Charter](kernel-charter.md),
-[AMK-000](amk-000-kernel-invariants.md), and
+[AMK-000](amk-000-kernel-invariants.md), [SPEC](../SPEC.md), and
 [Backlog Cutover](backlog-cutover.md).
+
+Public status:
+
+```text
+v0.1.0 alpha: kernel-complete local reference implementation with executable
+conformance contracts.
+```
 
 The project should remain a local-first memory kernel. Adapters, packs,
 embeddings, hosted services, and domain rollouts are valuable only when they
 consume the kernel contract instead of redefining it.
 
-The public spec is [../SPEC.md](../SPEC.md), and the current implementation
-state is tracked in [core-status-audit.md](core-status-audit.md).
+## v0.1.0 Alpha: Local Kernel Reference
 
-## v0.1: Local Kernel Baseline
-
-Status: implemented in this template.
+Status: implemented as a local reference implementation and covered by the
+release checklist in [release-checklist.md](release-checklist.md).
 
 Included:
 
-- SQLite source of truth;
-- CLI;
-- source events, candidates, active memories;
-- conversation turns, thread messages, and summaries;
-- generic scope/lane/namespace policy isolation with personal/professional
-  starter templates;
-- memory items;
-- manual review and conservative auto-approval;
-- quarantine for secret-like and prompt-injection-like content;
-- persistent graph nodes, graph edges, node evidence, and edge evidence;
-- Keeper runs, graph command normalization, and graph command audit;
-- context packs, Memory Tree Packs, and context builder packs;
-- write-policy and read-policy enforcement;
-- correction, deletion, distrust, expiration, supersession, and rollback paths;
-- export control, redaction profiles, encrypted export/import, vault export,
-  retention, and approval flows;
-- backup, restore, migration, and restore-drill commands;
-- local HTTP API, stdio MCP server, and worker processing;
-- formal Memory Contract, acceptance harness, and conformance suite;
-- provider-neutral runtime loop and reference demo.
+- SQLite local source of truth;
+- source events, candidates, active memories, review history, audit trails;
+- Router-selected prompt envelopes;
+- Keeper saved-turn and candidate proposal path;
+- graph/evidence records and Memory Tree rendering;
+- scope/lane/namespace isolation;
+- read/write/export/lifecycle policy checks;
+- correction, rollback, delete, distrust, expire, supersede, conflict, and
+  current-best flows;
+- profile/bundle/vault export and import with provenance and redaction;
+- backup, restore, migration, and recovery checks;
+- formal memory contract, acceptance harness, conformance suite, and
+  deterministic vertical slice;
+- optional local HTTP, stdio MCP, browser UI, provider formatter, embedding,
+  notification, billing, and adapter examples as extension surfaces.
 
-## v0.2: Kernel Charter Cutover
+Not included as v0.1.0 blockers:
 
-Goal: make the repository read as a memory kernel, not a platform roadmap.
+- hosted SaaS;
+- hosted multi-user API/UI;
+- hosted team RBAC;
+- remote hosted MCP;
+- cloud KMS/off-host custody;
+- managed billing or notification delivery;
+- hosted registry and badge publication;
+- live provider certification;
+- production rollout into any named runtime.
 
-Core work:
+## v0.1.x Public Hardening
 
-- keep [../SPEC.md](../SPEC.md) as the public kernel behavior spec;
-- keep [kernel-charter.md](kernel-charter.md) as the governing boundary;
-- keep [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md) as the
-  executable invariant contract;
-- keep [backlog-cutover.md](backlog-cutover.md) as the classification rule for
-  new work;
-- keep [core-status-audit.md](core-status-audit.md) current with `done`,
-  `partial`, `missing`, `extension`, and `later-hosted` status;
-- keep [implementation-plan.md](implementation-plan.md) scoped to local kernel
-  completion;
-- move hosted/platform work to [hosted-roadmap.md](hosted-roadmap.md);
-- keep domain and runtime examples under `examples/` and `adapters/`;
-- keep optional retrieval and provider work as extensions.
+Goal: make the alpha easier for outside adopters to understand, verify, and
+extend without private project context.
 
-Done when:
+Core/public work:
 
-- contributors can identify `core`, `extension`, and `later-hosted` work;
-- hosted features are not local full-memory blockers;
-- personal/professional templates do not define the kernel ontology;
-- runtime/domain examples point back to the kernel contract.
+- keep README kernel-first;
+- keep [evidence-matrix.md](evidence-matrix.md) current;
+- keep [trust-and-security.md](trust-and-security.md) visible from the front
+  door;
+- keep [compatibility-policy.md](compatibility-policy.md) current with schema,
+  contract, conformance, CLI, Python API, and bundle changes;
+- keep [adapter-certification.md](adapter-certification.md) as the main
+  external adoption path;
+- keep CI green for tests, contract assert, conformance spec assert, vertical
+  slice, conformance fixture, compileall, and whitespace checks.
 
-## v0.3: Memory Safety Invariants
+Post-v0.1.0 hardening:
 
-Goal: make memory governance enforceable.
+- wider third-party namespace adversarial fixtures;
+- interrupted export and interrupted non-bundle import fixtures;
+- stale-backup and corrupted-store drills beyond current recovery evidence;
+- larger local resource benchmarks;
+- adapter-specific prompt and Keeper snapshots;
+- cross-version bundle/import matrices once a second public schema or contract
+  version exists.
 
-Core work:
-
-- deleted memory cannot reappear from retained evidence;
-- distrusted sources cannot influence retrieval, summaries, or derived memory;
-- scope/lane/namespace boundaries cannot leak across prompt, graph, summary,
-  browser, or export surfaces by default;
-- derived memory invalidates after correction, deletion, distrust, expiration,
-  or supersession;
-- exports preserve provenance, tombstones, trust state, policy metadata, review
-  history, and evidence chains;
-- prompt envelopes contain selected, policy-filtered, budgeted memory only,
-  never the full graph;
-- local actors cannot bypass capability grants;
-- local histories stay bounded and predictable.
-- maintain an invariant matrix that maps each law to code paths and executable
-  proof.
-
-Evidence required:
-
-- invariant tests;
-- conformance golden traces;
-- lifecycle mutation reports;
-- export/import fixtures;
-- prompt-envelope fixtures;
-- bounded-selection fixtures;
-- latency/resource fixtures.
-
-## v0.4: Reference Loop And Explainability
-
-Goal: make the local loop boring, inspectable, and easy to operate.
-
-Core work:
-
-- preserve raw turns before Keeper extraction;
-- keep Keeper writes reviewable by default;
-- keep Router retrieval deterministic and policy-filtered;
-- expose selected/skipped branch reasons;
-- add or strengthen human-readable memory diffs;
-- add or strengthen "why this memory exists" reports;
-- keep review, correction, delete, distrust, expire, and rollback flows
-  available through stable interfaces.
-
-Evidence required:
-
-- `slice seed/run/assert`;
-- review inbox and lifecycle tests;
-- Router explainability tests;
-- no-memory fallback tests.
-
-## v0.5: Portable Bundles, API, And Resource Budgets
-
-Goal: make the kernel portable and dependable for third-party adopters.
-
-Core work:
-
-- stable CLI/API surface and versioning policy;
-- `.amk` portable bundle manifest with schema and contract versions;
-- import/export round trips preserving ids, provenance, policies, evidence,
-  review history, pending/rejected review queues, lifecycle state, and
-  tombstones;
-- policy simulator and dry-run behavior for read/write/inject/export/lifecycle;
-- deterministic ranking spec with stable tie-breakers;
-- local capability grants for actors and adapters;
-- latency/resource budgets for large histories beyond bounded selection.
-
-Evidence required:
-
-- bundle round-trip tests;
-- policy dry-run fixtures;
-- ranking golden traces;
-- API/versioning checks;
-- bounded-selection golden traces;
-- latency/resource fixtures.
-
-## v0.6: Adapter Contracts
+## v0.2: Adapter Ecosystem
 
 Goal: let external systems use the kernel without copying internal assumptions.
 
 Extension work:
 
-- runtime adapter contract for pre-call retrieval and post-turn Keeper work;
-- importer/exporter contract for provenance and lifecycle preservation;
-- retrieval-enhancer contract for embeddings or rerankers after policy
-  filtering;
-- adapter capability levels: read-only, write-capable, lifecycle-capable,
-  graph-capable, export-capable, and prompt-injection capable;
-- local adapter certification through conformance scenarios.
+- neutral runtime adapter examples;
+- adapter certification reports and local badge output;
+- importer/exporter compatibility examples;
+- retrieval-enhancer examples that run after policy filtering;
+- provider formatter examples that keep memory outside hidden system surfaces;
+- optional runtime adapters such as Hermes, LangGraph, AutoGen, CrewAI, chat
+  apps, coding agents, and notes/vault systems.
 
-Examples:
+Rules:
 
-- provider-neutral reference loop;
-- personal/professional starter templates;
-- chat agent adapter;
-- coding agent adapter;
-- optional Hermes adapter;
-- notes/vault importer.
+- adapters must pass local conformance before claiming compatibility;
+- adapters must not inject the full graph or raw database into prompts;
+- adapters must not bypass review, lifecycle, policy, import/export, or prompt
+  boundary invariants.
 
-## v0.7: Domain Packs
+## v0.3: Domain And Outcome Packs
 
 Goal: support iterative workflows without turning them into kernel assumptions.
 
 Extension work:
 
 - outcome loop pack;
-- SEO loop pack;
 - research memory pack;
 - support/CRM memory pack;
-- QA/testing memory pack.
+- QA/testing memory pack;
+- SEO loop pack as one optional domain example;
+- personal/professional starter templates maintained as default packs.
 
 Rules:
 
 - packs must use core memory kinds and policies;
 - packs may add graph conventions and examples;
 - packs must not require hosted infrastructure;
-- packs must not bypass review or lifecycle invariants.
+- packs must not bypass review or lifecycle invariants;
+- packs must not define the kernel ontology.
 
 ## Later Hosted
 
@@ -201,4 +136,4 @@ Later-hosted work includes:
 - live provider certification;
 - hosted sync and collaboration.
 
-None of these are blockers for the local full-memory kernel.
+None of these are blockers for the local v0.1.0 alpha kernel.

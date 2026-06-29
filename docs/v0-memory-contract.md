@@ -1,6 +1,14 @@
 # v0 Memory Contract
 
-This document defines the stable contract for `v0.1.x`.
+> Historical contract draft.
+>
+> This document is kept for compatibility research around `v0.1.x` planning.
+> It is not the primary release authority for `v0.1.0 alpha`. Use
+> [../SPEC.md](../SPEC.md), [adapter-contract.md](adapter-contract.md),
+> [memory-lifecycle-contract.md](memory-lifecycle-contract.md), and the
+> machine-readable `memory_contract()` output for current public behavior.
+
+This document defines an older contract draft for `v0.1.x`.
 
 ## Goals
 

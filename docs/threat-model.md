@@ -43,7 +43,7 @@ The machine-readable version of this table lives in
 | `corrupt_or_partial_store` | report migration status; run SQLite integrity checks; roll back interrupted imports; fail closed to no-memory mode | `migration_status_is_compatible`, `kernel_status_reports_compatible_versions`, `golden_trace_interrupted_import_rolls_back_partial_writes` |
 | `audit_tampering_or_blind_spots` | expose who/what/why metadata; preserve provenance and review history; keep graph source previews; hash-chain new local audit entries for tamper evidence | `keeper_change_is_inspectable`, `professional_memory_injected_with_provenance`, `golden_trace_graph_browser_shows_source_previews`, `golden_trace_portable_bundle_manifest_roundtrip`, `audit_log_integrity_detects_tampering` |
 
-## Non-Goals For Local V1
+## Non-Goals For Local v0.1.0
 
 The local kernel does not claim to solve:
 

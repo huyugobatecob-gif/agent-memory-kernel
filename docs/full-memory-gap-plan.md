@@ -1,17 +1,19 @@
 # Historical Full Memory Gap Analysis
 
 > Scope note: this is the historical deep gap analysis. The current governing
-> plan is [kernel-charter.md](kernel-charter.md),
-> [backlog-cutover.md](backlog-cutover.md), and
-> [implementation-plan.md](implementation-plan.md). Hosted, runtime-specific,
-> provider-specific, and domain-specific items in this document are not local
-> kernel blockers unless they are classified as `core` in the backlog cutover.
-> Use this document as research background, not as the release authority.
+> documents are [../SPEC.md](../SPEC.md), [kernel-charter.md](kernel-charter.md),
+> [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md),
+> [backlog-cutover.md](backlog-cutover.md),
+> [core-status-audit.md](core-status-audit.md), and
+> [roadmap.md](roadmap.md). Hosted, runtime-specific, provider-specific, and
+> domain-specific items in this document are not local kernel blockers unless
+> they are classified as `core` in the current public docs. Use this document
+> as research background, not as release authority for `v0.1.0 alpha`.
 
 **Historical goal:** explore an automatic cross-model memory layer where a
 lightweight Keeper/Router maintains a graph tree and injects relevant node
 content into the prompt before any main agent answers.
-**Current v1 authority:** prove the local kernel contract without requiring a
+**Current public alpha authority:** prove the local kernel contract without requiring a
 live model provider, runtime rollout, hosted service, or domain-specific
 project.
 **Current dependencies:** SQLite migration discipline, prompt-boundary policy,
@@ -960,7 +962,7 @@ external runtime deployments.
 
 ## Historical Acceptance Criteria
 
-The canonical v1 gates are now in
+The canonical local-kernel gates are now in
 [implementation-plan.md](implementation-plan.md). This checklist is retained as
 research background and should be interpreted through the core/extension split.
 
