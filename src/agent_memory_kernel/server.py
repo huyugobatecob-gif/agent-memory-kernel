@@ -193,6 +193,34 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             ),
             limit=int(payload.get("limit", 20) or 20),
         )
+    if path in {"/billing/invoice/import", "/billing-invoice/import"}:
+        line_items = payload.get("line_items", [])
+        if not isinstance(line_items, list):
+            raise ValueError("line_items must be a list")
+        return store.import_billing_invoice(
+            invoice_id=str(payload.get("invoice_id", "")),
+            provider=str(payload.get("provider", "")),
+            line_items=line_items,
+            period_start=str(payload.get("period_start", "")),
+            period_end=str(payload.get("period_end", "")),
+            currency=str(payload.get("currency", "USD") or "USD"),
+            actor=str(payload.get("actor", "api")),
+            source_ref=str(payload.get("source_ref", "")),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+            overwrite=bool(payload.get("overwrite", False)),
+        )
+    if path in {"/billing/invoice/list", "/billing-invoice/list"}:
+        return store.list_billing_invoice_items(
+            invoice_id=payload.get("invoice_id"),
+            provider=payload.get("provider"),
+            scope=payload.get("scope"),
+            thread_id=payload.get("thread_id"),
+            currency=payload.get("currency"),
+            since=payload.get("since"),
+            until=payload.get("until"),
+            status=str(payload.get("status", "active") or "active"),
+            limit=int(payload.get("limit", 50) or 50),
+        )
     if path in {"/migration/status", "/migration-status"}:
         return store.migration_status(
             integrity_check=bool(payload.get("integrity_check", True)),

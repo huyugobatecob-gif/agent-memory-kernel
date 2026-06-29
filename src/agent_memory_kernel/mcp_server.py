@@ -291,6 +291,44 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_billing_invoice_import": {
+        "endpoint": "/billing/invoice/import",
+        "description": "Import provider invoice line items for billing reconciliation.",
+        "inputSchema": _schema(
+            {
+                "invoice_id": _string("Provider invoice id."),
+                "provider": _string("Provider name, such as openai or anthropic."),
+                "line_items": _array(
+                    "Invoice line items with amount, currency, model, scope, and token metadata.",
+                    {"type": "object", "additionalProperties": True},
+                ),
+                "period_start": _string("Fallback invoice period start.", ""),
+                "period_end": _string("Fallback invoice period end.", ""),
+                "currency": _string("Fallback invoice currency.", "USD"),
+                "actor": _string("Actor importing the invoice.", "mcp"),
+                "source_ref": _string("Optional source artifact reference.", ""),
+                "overwrite": _boolean("Replace active rows for the same invoice/provider.", False),
+            },
+            ["invoice_id", "provider", "line_items"],
+        ),
+    },
+    "memory_billing_invoice_list": {
+        "endpoint": "/billing/invoice/list",
+        "description": "List imported provider invoice line items.",
+        "inputSchema": _schema(
+            {
+                "invoice_id": _string("Optional invoice id filter.", ""),
+                "provider": _string("Optional provider filter.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "thread_id": _string("Optional thread id.", ""),
+                "currency": _string("Optional currency filter.", ""),
+                "since": _string("Inclusive invoice period lower bound.", ""),
+                "until": _string("Inclusive invoice period upper bound.", ""),
+                "status": _string("Invoice row status: active, replaced, or all.", "active"),
+                "limit": _integer("Maximum invoice rows.", 50),
+            }
+        ),
+    },
     "memory_migration_status": {
         "endpoint": "/migration/status",
         "description": "Check SQLite schema version, required tables/columns, and migration compatibility.",

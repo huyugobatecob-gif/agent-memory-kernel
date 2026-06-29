@@ -339,6 +339,24 @@ CREATE TABLE IF NOT EXISTS llm_usage_stats (
     metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS provider_invoice_items (
+    invoice_item_id TEXT PRIMARY KEY,
+    imported_at     TEXT NOT NULL,
+    invoice_id      TEXT NOT NULL DEFAULT '',
+    provider        TEXT NOT NULL DEFAULT '',
+    model           TEXT NOT NULL DEFAULT '',
+    scope           TEXT NOT NULL DEFAULT 'all',
+    thread_id       TEXT NOT NULL DEFAULT '',
+    period_start    TEXT NOT NULL DEFAULT '',
+    period_end      TEXT NOT NULL DEFAULT '',
+    total_tokens    INTEGER NOT NULL DEFAULT 0,
+    amount          REAL NOT NULL DEFAULT 0,
+    currency        TEXT NOT NULL DEFAULT 'USD',
+    source_ref      TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'active',
+    metadata_json   TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS graph_optimization_runs (
     optimization_id TEXT PRIMARY KEY,
     created_at      TEXT NOT NULL,
@@ -633,6 +651,9 @@ CREATE INDEX IF NOT EXISTS idx_graph_groups_scope ON memory_graph_groups(scope);
 CREATE INDEX IF NOT EXISTS idx_semantic_analyses_scope ON semantic_analyses(scope);
 CREATE INDEX IF NOT EXISTS idx_profile_notes_scope_type ON profile_notes(scope, note_type);
 CREATE INDEX IF NOT EXISTS idx_llm_usage_scope_thread ON llm_usage_stats(scope, thread_id);
+CREATE INDEX IF NOT EXISTS idx_provider_invoice_provider_period ON provider_invoice_items(provider, period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_provider_invoice_scope_thread ON provider_invoice_items(scope, thread_id);
+CREATE INDEX IF NOT EXISTS idx_provider_invoice_status ON provider_invoice_items(status, invoice_id);
 CREATE INDEX IF NOT EXISTS idx_graph_optimizations_scope ON graph_optimization_runs(scope);
 CREATE INDEX IF NOT EXISTS idx_router_runs_thread ON router_runs(thread_id);
 CREATE INDEX IF NOT EXISTS idx_router_feedback_run ON router_feedback(router_run_id);

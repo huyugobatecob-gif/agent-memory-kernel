@@ -67,6 +67,9 @@ The adapter should:
   after correction, rollback, delete, distrust, expire, or supersede;
 - expose `operational_status()` so Hermes can check local memory health and
   fallback behavior before routing critical work through memory;
+- expose `import_billing_invoice()` and `billing_invoice_items()` so runtime
+  operators can reconcile recorded memory usage against imported provider
+  invoices without live billing API access;
 - expose `migration_status()`, `migration_changelog()`, `backup_database()`,
   and `restore_database()` for local SQLite recovery and migration
   compatibility checks;

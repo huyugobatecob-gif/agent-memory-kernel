@@ -92,7 +92,8 @@ Included now:
 - Combined Router/Keeper/usage observability report with token, cost,
   wall-clock duration, and local latency SLO alert telemetry.
 - Billing reconciliation report for recorded memory LLM usage, provider/model
-  cost grouping, expected-cost deltas, and suspicious usage rows.
+  cost grouping, imported provider invoice line items, expected-cost deltas,
+  and suspicious usage rows.
 - Prompt-budget adapter for model-family memory budgets across OpenAI, Claude,
   Gemini, and local model families.
 - Provider prompt formatters for OpenAI, Anthropic, Google/Gemini, and local
@@ -349,6 +350,7 @@ agent-memory router-feedback --db .memory/demo.db record router_xxxxxxxxxxxxxxxx
 agent-memory router-feedback --db .memory/demo.db list --router-run-id router_xxxxxxxxxxxxxxxx
 agent-memory memory-quality --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --scope professional
+agent-memory billing-invoice --db .memory/demo.db import --file provider-invoice.json
 agent-memory billing-reconcile --db .memory/demo.db --scope professional --expected-cost 0.25 --tolerance 0.01
 agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
@@ -410,6 +412,7 @@ agent-memory profile --db .memory/demo.db set-intro "This workspace works on SEO
 agent-memory profile --db .memory/demo.db add-rule "Always retrieve memory before planning."
 agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tokens 100 --completion-tokens 40
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
+agent-memory billing-invoice --db .memory/demo.db list --provider openai
 agent-memory billing-reconcile --db .memory/demo.db --thread-id seo-demo --max-cost-per-1k 0.05
 agent-memory migration-status --db .memory/demo.db
 agent-memory migration-changelog --db .memory/demo.db
@@ -847,7 +850,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_capability_check`, `memory_derived_invalidations`,
 `memory_derived_lineage`,
 `memory_operational_status`, `memory_observability`,
-`memory_billing_reconcile`,
+`memory_billing_reconcile`, `memory_billing_invoice_import`,
+`memory_billing_invoice_list`,
 `memory_embedding_certify`,
 `memory_migration_status`, `memory_migration_changelog`, `memory_backup_database`,
 `memory_restore_database`, `memory_restore_drill`,

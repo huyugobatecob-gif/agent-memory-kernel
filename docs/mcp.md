@@ -66,6 +66,9 @@ Runtime tools:
   feedback, shadow trace eval pass rate, Keeper job health, and quality gates.
 - `memory_billing_reconcile`: reconcile recorded memory LLM usage costs with
   expected billing and flag suspicious usage rows.
+- `memory_billing_invoice_import`: import provider invoice line items for
+  billing reconciliation.
+- `memory_billing_invoice_list`: list imported provider invoice line items.
 - `memory_worker_status`: report queued, stale, and failed Keeper worker jobs
   for supervisors and operators.
 - `memory_outcome_compare`: compare success/failure outcome records and return

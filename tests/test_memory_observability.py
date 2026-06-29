@@ -203,6 +203,42 @@ class MemoryObservabilityTests(unittest.TestCase):
             self.assertIn("high_cost_per_1k", names)
             self.assertIn("tokens_without_cost", names)
 
+            imported = store.import_billing_invoice(
+                invoice_id="inv-openai-001",
+                provider="openai",
+                currency="USD",
+                line_items=[
+                    {
+                        "model": "keeper-mini",
+                        "scope": "professional",
+                        "thread_id": "billing-thread",
+                        "total_tokens": 200,
+                        "amount": 0.02,
+                    },
+                    {
+                        "model": "expensive-memory",
+                        "scope": "professional",
+                        "thread_id": "billing-thread",
+                        "total_tokens": 1,
+                        "amount": 0.10,
+                    },
+                ],
+                actor="tester",
+            )
+            self.assertEqual(imported["version"], "billing-invoice-v0.1")
+            self.assertEqual(imported["totals_by_currency"]["USD"], 0.12)
+
+            invoice_report = store.billing_reconciliation_report(
+                scope="professional",
+                thread_id="billing-thread",
+                provider="openai",
+                currency="USD",
+                tolerance=0,
+            )
+            self.assertEqual(invoice_report["reconciliation"]["status"], "pass")
+            self.assertEqual(invoice_report["reconciliation"]["source"], "provider_invoice")
+            self.assertEqual(invoice_report["provider_invoice"]["line_count"], 2)
+
             endpoint = handle_api_request(
                 store,
                 "/billing/reconcile",
@@ -215,8 +251,36 @@ class MemoryObservabilityTests(unittest.TestCase):
                 },
             )
             self.assertEqual(endpoint["reconciliation"]["status"], "pass")
+            imported_endpoint = handle_api_request(
+                store,
+                "/billing/invoice/import",
+                {
+                    "invoice_id": "inv-local-001",
+                    "provider": "local",
+                    "currency": "USD",
+                    "line_items": [
+                        {
+                            "model": "free-router",
+                            "scope": "professional",
+                            "thread_id": "billing-thread",
+                            "total_tokens": 30,
+                            "amount": 0,
+                        }
+                    ],
+                    "actor": "api",
+                },
+            )
+            self.assertEqual(imported_endpoint["status"], "imported")
+            listed_endpoint = handle_api_request(
+                store,
+                "/billing/invoice/list",
+                {"provider": "local", "thread_id": "billing-thread"},
+            )
+            self.assertEqual(listed_endpoint["count"], 1)
             mcp_names = {tool["name"] for tool in list_mcp_tools()}
             self.assertIn("memory_billing_reconcile", mcp_names)
+            self.assertIn("memory_billing_invoice_import", mcp_names)
+            self.assertIn("memory_billing_invoice_list", mcp_names)
             store.close()
 
     def test_billing_reconciliation_cli_outputs_report(self) -> None:
@@ -234,8 +298,62 @@ class MemoryObservabilityTests(unittest.TestCase):
                 cost=0.001,
             )
             store.close()
+            invoice_file = Path(tmp) / "invoice.json"
+            invoice_file.write_text(
+                json.dumps(
+                    {
+                        "invoice_id": "inv-cli-001",
+                        "provider": "openai",
+                        "currency": "USD",
+                        "line_items": [
+                            {
+                                "model": "keeper-mini",
+                                "scope": "professional",
+                                "thread_id": "billing-cli-thread",
+                                "total_tokens": 15,
+                                "amount": 0.001,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             parser = build_parser()
+            args = parser.parse_args(
+                [
+                    "billing-invoice",
+                    "--db",
+                    db,
+                    "import",
+                    "--file",
+                    str(invoice_file),
+                ]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["status"], "imported")
+
+            args = parser.parse_args(
+                [
+                    "billing-invoice",
+                    "--db",
+                    db,
+                    "list",
+                    "--provider",
+                    "openai",
+                ]
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["count"], 1)
+
             args = parser.parse_args(
                 [
                     "billing-reconcile",
@@ -245,8 +363,10 @@ class MemoryObservabilityTests(unittest.TestCase):
                     "professional",
                     "--thread-id",
                     "billing-cli-thread",
-                    "--expected-cost",
-                    "0.001",
+                    "--provider",
+                    "openai",
+                    "--currency",
+                    "USD",
                     "--tolerance",
                     "0",
                 ]

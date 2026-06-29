@@ -538,6 +538,53 @@ def cmd_billing_reconcile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_billing_invoice_import(args: argparse.Namespace) -> int:
+    payload = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("billing invoice file must contain a JSON object")
+    line_items = payload.get("line_items", [])
+    if not isinstance(line_items, list):
+        raise ValueError("billing invoice line_items must be a list")
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.import_billing_invoice(
+            invoice_id=str(payload.get("invoice_id") or args.invoice_id),
+            provider=str(payload.get("provider") or args.provider),
+            line_items=line_items,
+            period_start=str(payload.get("period_start") or args.period_start),
+            period_end=str(payload.get("period_end") or args.period_end),
+            currency=str(payload.get("currency") or args.currency),
+            actor=args.actor,
+            source_ref=str(payload.get("source_ref") or args.source_ref),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+            overwrite=args.overwrite,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_billing_invoice_list(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.list_billing_invoice_items(
+            invoice_id=args.invoice_id,
+            provider=args.provider,
+            scope=args.scope,
+            thread_id=args.thread_id,
+            currency=args.currency,
+            since=args.since,
+            until=args.until,
+            status=args.status,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_migration_status(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2032,6 +2079,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-cost-per-1k", type=float)
     p.add_argument("--limit", type=int, default=20)
     p.set_defaults(func=cmd_billing_reconcile)
+
+    p = sub.add_parser("billing-invoice", help="Import and inspect provider invoice line items")
+    add_common_db(p)
+    invoice_sub = p.add_subparsers(dest="billing_invoice_command", required=True)
+
+    ip = invoice_sub.add_parser("import", help="Import a provider invoice JSON file")
+    ip.add_argument("--file", required=True, help="JSON invoice file with line_items")
+    ip.add_argument("--invoice-id", default="", help="Fallback invoice id if omitted in the file")
+    ip.add_argument("--provider", default="", help="Fallback provider if omitted in the file")
+    ip.add_argument("--period-start", default="", help="Fallback invoice period start")
+    ip.add_argument("--period-end", default="", help="Fallback invoice period end")
+    ip.add_argument("--currency", default="USD", help="Fallback invoice currency")
+    ip.add_argument("--actor", default="operator")
+    ip.add_argument("--source-ref", default="")
+    ip.add_argument("--overwrite", action="store_true")
+    ip.set_defaults(func=cmd_billing_invoice_import)
+
+    ip = invoice_sub.add_parser("list", help="List imported provider invoice line items")
+    ip.add_argument("--invoice-id", default="")
+    ip.add_argument("--provider", default="")
+    ip.add_argument("--scope", choices=["", "all", "personal", "professional", "project", "agent", "session"], default="")
+    ip.add_argument("--thread-id", default="")
+    ip.add_argument("--currency", default="")
+    ip.add_argument("--since", default="")
+    ip.add_argument("--until", default="")
+    ip.add_argument("--status", choices=["active", "replaced", "all"], default="active")
+    ip.add_argument("--limit", type=int, default=50)
+    ip.set_defaults(func=cmd_billing_invoice_list)
 
     p = sub.add_parser("migration-status", help="Check local schema and migration compatibility")
     add_common_db(p)

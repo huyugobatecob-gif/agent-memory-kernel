@@ -50,7 +50,39 @@ latest usage samples. It is exposed through:
 - MCP: `memory_billing_reconcile`
 - Python adapter wrapper: `billing_reconciliation_report()`
 
+Provider invoice line items can be imported from JSON and then used as the
+expected billing amount when `billing-reconcile` is called without
+`--expected-cost`:
+
+```json
+{
+  "invoice_id": "inv_2026_06",
+  "provider": "openai",
+  "currency": "USD",
+  "period_start": "2026-06-01T00:00:00+00:00",
+  "period_end": "2026-06-30T23:59:59+00:00",
+  "line_items": [
+    {
+      "model": "keeper-mini",
+      "scope": "professional",
+      "thread_id": "seo-demo",
+      "total_tokens": 1200,
+      "amount": 0.25
+    }
+  ]
+}
+```
+
+Invoice ingestion surfaces:
+
+- CLI: `agent-memory billing-invoice import --file provider-invoice.json`
+- CLI: `agent-memory billing-invoice list --provider openai`
+- HTTP: `POST /billing/invoice/import`, `POST /billing/invoice/list`
+- MCP: `memory_billing_invoice_import`, `memory_billing_invoice_list`
+- Python adapter wrappers: `import_billing_invoice()`,
+  `billing_invoice_items()`
+
 This is a baseline local report with local latency SLO checks and recorded-cost
 reconciliation. Production deployments should still add supervisor metrics,
-external provider invoice ingestion, dashboards, managed alerts, and hosted
+live provider invoice fetchers, dashboards, managed alerts, and hosted
 retention policy enforcement beyond the local export retention ledger.

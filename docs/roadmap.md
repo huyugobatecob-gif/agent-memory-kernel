@@ -151,9 +151,11 @@ status/warnings, LLM usage tokens/cost, and local latency SLO alerts.
 Baseline provider billing reconciliation is implemented through
 `agent-memory billing-reconcile`, `/billing/reconcile`, Python adapter
 wrappers, and MCP `memory_billing_reconcile`; it compares recorded usage cost
-against expected billing amounts and flags suspicious usage rows. External
-provider invoice ingestion, dashboards, hosted retention policy, and managed
-alerts are still backlog.
+against expected billing amounts or imported provider invoice line items and
+flags suspicious usage rows. Baseline invoice ingestion is implemented through
+`agent-memory billing-invoice`, `/billing/invoice/*`, Python adapter wrappers,
+and MCP `memory_billing_invoice_*`. Live provider invoice fetchers, dashboards,
+hosted retention policy, and managed alerts are still backlog.
 Baseline prompt-envelope provider formatters are implemented through
 `before_model_call(..., prompt_format=...)`, `agent-memory before-model-call
 --prompt-format`, `/before-model-call`, and MCP `memory_before_model_call`.

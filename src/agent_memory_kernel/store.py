@@ -117,6 +117,7 @@ MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
+BILLING_INVOICE_VERSION = "billing-invoice-v0.1"
 BRAIN_STYLE_CERTIFICATION_VERSION = "brain-style-certification-v0.1"
 RESTORE_DRILL_VERSION = "database-restore-drill-v0.1"
 MIGRATION_CHANGELOG_VERSION = "migration-changelog-v0.1"
@@ -2187,6 +2188,15 @@ class MemoryStore:
                 "metadata_json",
             ],
             "llm_usage_stats": ["usage_id", "provider", "model", "total_tokens", "cost"],
+            "provider_invoice_items": [
+                "invoice_item_id",
+                "invoice_id",
+                "provider",
+                "model",
+                "amount",
+                "currency",
+                "status",
+            ],
             "memory_export_approvals": [
                 "approval_id",
                 "actor",
@@ -4066,6 +4076,248 @@ class MemoryStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def import_billing_invoice(
+        self,
+        *,
+        invoice_id: str,
+        provider: str,
+        line_items: list[dict[str, Any]],
+        period_start: str = "",
+        period_end: str = "",
+        currency: str = "USD",
+        actor: str = "system",
+        source_ref: str = "",
+        metadata: dict[str, Any] | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Import provider invoice line items for local billing reconciliation."""
+        invoice_id = (invoice_id or "").strip()
+        provider = (provider or "").strip().lower()
+        if not invoice_id:
+            raise ValueError("invoice_id is required")
+        if not provider:
+            raise ValueError("provider is required")
+        if not line_items:
+            raise ValueError("line_items must not be empty")
+        currency = (currency or "USD").strip().upper() or "USD"
+        existing = self.conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM provider_invoice_items
+            WHERE invoice_id = ? AND LOWER(provider) = LOWER(?) AND status = 'active'
+            """,
+            (invoice_id, provider),
+        ).fetchone()
+        if int(existing["count"] if existing else 0) and not overwrite:
+            raise ValueError("invoice already imported; pass overwrite=True to replace it")
+        if overwrite:
+            self.conn.execute(
+                """
+                UPDATE provider_invoice_items
+                SET status = 'replaced'
+                WHERE invoice_id = ? AND LOWER(provider) = LOWER(?) AND status = 'active'
+                """,
+                (invoice_id, provider),
+            )
+
+        imported_at = now_iso()
+        imported: list[dict[str, Any]] = []
+        totals_by_currency: dict[str, float] = {}
+        tokens_total = 0
+        for index, raw in enumerate(line_items, start=1):
+            item_currency = str(raw.get("currency") or currency).strip().upper() or currency
+            scope_value = str(raw.get("scope") or "all").strip()
+            scope = normalize_scope(scope_value) if scope_value != "all" else "all"
+            amount = round(self._safe_float(raw.get("amount"), 0.0), 6)
+            tokens = int(raw.get("total_tokens") or raw.get("tokens") or 0)
+            invoice_item_id = new_id("inv")
+            row = {
+                "invoice_item_id": invoice_item_id,
+                "imported_at": imported_at,
+                "invoice_id": invoice_id,
+                "provider": provider,
+                "model": str(raw.get("model") or "").strip(),
+                "scope": scope,
+                "thread_id": str(raw.get("thread_id") or "").strip(),
+                "period_start": str(raw.get("period_start") or period_start or "").strip(),
+                "period_end": str(raw.get("period_end") or period_end or "").strip(),
+                "total_tokens": tokens,
+                "amount": amount,
+                "currency": item_currency,
+                "source_ref": str(raw.get("source_ref") or source_ref or f"line:{index}").strip(),
+                "status": "active",
+                "metadata": {
+                    **(metadata or {}),
+                    **(raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}),
+                },
+            }
+            self.conn.execute(
+                """
+                INSERT INTO provider_invoice_items
+                  (invoice_item_id, imported_at, invoice_id, provider, model, scope,
+                   thread_id, period_start, period_end, total_tokens, amount,
+                   currency, source_ref, status, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["invoice_item_id"],
+                    row["imported_at"],
+                    row["invoice_id"],
+                    row["provider"],
+                    row["model"],
+                    row["scope"],
+                    row["thread_id"],
+                    row["period_start"],
+                    row["period_end"],
+                    row["total_tokens"],
+                    row["amount"],
+                    row["currency"],
+                    row["source_ref"],
+                    row["status"],
+                    json.dumps(row["metadata"], sort_keys=True),
+                ),
+            )
+            imported.append(row)
+            totals_by_currency[item_currency] = round(
+                float(totals_by_currency.get(item_currency, 0.0)) + amount,
+                6,
+            )
+            tokens_total += tokens
+        self._audit(
+            "billing_invoice_imported",
+            "provider_invoice",
+            invoice_id,
+            actor=actor,
+            details={
+                "provider": provider,
+                "line_count": len(imported),
+                "totals_by_currency": totals_by_currency,
+                "overwrite": bool(overwrite),
+            },
+        )
+        self.conn.commit()
+        return {
+            "version": BILLING_INVOICE_VERSION,
+            "status": "imported",
+            "invoice_id": invoice_id,
+            "provider": provider,
+            "line_count": len(imported),
+            "total_tokens": tokens_total,
+            "totals_by_currency": totals_by_currency,
+            "items": imported,
+        }
+
+    def list_billing_invoice_items(
+        self,
+        *,
+        invoice_id: str | None = None,
+        provider: str | None = None,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        currency: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        status: str = "active",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """List imported provider invoice items for local reconciliation."""
+        invoice_id = (invoice_id or "").strip() or None
+        provider = (provider or "").strip() or None
+        scope = normalize_scope(scope) if scope and scope != "all" else (scope or None)
+        thread_id = (thread_id or "").strip() or None
+        currency = (currency or "").strip().upper() or None
+        since = (since or "").strip() or None
+        until = (until or "").strip() or None
+        status = (status or "active").strip().lower()
+        if status not in {"active", "replaced", "all"}:
+            raise ValueError("invoice item status must be active, replaced, or all")
+        row_limit = max(1, min(int(limit or 50), 500))
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if status != "all":
+            clauses.append("status = ?")
+            params.append(status)
+        if invoice_id:
+            clauses.append("invoice_id = ?")
+            params.append(invoice_id)
+        if provider:
+            clauses.append("LOWER(provider) = LOWER(?)")
+            params.append(provider)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        if thread_id:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if currency:
+            clauses.append("UPPER(currency) = ?")
+            params.append(currency)
+        if since:
+            clauses.append("(period_end = '' OR period_end >= ?)")
+            params.append(since)
+        if until:
+            clauses.append("(period_start = '' OR period_start <= ?)")
+            params.append(until)
+        rows = self.conn.execute(
+            f"""
+            SELECT invoice_item_id, imported_at, invoice_id, provider, model,
+                   scope, thread_id, period_start, period_end, total_tokens,
+                   amount, currency, source_ref, status, metadata_json
+            FROM provider_invoice_items
+            WHERE {' AND '.join(clauses)}
+            ORDER BY imported_at DESC, invoice_id ASC
+            LIMIT ?
+            """,
+            (*params, row_limit),
+        ).fetchall()
+        items = [self._billing_invoice_item_to_dict(row) for row in rows]
+        totals_by_currency: dict[str, float] = {}
+        tokens_total = 0
+        for item in items:
+            cur = str(item["currency"])
+            totals_by_currency[cur] = round(
+                float(totals_by_currency.get(cur, 0.0)) + float(item["amount"]),
+                6,
+            )
+            tokens_total += int(item["total_tokens"])
+        return {
+            "version": BILLING_INVOICE_VERSION,
+            "status": "pass",
+            "filters": {
+                "invoice_id": invoice_id or "",
+                "provider": provider or "",
+                "scope": scope or "all",
+                "thread_id": thread_id or "",
+                "currency": currency or "",
+                "since": since or "",
+                "until": until or "",
+                "status": status,
+            },
+            "count": len(items),
+            "total_tokens": tokens_total,
+            "totals_by_currency": totals_by_currency,
+            "items": items,
+        }
+
+    def _billing_invoice_item_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "invoice_item_id": row["invoice_item_id"],
+            "imported_at": row["imported_at"],
+            "invoice_id": row["invoice_id"],
+            "provider": row["provider"],
+            "model": row["model"],
+            "scope": row["scope"],
+            "thread_id": row["thread_id"],
+            "period_start": row["period_start"],
+            "period_end": row["period_end"],
+            "total_tokens": int(row["total_tokens"] or 0),
+            "amount": round(float(row["amount"] or 0.0), 6),
+            "currency": str(row["currency"] or "USD").upper(),
+            "source_ref": row["source_ref"],
+            "status": row["status"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
     def memory_observability_report(
         self,
         *,
@@ -4249,7 +4501,11 @@ class MemoryStore:
         currency = (currency or "").strip().upper() or None
         since = (since or "").strip() or None
         until = (until or "").strip() or None
-        expected_currency = (expected_currency or "USD").strip().upper() or "USD"
+        expected_currency = (
+            currency
+            if currency and expected_cost is None
+            else (expected_currency or "USD").strip().upper() or "USD"
+        )
         tolerance_value = max(0.0, self._safe_float(tolerance, 0.01))
         cost_per_1k_limit = (
             None
@@ -4308,6 +4564,16 @@ class MemoryStore:
             }
 
         items = [usage_item(row) for row in rows]
+        invoice_report = self.list_billing_invoice_items(
+            provider=provider,
+            scope=scope,
+            thread_id=thread_id,
+            currency=currency,
+            since=since,
+            until=until,
+            status="active",
+            limit=500,
+        )
         totals: dict[str, Any] = {
             "call_count": len(items),
             "prompt_tokens": 0,
@@ -4450,9 +4716,16 @@ class MemoryStore:
             "observed_cost": totals["cost_by_currency"].get(expected_currency, 0.0),
             "delta": 0.0,
             "tolerance": tolerance_value,
+            "source": "manual" if expected_cost is not None else "not_configured",
         }
-        if expected_cost is not None:
-            expected = round(float(expected_cost), 6)
+        invoice_expected = invoice_report["totals_by_currency"].get(expected_currency)
+        effective_expected_cost = expected_cost
+        reconciliation_source = "manual"
+        if effective_expected_cost is None and invoice_expected is not None:
+            effective_expected_cost = float(invoice_expected)
+            reconciliation_source = "provider_invoice"
+        if effective_expected_cost is not None:
+            expected = round(float(effective_expected_cost), 6)
             observed = round(float(totals["cost_by_currency"].get(expected_currency, 0.0)), 6)
             delta = round(observed - expected, 6)
             passed = abs(delta) <= tolerance_value
@@ -4462,12 +4735,17 @@ class MemoryStore:
                     "expected_cost": expected,
                     "observed_cost": observed,
                     "delta": delta,
+                    "source": reconciliation_source,
                 }
             )
             if not passed:
                 add_anomaly(
                     "warn",
-                    "expected_cost_mismatch",
+                    (
+                        "invoice_cost_mismatch"
+                        if reconciliation_source == "provider_invoice"
+                        else "expected_cost_mismatch"
+                    ),
                     "Observed recorded cost differs from expected billing amount.",
                     extra={
                         "expected_cost": expected,
@@ -4475,6 +4753,7 @@ class MemoryStore:
                         "delta": delta,
                         "currency": expected_currency,
                         "tolerance": tolerance_value,
+                        "source": reconciliation_source,
                     },
                 )
 
@@ -4502,6 +4781,13 @@ class MemoryStore:
                 "status": status,
             },
             "reconciliation": reconciliation,
+            "provider_invoice": {
+                "version": invoice_report["version"],
+                "line_count": invoice_report["count"],
+                "total_tokens": invoice_report["total_tokens"],
+                "totals_by_currency": invoice_report["totals_by_currency"],
+                "latest_items": invoice_report["items"][:row_limit],
+            },
             "totals": totals,
             "by_provider": by_provider,
             "by_model": by_model,

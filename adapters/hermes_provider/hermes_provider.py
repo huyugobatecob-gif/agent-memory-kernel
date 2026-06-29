@@ -239,6 +239,58 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def import_billing_invoice(
+        self,
+        *,
+        invoice_id: str,
+        provider: str,
+        line_items: list[dict[str, Any]],
+        period_start: str = "",
+        period_end: str = "",
+        currency: str = "USD",
+        actor: str = "provider",
+        source_ref: str = "",
+        metadata: dict[str, Any] | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        return self.store.import_billing_invoice(
+            invoice_id=invoice_id,
+            provider=provider,
+            line_items=line_items,
+            period_start=period_start,
+            period_end=period_end,
+            currency=currency,
+            actor=actor,
+            source_ref=source_ref,
+            metadata=metadata,
+            overwrite=overwrite,
+        )
+
+    def billing_invoice_items(
+        self,
+        *,
+        invoice_id: str | None = None,
+        provider: str | None = None,
+        scope: str | None = None,
+        thread_id: str | None = None,
+        currency: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        status: str = "active",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.list_billing_invoice_items(
+            invoice_id=invoice_id,
+            provider=provider,
+            scope=scope,
+            thread_id=thread_id,
+            currency=currency,
+            since=since,
+            until=until,
+            status=status,
+            limit=limit,
+        )
+
     def current_best_report(
         self,
         query: str = "",
