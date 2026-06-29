@@ -75,6 +75,8 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("tool_prompt_injection_is_quarantined", scenario_ids)
         self.assertIn("untrusted_tool_claim_stays_reviewable", scenario_ids)
         self.assertIn("assistant_guess_stays_reviewable", scenario_ids)
+        self.assertIn("personal_full_export_requires_approval", scenario_ids)
+        self.assertIn("personal_safe_export_redacts_content", scenario_ids)
         self.assertTrue(spec["golden_traces"])
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -111,6 +113,8 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("tool_prompt_injection_is_quarantined", passed)
             self.assertIn("untrusted_tool_claim_stays_reviewable", passed)
             self.assertIn("assistant_guess_stays_reviewable", passed)
+            self.assertIn("personal_full_export_requires_approval", passed)
+            self.assertIn("personal_safe_export_redacts_content", passed)
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")

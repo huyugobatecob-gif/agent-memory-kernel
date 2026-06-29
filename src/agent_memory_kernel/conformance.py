@@ -7,6 +7,7 @@ compatibility with the memory behavior contract.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import quote
 
@@ -85,6 +86,8 @@ def conformance_spec() -> dict[str, Any]:
                     "tool_prompt_injection_is_quarantined",
                     "untrusted_tool_claim_stays_reviewable",
                     "assistant_guess_stays_reviewable",
+                    "personal_full_export_requires_approval",
+                    "personal_safe_export_redacts_content",
                 ],
             },
         ],
@@ -238,6 +241,22 @@ def conformance_spec() -> dict[str, Any]:
                     "pending assistant guesses are absent from prompt-facing retrieval",
                 ],
             },
+            {
+                "id": "personal_full_export_requires_approval",
+                "requires": [
+                    "active personal memory is considered sensitive export scope",
+                    "full export of personal memory fails without an approved export approval",
+                    "the failed export leaves an audit trail instead of leaking content",
+                ],
+            },
+            {
+                "id": "personal_safe_export_redacts_content",
+                "requires": [
+                    "safe export of personal memory does not require full-content approval",
+                    "safe export metadata records redaction",
+                    "personal memory text is absent from the exported payload",
+                ],
+            },
         ],
     }
 
@@ -253,6 +272,14 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         "Preference: user likes quiet personal replies.",
         scope="personal",
         source_ref="conformance://personal-memory",
+        auto_approve=True,
+    )["candidates"][0]
+    personal_private = store.remember(
+        "Preference: personal red-team codename is dragonfly-private.",
+        scope="personal",
+        source_type="user",
+        source_ref="conformance://personal-private",
+        sensitivity="personal",
         auto_approve=True,
     )["candidates"][0]
     stale = _approved_memory(
@@ -352,6 +379,7 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         "ids": {
             "cms_memory_id": cms["memory_id"],
             "personal_memory_id": personal["memory_id"],
+            "personal_private_memory_id": personal_private["memory_id"],
             "stale_owner_memory_id": stale["memory_id"],
             "current_owner_memory_id": current["memory_id"],
             "conflict_id": conflict["conflict_id"],
@@ -630,6 +658,46 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         {
             "candidate_ids": [item["candidate_id"] for item in pending_assistant_guesses],
             "source_trust": sorted({item["source_trust"] for item in pending_assistant_guesses}),
+        },
+    )
+
+    full_personal_blocked = False
+    full_personal_error = ""
+    try:
+        store.export_profile(
+            scope="personal",
+            actor="conformance",
+            redaction_profile="full",
+        )
+    except PermissionError as exc:
+        full_personal_blocked = True
+        full_personal_error = str(exc)
+    _append_result(
+        results,
+        "personal_full_export_requires_approval",
+        full_personal_blocked and "sensitive full export" in full_personal_error,
+        {"error": full_personal_error},
+    )
+
+    safe_personal_export = store.export_profile(
+        scope="personal",
+        actor="conformance",
+        redaction_profile="safe",
+    )
+    safe_personal_payload = json.dumps(safe_personal_export, sort_keys=True)
+    safe_redaction = safe_personal_export["export_metadata"]["redaction"]
+    _append_result(
+        results,
+        "personal_safe_export_redacts_content",
+        safe_redaction["profile"] == "safe"
+        and not safe_redaction["content_included"]
+        and safe_redaction["redaction_count"] > 0
+        and "dragonfly-private" not in safe_personal_payload,
+        {
+            "redaction": safe_redaction,
+            "sensitive_export": safe_personal_export["export_metadata"]["approval"][
+                "sensitive_export"
+            ],
         },
     )
 

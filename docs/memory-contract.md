@@ -156,12 +156,13 @@ that denied export or lifecycle mutation paths fail closed.
 The suite now includes first public golden traces for outcome planning,
 operator graph inspection, safe profile export, migration compatibility, and
 security red-team cases for secret capture, tool-output prompt injection,
-untrusted tool claims, and assistant guesses.
+untrusted tool claims, assistant guesses, and personal export approval/redaction.
 These traces prove that a compatible adapter can retrieve both success and
 failure outcome evidence, inspect graph nodes with source previews, share
 profile shape without leaking content-bearing memory fields, verify the local
-SQLite schema before rollout, and keep unsafe or untrusted content out of
-prompt-facing retrieval until review.
+SQLite schema before rollout, keep unsafe or untrusted content out of
+prompt-facing retrieval until review, and prevent personal full-content export
+without approval.
 `agent-memory conformance certify` and `POST /conformance/certify` wrap those
 checks in an adapter certification report with pass/fail status, scenario
 counts, golden trace coverage, and a local Markdown badge for README or CI

@@ -337,7 +337,8 @@ outcome planning, graph browser source previews, and safe redacted profile
 export, plus a migration compatibility check for required runtime tables,
 `user_version`, SQLite `quick_check`, and security red-team cases for
 secret-like text, tool-output prompt injection, untrusted tool claims, and
-assistant guesses.
+assistant guesses, plus personal full-export approval and safe-export
+redaction.
 `conformance certify` emits the first adapter compatibility badge report for
 README and CI use. Hosted badge publishing and public adapter registry entries
 remain future work.

@@ -374,7 +374,7 @@ personal-lane isolation, resolved conflict suppression, deleted-memory absence,
 unsafe-memory absence, reviewable/idempotent Keeper writes, and golden traces
 for outcome planning, graph evidence inspection, safe profile export,
 migration compatibility, and security red-team cases for secrets, tool output,
-and assistant guesses.
+assistant guesses, and personal export approval/redaction.
 Adapters can use it as the first "does this behave like Agent Memory Kernel?"
 gate. `conformance certify` wraps the same suite in an adapter certification
 report with pass/fail status, scenario counts, golden trace coverage, and a

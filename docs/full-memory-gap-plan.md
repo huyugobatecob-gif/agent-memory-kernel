@@ -395,8 +395,9 @@ Remaining for full memory:
 - Broader live-provider certification and provider-specific prompt envelope
   tests beyond the baseline OpenAI/Anthropic/Google/local prompt formatter
   certification.
-- Broader provider-specific prompt-injection, source trust, and secret
-  red-team fixtures beyond the baseline public conformance cases.
+- Broader provider-specific prompt-injection, source trust, export leakage, and
+  secret red-team fixtures beyond the expanded baseline public conformance
+  cases.
 - Production observability beyond the baseline report, latency SLOs, and
   recorded-cost reconciliation, including external provider invoice ingestion,
   hosted retention policies, dashboards, and managed alerts.
