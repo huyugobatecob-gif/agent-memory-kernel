@@ -962,6 +962,9 @@ it without relying on the original planning conversation:
 - [docs/core-status-audit.md](docs/core-status-audit.md) tracks what is
   v1 `done`, optional `extension`, or `later-hosted`, with post-v1 hardening
   separated from blockers.
+- [docs/public-readiness-todo.md](docs/public-readiness-todo.md) tracks the
+  remaining public-readiness work before presenting the project as a broadly
+  shareable universal memory kernel.
 - [docs/runtime-contract.md](docs/runtime-contract.md) defines the live
   `before_model_call` / `after_saved_turn` loop.
 - [docs/memory-lifecycle-contract.md](docs/memory-lifecycle-contract.md)
@@ -1027,6 +1030,7 @@ docs/
   kernel-charter.md      core boundary, package model, and safety invariants
   backlog-cutover.md     core / extension / later-hosted classification
   core-status-audit.md   factual v1 gate status and hardening backlog
+  public-readiness-todo.md  remaining public-readiness tasks
   implementation-plan.md  phased build plan
   hosted-roadmap.md       hosted/platform items outside local v1
   full-memory-gap-plan.md  gap plan for automatic full memory
