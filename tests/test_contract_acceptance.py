@@ -120,6 +120,7 @@ class ContractAcceptanceTests(unittest.TestCase):
 
         self.assertEqual(spec_result["status"], "pass")
         scenario_ids = {item["id"] for item in spec["scenarios"]}
+        self.assertIn("default_packs_are_published", scenario_ids)
         self.assertIn("prompt_envelope_contains_selected_content_only", scenario_ids)
         self.assertIn("stored_read_policy_denies_injection", scenario_ids)
         self.assertIn("personal_lane_absent_from_derived_surfaces", scenario_ids)
@@ -179,6 +180,7 @@ class ContractAcceptanceTests(unittest.TestCase):
             result = run_conformance_suite(store)
             self.assertEqual(result["status"], "pass")
             passed = {item["scenario"] for item in result["results"] if item["passed"]}
+            self.assertIn("default_packs_are_published", passed)
             self.assertIn("professional_memory_injected_with_provenance", passed)
             self.assertIn("prompt_envelope_contains_selected_content_only", passed)
             self.assertIn("personal_lane_is_withheld", passed)

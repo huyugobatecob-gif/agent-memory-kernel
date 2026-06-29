@@ -213,6 +213,14 @@ def conformance_spec() -> dict[str, Any]:
         ],
         "scenarios": [
             {
+                "id": "default_packs_are_published",
+                "requires": [
+                    "memory contract exposes personal and professional starter packs",
+                    "starter packs name their prompt boundaries and review exclusions",
+                    "starter packs remain templates over generic lane policy, not the whole ontology",
+                ],
+            },
+            {
                 "id": "professional_memory_injected_with_provenance",
                 "requires": [
                     "pre-turn retrieval selects relevant professional memory",
@@ -828,6 +836,27 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         "conformance_spec_shape",
         spec_result["status"] == "pass",
         spec_result,
+    )
+    contract = memory_contract()
+    default_packs = contract.get("default_packs", {})
+    personal_pack = default_packs.get("personal", {})
+    professional_pack = default_packs.get("professional", {})
+    extension_lanes = set(contract.get("extension_lanes", []))
+    _append_result(
+        results,
+        "default_packs_are_published",
+        personal_pack.get("lane") == "personal"
+        and professional_pack.get("lane") == "professional"
+        and personal_pack.get("retrieval_default") == "explicit_only"
+        and "professional" in str(personal_pack.get("prompt_boundary", ""))
+        and "personal" in " ".join(professional_pack.get("excludes", []))
+        and {"project", "agent", "session"}.issubset(extension_lanes),
+        {
+            "default_pack_ids": sorted(default_packs.keys()),
+            "extension_lanes": sorted(extension_lanes),
+            "personal_retrieval_default": personal_pack.get("retrieval_default", ""),
+            "professional_prompt_boundary": professional_pack.get("prompt_boundary", ""),
+        },
     )
 
     professional = store.before_model_call(
@@ -2457,6 +2486,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
     data = spec or conformance_spec()
     scenario_ids = {str(item.get("id")) for item in data.get("scenarios", [])}
     required = {
+        "default_packs_are_published",
         "professional_memory_injected_with_provenance",
         "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",
