@@ -210,6 +210,15 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "api")),
             overwrite=bool(payload.get("overwrite", False)),
         )
+    if path in {"/restore/drill", "/restore-drill"}:
+        return store.restore_drill(
+            backup_path=payload.get("backup_path") or payload.get("backup"),
+            target_path=payload.get("target_path") or payload.get("target_db"),
+            scope=payload.get("scope"),
+            probe_query=str(payload.get("probe_query", "")),
+            actor=str(payload.get("actor", "api")),
+            overwrite=bool(payload.get("overwrite", False)),
+        )
     if path == "/current-best":
         return store.current_best_report(
             str(payload.get("query", "")),

@@ -215,8 +215,11 @@ envelope with `metadata.operational_failure`; Keeper extraction failures keep
 saved turns and mark the Keeper job failed.
 Baseline migration and local recovery are implemented through
 `agent-memory migration-status`, `agent-memory backup`, `agent-memory restore`,
-`/migration/status`, `/backup`, `/restore`, and MCP recovery tools. Production
-SLOs, encrypted off-host backups, restore drills, migration changelogs, worker
+`agent-memory restore-drill`, `/migration/status`, `/backup`, `/restore`,
+`/restore/drill`, and MCP recovery tools. Restore drills create a backup,
+restore into a drill database, check migration status, and optionally verify a
+probe query against restored active memory. Production SLOs, encrypted off-host
+backups, migration changelogs, managed restore-drill schedules, worker
 supervision, and hosted alerting are still backlog.
 Post-turn memory-change inspection is implemented through `agent-memory
 memory-changes`, `/memory-changes`, and Python adapter wrappers. A Keeper

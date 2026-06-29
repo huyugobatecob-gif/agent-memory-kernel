@@ -396,6 +396,20 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             ["backup_path", "target_path"],
         ),
     },
+    "memory_restore_drill": {
+        "endpoint": "/restore/drill",
+        "description": "Run a backup/restore drill and verify restored memory health.",
+        "inputSchema": _schema(
+            {
+                "backup_path": _string("Optional backup artifact path to keep.", ""),
+                "target_path": _string("Optional restored database path to keep.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "probe_query": _string("Optional query that must be found after restore.", ""),
+                "actor": _string("Actor running the drill.", "mcp"),
+                "overwrite": _boolean("Overwrite provided backup or target paths.", False),
+            }
+        ),
+    },
     "memory_search": {
         "endpoint": "/search",
         "description": "Search active memory with provenance-aware results.",

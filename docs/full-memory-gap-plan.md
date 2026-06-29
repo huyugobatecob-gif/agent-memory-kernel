@@ -196,11 +196,12 @@ Already present:
   envelope with `metadata.operational_failure`, and Keeper extraction failures
   keep saved turns while marking the Keeper job failed.
 - Baseline migration and recovery behavior through `migration_status`,
-  `backup_database`, `restore_database`, `agent-memory migration-status`,
-  `agent-memory backup`, `agent-memory restore`, `/migration/status`,
-  `/backup`, `/restore`, and MCP recovery tools; backup/restore use the SQLite
-  backup API and migration status checks required tables, columns, user version,
-  and SQLite quick check.
+  `backup_database`, `restore_database`, `restore_drill`,
+  `agent-memory migration-status`, `agent-memory backup`,
+  `agent-memory restore`, `agent-memory restore-drill`, `/migration/status`,
+  `/backup`, `/restore`, `/restore/drill`, and MCP recovery tools;
+  backup/restore use the SQLite backup API and restore drills verify migration
+  status plus optional restored-memory probe queries.
 - Memory Tree Pack and full context builder output.
 - Dependency-free semantic reranking for Memory Tree retrieval.
 - Guarded brain/style system-prompt append derived from graph analytics.
@@ -421,8 +422,8 @@ Remaining for full memory:
   hosted retention policies, dashboards, and managed alerts.
 - Production operational failure behavior beyond the local baseline for slow,
   unavailable, corrupted, partially migrated, or oversized memory stores,
-  including latency budgets, encrypted off-host backups, restore drills,
-  migration changelogs, worker supervision, and hosted alerting.
+  including latency budgets, encrypted off-host backups, migration changelogs,
+  worker supervision, hosted alerting, and managed restore-drill schedules.
 - Real production acceptance traces proving behavior improvement on live agent
   tasks beyond the deterministic local fixture.
 

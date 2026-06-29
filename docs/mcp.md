@@ -75,6 +75,8 @@ Runtime tools:
 - `memory_backup_database`: create a SQLite backup of the memory database.
 - `memory_restore_database`: restore a SQLite backup into a target database
   path.
+- `memory_restore_drill`: run a backup/restore drill, migration checks, and
+  optional restored-memory probe query.
 
 Retrieval tools:
 

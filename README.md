@@ -413,6 +413,7 @@ agent-memory billing-reconcile --db .memory/demo.db --thread-id seo-demo --max-c
 agent-memory migration-status --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
+agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "SEO projects"
 agent-memory export-control --db .memory/demo.db --scope professional --actor writer --redaction-profile safe
 agent-memory export-custody --db .memory/demo.db --scope professional --actor writer --redaction-profile safe --artifact-ref s3://memory-exports/demo/exported-profile.encrypted.json
 agent-memory export-profile --db .memory/demo.db --scope professional --redaction-profile safe
@@ -845,7 +846,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_billing_reconcile`,
 `memory_embedding_certify`,
 `memory_migration_status`, `memory_backup_database`,
-`memory_restore_database`, `memory_graph_nodes`, `memory_graph_edges`, and
+`memory_restore_database`, `memory_restore_drill`, `memory_graph_nodes`, `memory_graph_edges`, and
 `memory_worker_run`, `memory_worker_status`.
 
 ## Implementation Plan

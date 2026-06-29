@@ -572,6 +572,23 @@ def cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore_drill(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.restore_drill(
+            backup_path=args.backup_path,
+            target_path=args.target_db,
+            scope=args.scope,
+            probe_query=args.probe_query,
+            actor=args.actor,
+            overwrite=args.overwrite,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_current_best(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1978,6 +1995,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", default="operator")
     p.add_argument("--overwrite", action="store_true")
     p.set_defaults(func=cmd_restore)
+
+    p = sub.add_parser("restore-drill", help="Run a backup/restore drill and verify the restored database")
+    add_common_db(p)
+    p.add_argument("--backup-path", default="", help="Optional backup artifact path to keep")
+    p.add_argument("--target-db", default="", help="Optional restored database path to keep")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    p.add_argument("--probe-query", default="", help="Optional query that must be found after restore")
+    p.add_argument("--actor", default="operator")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_restore_drill)
 
     p = sub.add_parser("current-best", help="Resolve current-best memory for a query or scope")
     add_common_db(p)

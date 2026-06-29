@@ -11,6 +11,7 @@ import re
 import secrets
 import sqlite3
 import struct
+import tempfile
 import time
 import uuid
 from collections import defaultdict
@@ -117,6 +118,7 @@ MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
 BRAIN_STYLE_CERTIFICATION_VERSION = "brain-style-certification-v0.1"
+RESTORE_DRILL_VERSION = "database-restore-drill-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -2373,6 +2375,129 @@ class MemoryStore:
             "migration": migration,
             "restored_at": now_iso(),
         }
+
+    def restore_drill(
+        self,
+        *,
+        backup_path: str | Path | None = None,
+        target_path: str | Path | None = None,
+        scope: str | None = None,
+        probe_query: str = "",
+        actor: str = "system",
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Run a local backup/restore drill and verify the restored database."""
+        scope = normalize_scope(scope) if scope else None
+        temp_dir: tempfile.TemporaryDirectory[str] | None = None
+        artifacts_retained = bool(backup_path or target_path)
+        if not backup_path or not target_path:
+            temp_dir = tempfile.TemporaryDirectory(prefix="agent-memory-restore-drill-")
+        try:
+            root = Path(temp_dir.name) if temp_dir else None
+            backup = Path(backup_path).expanduser() if backup_path else root / "backup.db"  # type: ignore[operator]
+            target = Path(target_path).expanduser() if target_path else root / "restored.db"  # type: ignore[operator]
+            source_migration = self.migration_status()
+            backup_result = self.backup_database(
+                backup,
+                actor=actor,
+                overwrite=overwrite,
+            )
+            restore_result = self.restore_database(
+                backup,
+                target,
+                actor=actor,
+                overwrite=overwrite,
+            )
+
+            restored = MemoryStore(target)
+            restored.init_db()
+            try:
+                restored_migration = restored.migration_status()
+                active_row = restored.conn.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM memories
+                    WHERE status = 'active'
+                      AND (? IS NULL OR scope = ?)
+                    """,
+                    (scope, scope),
+                ).fetchone()
+                active_memory_count = int(active_row["count"] if active_row else 0)
+                probe_results = (
+                    restored.search(
+                        probe_query,
+                        scope=scope,
+                        actor=actor,
+                        enforce_read_policy=False,
+                    )
+                    if (probe_query or "").strip()
+                    else []
+                )
+            finally:
+                restored.close()
+
+            checks = [
+                {
+                    "name": "source_migration_passed",
+                    "passed": source_migration["status"] == "pass",
+                    "detail": source_migration["status"],
+                },
+                {
+                    "name": "backup_integrity_ok",
+                    "passed": str(backup_result.get("integrity_check", "")).lower() == "ok",
+                    "detail": str(backup_result.get("integrity_check", "")),
+                },
+                {
+                    "name": "restore_status_restored",
+                    "passed": restore_result["status"] == "restored",
+                    "detail": restore_result["status"],
+                },
+                {
+                    "name": "restored_migration_passed",
+                    "passed": restored_migration["status"] == "pass",
+                    "detail": restored_migration["status"],
+                },
+            ]
+            if (probe_query or "").strip():
+                checks.append(
+                    {
+                        "name": "probe_query_found",
+                        "passed": bool(probe_results),
+                        "detail": f"probe_query={probe_query}; result_count={len(probe_results)}",
+                    }
+                )
+            failures = [item for item in checks if not item["passed"]]
+            return {
+                "version": RESTORE_DRILL_VERSION,
+                "status": "fail" if failures else "pass",
+                "scope": scope or "all",
+                "probe_query": probe_query,
+                "backup": backup_result,
+                "restore": restore_result,
+                "source_migration": source_migration,
+                "restored_migration": restored_migration,
+                "active_memory_count": active_memory_count,
+                "probe_result_count": len(probe_results),
+                "probe_results": [
+                    {
+                        "memory_id": item.get("memory_id", ""),
+                        "scope": item.get("scope", ""),
+                        "text": self._excerpt(str(item.get("text", "")), 220),
+                    }
+                    for item in probe_results[:5]
+                ],
+                "checks": checks,
+                "failures": failures,
+                "artifacts": {
+                    "retained": artifacts_retained,
+                    "backup_path": str(backup),
+                    "target_path": str(target),
+                },
+                "completed_at": now_iso(),
+            }
+        finally:
+            if temp_dir is not None:
+                temp_dir.cleanup()
 
     def approve_candidate(self, candidate_id: str, *, actor: str = "user", reason: str = "") -> str:
         candidate = self._candidate(candidate_id)
