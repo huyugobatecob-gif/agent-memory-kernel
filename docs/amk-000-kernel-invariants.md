@@ -64,7 +64,7 @@ Those items can exist as adapters, packs, examples, or later hosted work.
 | Corrections, rollback, delete, distrust, expire, and supersede invalidate derived memory. | Derived invalidation ledger test and prompt/export round trip. |
 | Prompt envelopes contain selected, policy-filtered, budgeted memory only. | Deterministic selected-content and budget-trim prompt snapshots. |
 | Retrieval ranking is deterministic without embeddings. | Ranking fixture with stable score inputs and tie-breakers. |
-| Import/export preserves ids, provenance, evidence, tombstones, trust state, review history, policy metadata, and lifecycle state. | Portable bundle round-trip test. |
+| Import/export preserves ids, provenance, evidence, tombstones, trust state, review history, policy metadata, and lifecycle state. | Portable bundle round-trip test with graph evidence and derived invalidations. |
 | Every read, write, inject, export, correction, deletion, denial, and lifecycle change is auditable. | Audit log fixture and explainability assertion. |
 | Local actors can perform only actions allowed by capability grants and policy. | Policy simulator and denied-action conformance fixture. |
 | Large histories remain bounded and predictable. | Bounded-selection prompt fixture plus performance fixture covering index use, retrieval latency, export size, and compaction/retention behavior. |

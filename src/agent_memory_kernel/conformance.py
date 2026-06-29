@@ -314,6 +314,7 @@ def conformance_spec() -> dict[str, Any]:
                     "bundle payload digest is verified before import",
                     "tampered bundle payload is rejected",
                     "bundle import preserves lifecycle and policy metadata",
+                    "bundle import restores graph evidence chains and derived invalidation records",
                 ],
             },
             {
@@ -1751,6 +1752,16 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
                 scope=CONFORMANCE_SCOPE,
                 actor="conformance",
             )
+            bundle_graph = bundle_restored.graph_browser(
+                scope=CONFORMANCE_SCOPE,
+                query=CONFORMANCE_PROJECT,
+                evidence_limit=3,
+            )
+            bundle_graph_text = json.dumps(bundle_graph, sort_keys=True)
+            bundle_lifecycle = bundle_restored.export_profile(
+                scope=CONFORMANCE_SCOPE,
+                actor="conformance",
+            ).get("memory_lifecycle", {})
         finally:
             bundle_restored.close()
         _append_result(
@@ -1766,13 +1777,23 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             and bundle_import.get("status") == "imported"
             and bundle_import.get("counts", {}).get("memories", 0)
             == lifecycle.get("counts", {}).get("memories", -1)
+            and bundle_import.get("counts", {}).get("derived_invalidations", 0) >= 1
+            and bundle_import.get("counts", {}).get("memory_graph_nodes", 0) >= 1
+            and bundle_import.get("counts", {}).get("memory_graph_edges", 0) >= 1
+            and bundle_import.get("counts", {}).get("node_evidence", 0) >= 1
+            and bundle_import.get("counts", {}).get("edge_evidence", 0) >= 1
+            and bundle_lifecycle.get("counts", {}).get("derived_invalidations", 0) >= 1
             and bundle_capability["read"]["export"]["decision"] == "deny"
-            and bool(bundle_active),
+            and bool(bundle_active)
+            and "conformance://professional-memory" in bundle_graph_text
+            and "Statamic" in bundle_graph_text,
             {
                 "manifest": bundle.get("manifest", {}),
                 "verification": bundle_verification,
                 "tampered_rejected": tampered_rejected,
                 "import_counts": bundle_import.get("counts", {}),
+                "restored_lifecycle_counts": bundle_lifecycle.get("counts", {}),
+                "restored_graph_counts": bundle_graph.get("counts", {}),
                 "restored_denied_actions": bundle_capability.get("denied_actions", []),
                 "active_result_count": len(bundle_active),
             },

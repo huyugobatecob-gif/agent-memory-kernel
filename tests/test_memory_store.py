@@ -874,6 +874,28 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional",
                 auto_approve=True,
             )["candidates"][0]["memory_id"]
+            store.correct_memory(
+                memory_id,
+                "Decision: bundle-site keeps portable memory exports in .amk bundles.",
+                actor="reviewer",
+                reason="bundle fixture correction",
+            )
+            store.apply_graph_commands(
+                [
+                    {
+                        "command": "upsert_edge",
+                        "source": {"type": "project", "label": "bundle-site"},
+                        "target": {"type": "tool", "label": "StaticCMS"},
+                        "edge_type": "uses",
+                        "evidence": "User confirmed bundle-site uses StaticCMS.",
+                    }
+                ],
+                scope="professional",
+                actor="keeper",
+                source_type="system",
+                source_ref="fixture://bundle-graph-evidence",
+                auto_approve=True,
+            )
             policy = store.set_read_policy(
                 agent_id="bundle-reader",
                 scope="professional",
@@ -894,6 +916,12 @@ class MemoryStoreTests(unittest.TestCase):
                 bundle["manifest"]["payload_digest"],
                 store._stable_json_sha256(bundle["payload"]),
             )
+            self.assertGreaterEqual(
+                bundle["payload"]["memory_lifecycle"]["counts"]["derived_invalidations"],
+                1,
+            )
+            self.assertGreaterEqual(len(bundle["payload"]["memory_tree"]["node_evidence"]), 1)
+            self.assertGreaterEqual(len(bundle["payload"]["memory_tree"]["edge_evidence"]), 1)
 
             verification = store.verify_bundle(bundle)
             self.assertEqual(verification["status"], "verified")
@@ -923,11 +951,27 @@ class MemoryStoreTests(unittest.TestCase):
             result = imported.import_bundle(bundle)
             self.assertEqual(result["status"], "imported")
             self.assertEqual(result["verification"]["status"], "verified")
-            self.assertEqual(result["counts"]["memories"], 1)
+            self.assertGreaterEqual(result["counts"]["memories"], 2)
+            self.assertGreaterEqual(result["counts"]["derived_invalidations"], 1)
+            self.assertGreaterEqual(result["counts"]["memory_graph_nodes"], 2)
+            self.assertGreaterEqual(result["counts"]["memory_graph_edges"], 1)
+            self.assertGreaterEqual(result["counts"]["node_evidence"], 1)
+            self.assertGreaterEqual(result["counts"]["edge_evidence"], 1)
             self.assertEqual(
                 imported.search("portable memory exports", scope="professional")[0]["memory_id"],
                 memory_id,
             )
+            restored_invalidations = imported.derived_invalidations(memory_id=memory_id)
+            self.assertEqual(restored_invalidations["count"], 1)
+            self.assertEqual(restored_invalidations["invalidations"][0]["action"], "correct")
+            graph = imported.graph_browser(
+                scope="professional",
+                query="bundle-site",
+                evidence_limit=5,
+            )
+            graph_text = json.dumps(graph, sort_keys=True)
+            self.assertIn("fixture://bundle-graph-evidence", graph_text)
+            self.assertIn("User confirmed bundle-site uses StaticCMS.", graph_text)
             restored_policy = imported.resolve_read_policy(
                 "bundle-reader",
                 "professional",
