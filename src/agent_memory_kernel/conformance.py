@@ -68,6 +68,17 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "deterministic_ranking_trace",
+                "steps": [
+                    "seed several active memories that can match the same query",
+                    "run the same Router retrieval twice without provider calls",
+                    "verify ranks, scores, reasons, and policy factors are stable",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_deterministic_ranking_snapshot"
+                ],
+            },
+            {
                 "id": "safe_profile_export_trace",
                 "steps": [
                     "seed active and lifecycle-mutated professional memory",
@@ -254,6 +265,15 @@ def conformance_spec() -> dict[str, Any]:
                     "graph browser returns active nodes for the project",
                     "node source previews include event-backed source references",
                     "operators can inspect graph evidence without scanning the full database",
+                ],
+            },
+            {
+                "id": "golden_trace_deterministic_ranking_snapshot",
+                "requires": [
+                    "the same local retrieval query returns the same ranked decisions",
+                    "scores are monotonic and stable",
+                    "selection reasons and policy factors are included",
+                    "the trace runs without embeddings or provider calls",
                 ],
             },
             {
@@ -1213,6 +1233,67 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "source_refs": sorted(set(source_refs))[:8],
         },
     )
+    ranking_first = store.retrieve_tree(
+        "conformance-site canonical CMS",
+        scope=CONFORMANCE_SCOPE,
+        limit=5,
+        actor="conformance",
+    )
+    ranking_second = store.retrieve_tree(
+        "conformance-site canonical CMS",
+        scope=CONFORMANCE_SCOPE,
+        limit=5,
+        actor="conformance",
+    )
+    ranking_snapshot_first = [
+        item
+        for item in ranking_first.get("retrieval", {}).get("selection_decisions", [])
+        if "rank" in item
+    ]
+    ranking_snapshot_second = [
+        item
+        for item in ranking_second.get("retrieval", {}).get("selection_decisions", [])
+        if "rank" in item
+    ]
+    top_memory_id = (
+        str(ranking_snapshot_first[0].get("memory_id", ""))
+        if ranking_snapshot_first
+        else ""
+    )
+    ranking_memory_text = {
+        str(memory.get("memory_id")): str(memory.get("text", ""))
+        for branch in ranking_first.get("branches", [])
+        for memory in branch.get("memories", [])
+    }
+    ranking_scores = [float(item.get("score", 0)) for item in ranking_snapshot_first]
+    _append_result(
+        results,
+        "golden_trace_deterministic_ranking_snapshot",
+        ranking_snapshot_first == ranking_snapshot_second
+        and bool(ranking_snapshot_first)
+        and "canonical CMS is Statamic" in ranking_memory_text.get(top_memory_id, "")
+        and ranking_scores == sorted(ranking_scores, reverse=True)
+        and all(item.get("rank") == index for index, item in enumerate(ranking_snapshot_first, start=1))
+        and all(item.get("policy_version") == "read-time-policy-v0.1" for item in ranking_snapshot_first)
+        and all(item.get("policy_factors") for item in ranking_snapshot_first)
+        and any("active memory text match" in item.get("why", []) for item in ranking_snapshot_first)
+        and "deterministic" in str(ranking_first.get("retrieval", {}).get("mode", "")),
+        {
+            "query": ranking_first.get("query", ""),
+            "mode": ranking_first.get("retrieval", {}).get("mode", ""),
+            "top_memory_id": top_memory_id,
+            "top_memory_text": ranking_memory_text.get(top_memory_id, ""),
+            "ranked": [
+                {
+                    "rank": item.get("rank"),
+                    "memory_id": item.get("memory_id"),
+                    "score": item.get("score"),
+                    "why": item.get("why", []),
+                }
+                for item in ranking_snapshot_first[:5]
+            ],
+        },
+    )
 
     safe_export = store.export_profile(
         scope=CONFORMANCE_SCOPE,
@@ -1624,6 +1705,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "golden_trace_portable_bundle_manifest_roundtrip",
         "golden_trace_outcome_pack_uses_success_and_failure",
         "golden_trace_graph_browser_shows_source_previews",
+        "golden_trace_deterministic_ranking_snapshot",
         "golden_trace_safe_export_redacts_memory_content",
         "migration_status_is_compatible",
         "secret_like_memory_is_quarantined",

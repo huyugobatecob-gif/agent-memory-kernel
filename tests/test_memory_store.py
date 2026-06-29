@@ -2002,6 +2002,71 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertIn("semantic rerank", tree["retrieval"]["mode"])
             store.close()
 
+    def test_retrieve_tree_ranking_snapshot_is_deterministic_without_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+
+            top_id = store.remember(
+                "Decision: ranking fixture project atlas canonical database is SQLite.",
+                scope="professional",
+                source_ref="fixture://ranking-database",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            second_id = store.remember(
+                "Decision: ranking fixture project atlas canonical owner is Alex.",
+                scope="professional",
+                source_ref="fixture://ranking-owner",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+            third_id = store.remember(
+                "Fact: ranking fixture project unrelated billing archive is old.",
+                scope="professional",
+                source_ref="fixture://ranking-unrelated",
+                auto_approve=True,
+            )["candidates"][0]["memory_id"]
+
+            first = store.retrieve_tree(
+                "ranking fixture atlas canonical database",
+                scope="professional",
+                limit=3,
+                actor="ranking-agent",
+            )
+            second = store.retrieve_tree(
+                "ranking fixture atlas canonical database",
+                scope="professional",
+                limit=3,
+                actor="ranking-agent",
+            )
+            first_snapshot = [
+                item
+                for item in first["retrieval"]["selection_decisions"]
+                if "rank" in item
+            ]
+            second_snapshot = [
+                item
+                for item in second["retrieval"]["selection_decisions"]
+                if "rank" in item
+            ]
+
+            self.assertEqual(first_snapshot, second_snapshot)
+            self.assertEqual(
+                [item["memory_id"] for item in first_snapshot],
+                [top_id, second_id, third_id],
+            )
+            self.assertEqual([item["rank"] for item in first_snapshot], [1, 2, 3])
+            self.assertEqual(
+                [item["score"] for item in first_snapshot],
+                sorted([item["score"] for item in first_snapshot], reverse=True),
+            )
+            self.assertTrue(
+                any("active memory text match" in item["why"] for item in first_snapshot)
+            )
+            self.assertTrue(all(item["policy_factors"]["scope"] == "professional" for item in first_snapshot))
+            self.assertEqual(first["retrieval"]["policy_version"], "read-time-policy-v0.1")
+            self.assertIn("deterministic", first["retrieval"]["mode"])
+            store.close()
+
     def test_conversation_turn_context_builder_and_graph_lists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

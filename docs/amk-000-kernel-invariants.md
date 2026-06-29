@@ -123,6 +123,10 @@ The read contract must define:
 Embeddings and vector indexes can improve ranking after policy filtering, but
 they cannot be required for correctness.
 
+The baseline golden trace is `golden_trace_deterministic_ranking_snapshot`: the
+same local query must produce identical ranks, scores, reasons, and policy
+factors without provider calls.
+
 ## API And Versioning
 
 The stable kernel surface is:

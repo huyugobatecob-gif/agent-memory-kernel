@@ -31,7 +31,7 @@ Status labels:
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available across CLI/API/MCP without policy bypass. |
 | Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, `.amk` bundle manifest/checksum round trip | Expand portable bundle tests across evidence chains and derived invalidation records. |
-| Deterministic ranking | partial | local lexical/semantic reranking, current-best logic | Keep deterministic baseline independent of embeddings and provider calls. |
+| Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance | Expand budget-trimming and large-history ranking fixtures. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness | Add invariant matrix coverage for every kernel law and prompt-envelope snapshots. |
 
 ## Not Core
@@ -64,7 +64,7 @@ Status labels:
    state, review history, policy metadata, evidence chains, and derived
    invalidation records.
 5. Add remaining kernel-contract coverage for local API/versioning, capability
-   grants, deterministic ranking, portable bundles, and performance/resource
+   grants, budget-aware ranking, portable bundles, and performance/resource
    budgets.
 6. Keep examples universal until the kernel gates pass; runtime/domain examples
    must consume the kernel contract rather than shaping it.
