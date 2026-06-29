@@ -313,9 +313,10 @@ def conformance_spec() -> dict[str, Any]:
             {
                 "id": "capability_report_blocks_denied_actions",
                 "requires": [
-                    "effective capability report includes read and write decisions",
+                    "effective capability report includes read, inject, export, and lifecycle decisions",
+                    "denied read and inject are visible before prompt retrieval",
                     "denied export is visible before memory leaves the store",
-                    "denied lifecycle mutation is policy-checkable",
+                    "denied lifecycle mutation is policy-checkable and dry-runnable without mutation",
                 ],
             },
             {
@@ -1403,8 +1404,31 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "prompt_surfaces": changes.get("affected", {}).get("prompt_surfaces", []),
         },
     )
+    blocked_actor = "blocked-conformance-export"
+    blocked_memory_id = str(
+        store.conn.execute(
+            "SELECT memory_id FROM memories WHERE scope = ? LIMIT 1",
+            (CONFORMANCE_SCOPE,),
+        ).fetchone()["memory_id"]
+    )
     store.set_read_policy(
-        agent_id="blocked-conformance-export",
+        agent_id=blocked_actor,
+        scope=CONFORMANCE_SCOPE,
+        action="read",
+        decision="deny",
+        reason="conformance read requires delegated consent",
+        actor="conformance",
+    )
+    store.set_read_policy(
+        agent_id=blocked_actor,
+        scope=CONFORMANCE_SCOPE,
+        action="inject",
+        decision="deny",
+        reason="conformance inject requires delegated consent",
+        actor="conformance",
+    )
+    store.set_read_policy(
+        agent_id=blocked_actor,
         scope=CONFORMANCE_SCOPE,
         action="export",
         decision="deny",
@@ -1412,7 +1436,7 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         actor="conformance",
     )
     store.set_write_policy(
-        agent_id="blocked-conformance-export",
+        agent_id=blocked_actor,
         scope=CONFORMANCE_SCOPE,
         action="delete",
         decision="deny",
@@ -1420,40 +1444,71 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         actor="conformance",
     )
     capability = store.capability_report(
-        actor="blocked-conformance-export",
+        actor=blocked_actor,
         scope=CONFORMANCE_SCOPE,
     )
+    read_blocked = False
+    inject_blocked = False
     export_blocked = False
     delete_blocked = False
+    dry_run_delete_blocked = False
+    dry_run_delete_report: dict[str, Any] = {}
     try:
-        store.export_profile(scope=CONFORMANCE_SCOPE, actor="blocked-conformance-export")
+        store.search("conformance-site", scope=CONFORMANCE_SCOPE, actor=blocked_actor)
+    except PermissionError:
+        read_blocked = True
+    try:
+        store.memory_tree_pack("conformance-site", scope=CONFORMANCE_SCOPE, actor=blocked_actor)
+    except PermissionError:
+        inject_blocked = True
+    try:
+        store.export_profile(scope=CONFORMANCE_SCOPE, actor=blocked_actor)
     except PermissionError:
         export_blocked = True
     try:
-        store.delete_memory(
-            str(
-                store.conn.execute(
-                    "SELECT memory_id FROM memories WHERE scope = ? LIMIT 1",
-                    (CONFORMANCE_SCOPE,),
-                ).fetchone()["memory_id"]
-            ),
-            actor="blocked-conformance-export",
-        )
+        store.delete_memory(blocked_memory_id, actor=blocked_actor)
     except PermissionError:
         delete_blocked = True
+    dry_run_delete_report = store.batch_memory_lifecycle(
+        [{"action": "delete", "memory_id": blocked_memory_id}],
+        actor=blocked_actor,
+        dry_run=True,
+    )
+    dry_run_delete_blocked = (
+        dry_run_delete_report.get("dry_run") is True
+        and dry_run_delete_report.get("error_count") == 1
+        and dry_run_delete_report.get("results", [{}])[0].get("status") == "error"
+    )
+    memory_after_denials = store._memory_row(blocked_memory_id)
     _append_result(
         results,
         "capability_report_blocks_denied_actions",
-        capability["read"]["export"]["decision"] == "deny"
+        capability["read"]["read"]["decision"] == "deny"
+        and capability["read"]["inject"]["decision"] == "deny"
+        and capability["read"]["export"]["decision"] == "deny"
         and capability["write"]["delete"]["decision"] == "deny"
+        and "read:read" in capability["denied_actions"]
+        and "read:inject" in capability["denied_actions"]
         and "read:export" in capability["denied_actions"]
         and "write:delete" in capability["denied_actions"]
+        and read_blocked
+        and inject_blocked
         and export_blocked
-        and delete_blocked,
+        and delete_blocked
+        and dry_run_delete_blocked
+        and memory_after_denials is not None
+        and memory_after_denials["status"] == "active",
         {
             "denied_actions": capability.get("denied_actions", []),
+            "read_blocked": read_blocked,
+            "inject_blocked": inject_blocked,
             "export_blocked": export_blocked,
             "delete_blocked": delete_blocked,
+            "dry_run_delete_blocked": dry_run_delete_blocked,
+            "dry_run_delete_report": dry_run_delete_report,
+            "memory_status_after_denials": (
+                memory_after_denials["status"] if memory_after_denials is not None else ""
+            ),
         },
     )
 

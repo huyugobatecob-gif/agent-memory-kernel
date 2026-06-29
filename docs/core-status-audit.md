@@ -29,7 +29,7 @@ Status labels:
 | Router contract | partial | `before_model_call`, tree packs, explainability, feedback, selected-content snapshot, deterministic ranking snapshot, budget-trim snapshot, large-history bounded prompt snapshot | Expand adapter budget fixtures and latency/resource measurements. |
 | Prompt envelope and renderers | partial | cross-model context contract, prompt format certification, no-full-graph conformance scenario, budget-trim conformance scenario, provider formatter boundary conformance, Memory Tree renderer | Keep renderers behind the read contract and expand adapter-specific snapshots as extensions. |
 | Review and explainability | partial | review inbox, memory changes, router explain, lifecycle history | Keep "why remembered" and "why injected" available through the stable local surface and ensure optional HTTP/MCP adapters cannot bypass policy. |
-| Read/write/export/inject policies | partial | read/write policy enforcement, capability reports | Preserve denial paths across import/export and all direct retrieval/export surfaces. |
+| Read/write/export/inject policies | partial | read/write policy enforcement, capability reports, denied read/inject/export/lifecycle conformance fixture | Preserve denial paths across import/export and expand the action matrix for every lifecycle/write family. |
 | Import/export provenance | partial | profile export/import, lifecycle and policy state preservation, graph evidence-chain round trip, `.amk` bundle manifest/checksum round trip with graph evidence and derived invalidations | Expand edge-case fixtures for poisoned imports and partial/redacted bundles. |
 | Deterministic ranking | partial | local lexical/semantic reranking, current-best logic, deterministic ranking snapshot conformance, large-history bounded selection conformance | Expand latency/resource fixtures for very large stores. |
 | Conformance and golden traces | partial | conformance CLI/spec/assert, acceptance harness, `docs/invariant-verifier-map.md`, budget-trim trace, large-history bounded prompt trace, provider formatter boundary trace | Expand invariant coverage for remaining edge cases and extension adapter snapshots. |
@@ -78,8 +78,9 @@ Status labels:
 5. Expand export/import round-trip tests to cover poisoned imports,
    partial/redacted bundles, provenance, tombstones, trust state, review
    history, policy metadata, evidence chains, and derived invalidations.
-6. Add capability-grant denied-action conformance and policy dry-run fixtures
-   for read, write, inject, export, and lifecycle actions.
+6. Harden capability-grant denied-action coverage. Conformance now checks denied
+   read, inject, export, write/delete, and lifecycle dry-run reporting; remaining
+   work is a broader action matrix across every lifecycle/write family.
 7. Add latency/resource measurements for large local histories, prompt budget
    boundaries, export size, and recovery paths.
 8. Keep examples universal until the kernel gates pass; runtime/domain examples
