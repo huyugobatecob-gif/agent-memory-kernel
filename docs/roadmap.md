@@ -214,13 +214,16 @@ MCP `memory_operational_status`. Prompt retrieval failures return a no-memory
 envelope with `metadata.operational_failure`; Keeper extraction failures keep
 saved turns and mark the Keeper job failed.
 Baseline migration and local recovery are implemented through
-`agent-memory migration-status`, `agent-memory backup`, `agent-memory restore`,
-`agent-memory restore-drill`, `/migration/status`, `/backup`, `/restore`,
+`agent-memory migration-status`, `agent-memory migration-changelog`,
+`agent-memory backup`, `agent-memory restore`, `agent-memory restore-drill`,
+`/migration/status`, `/migration/changelog`, `/backup`, `/restore`,
 `/restore/drill`, and MCP recovery tools. Restore drills create a backup,
 restore into a drill database, check migration status, and optionally verify a
-probe query against restored active memory. Production SLOs, encrypted off-host
-backups, migration changelogs, managed restore-drill schedules, worker
-supervision, and hosted alerting are still backlog.
+probe query against restored active memory. The changelog reports pending
+migrations, recommended rollout gates, and recent recovery audit events.
+Production SLOs, encrypted off-host backups, hosted migration release-note
+publication, managed restore-drill schedules, worker supervision, and hosted
+alerting are still backlog.
 Post-turn memory-change inspection is implemented through `agent-memory
 memory-changes`, `/memory-changes`, and Python adapter wrappers. A Keeper
 job report includes saved turns, the Keeper event, candidates, promoted

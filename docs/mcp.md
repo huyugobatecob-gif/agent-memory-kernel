@@ -72,6 +72,8 @@ Runtime tools:
   reusable loop lessons, failure anti-patterns, and recommended next actions.
 - `memory_migration_status`: check SQLite schema version, required tables and
   columns, and migration compatibility.
+- `memory_migration_changelog`: summarize schema migration state, pending
+  migrations, rollout gates, and recent recovery audit events.
 - `memory_backup_database`: create a SQLite backup of the memory database.
 - `memory_restore_database`: restore a SQLite backup into a target database
   path.

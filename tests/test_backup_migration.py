@@ -67,6 +67,26 @@ class BackupMigrationTests(unittest.TestCase):
             self.assertEqual(drill["probe_result_count"], 1)
             self.assertTrue(drill_backup.exists())
             self.assertTrue(drill_restored.exists())
+
+            changelog = store.migration_changelog(limit=10)
+            self.assertEqual(changelog["version"], "migration-changelog-v0.1")
+            self.assertEqual(changelog["status"], "pass")
+            self.assertTrue(changelog["compatible"])
+            self.assertIn("restore-drill", {gate["name"] for gate in changelog["recommended_gates"]})
+            self.assertFalse(changelog["pending_migrations"])
+            self.assertIn(
+                "backup_database",
+                {event["action"] for event in changelog["recent_recovery_events"]},
+            )
+
+            restored_again = MemoryStore(restored_db)
+            restored_again.init_db()
+            restored_changelog = restored_again.migration_changelog(limit=10)
+            self.assertIn(
+                "restore_database",
+                {event["action"] for event in restored_changelog["recent_recovery_events"]},
+            )
+            restored_again.close()
             store.close()
 
     def test_backup_restore_api_mcp_and_cli_surfaces(self) -> None:
@@ -120,8 +140,14 @@ class BackupMigrationTests(unittest.TestCase):
             self.assertEqual(drill_result["status"], "pass")
             self.assertEqual(drill_result["probe_result_count"], 1)
 
+            changelog = handle_api_request(store, "/migration/changelog", {"limit": 5})
+            self.assertEqual(changelog["version"], "migration-changelog-v0.1")
+            self.assertEqual(changelog["status"], "pass")
+            self.assertIn("migration-status", {gate["name"] for gate in changelog["recommended_gates"]})
+
             names = {tool["name"] for tool in list_mcp_tools()}
             self.assertIn("memory_migration_status", names)
+            self.assertIn("memory_migration_changelog", names)
             self.assertIn("memory_backup_database", names)
             self.assertIn("memory_restore_database", names)
             self.assertIn("memory_restore_drill", names)
@@ -133,6 +159,13 @@ class BackupMigrationTests(unittest.TestCase):
                 code = args.func(args)
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(stdout.getvalue())["status"], "pass")
+
+            args = parser.parse_args(["migration-changelog", "--db", str(db), "--limit", "5"])
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = args.func(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["version"], "migration-changelog-v0.1")
 
             args = parser.parse_args(["backup", "--db", str(db), "--out", str(cli_backup)])
             stdout = io.StringIO()

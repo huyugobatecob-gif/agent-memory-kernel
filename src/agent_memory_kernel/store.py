@@ -119,6 +119,7 @@ WORKER_SUPERVISION_VERSION = "worker-supervision-v0.1"
 BILLING_RECONCILIATION_VERSION = "billing-reconciliation-v0.1"
 BRAIN_STYLE_CERTIFICATION_VERSION = "brain-style-certification-v0.1"
 RESTORE_DRILL_VERSION = "database-restore-drill-v0.1"
+MIGRATION_CHANGELOG_VERSION = "migration-changelog-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 PROMPT_FORMATTER_CERTIFICATION_VERSION = "prompt-formatter-certification-v0.1"
@@ -2265,6 +2266,97 @@ class MemoryStore:
                     "name": "baseline additive sqlite schema",
                     "status": "applied" if user_version >= SCHEMA_VERSION else "pending",
                 }
+            ],
+        }
+
+    def migration_changelog(self, *, limit: int = 20) -> dict[str, Any]:
+        """Summarize schema migration state and recent recovery audit events."""
+        limit = max(1, min(int(limit or 20), 200))
+        migration = self.migration_status()
+        pending = [
+            item
+            for item in migration.get("migrations", [])
+            if item.get("status") != "applied"
+        ]
+        rows = self.conn.execute(
+            """
+            SELECT created_at, action, target_type, target_id, actor, details_json
+            FROM audit_log
+            WHERE action IN (
+                'init',
+                'backup_database',
+                'restore_database'
+            )
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                details = json.loads(str(row["details_json"] or "{}"))
+            except json.JSONDecodeError:
+                details = {"raw": str(row["details_json"] or "")}
+            events.append(
+                {
+                    "created_at": row["created_at"],
+                    "action": row["action"],
+                    "target_type": row["target_type"],
+                    "target_id": row["target_id"],
+                    "actor": row["actor"],
+                    "details": details,
+                }
+            )
+
+        gates = [
+            {
+                "name": "migration-status",
+                "purpose": "verify required tables, columns, user_version, and SQLite quick_check",
+                "cli": "agent-memory migration-status --db <db>",
+                "http": "/migration/status",
+                "mcp": "memory_migration_status",
+            },
+            {
+                "name": "backup",
+                "purpose": "create a SQLite API backup artifact before schema or runtime changes",
+                "cli": "agent-memory backup --db <db> --out <backup.db>",
+                "http": "/backup",
+                "mcp": "memory_backup_database",
+            },
+            {
+                "name": "restore-drill",
+                "purpose": "prove a backup restores, migrates, and can answer a probe query",
+                "cli": "agent-memory restore-drill --db <db>",
+                "http": "/restore/drill",
+                "mcp": "memory_restore_drill",
+            },
+            {
+                "name": "conformance-certify",
+                "purpose": "prove an adapter still satisfies the public memory behavior contract",
+                "cli": "agent-memory conformance certify --db <db>",
+                "http": "/conformance/certify",
+                "mcp": "memory_conformance_certify",
+            },
+        ]
+        return {
+            "version": MIGRATION_CHANGELOG_VERSION,
+            "status": "fail" if migration["status"] == "fail" else "pass",
+            "generated_at": now_iso(),
+            "schema_version": migration["schema_version"],
+            "sqlite_user_version": migration["sqlite_user_version"],
+            "sqlite_schema_version": migration["sqlite_schema_version"],
+            "compatible": migration["compatible"],
+            "migration_status": migration,
+            "migrations": migration.get("migrations", []),
+            "pending_migrations": pending,
+            "recent_recovery_events": events,
+            "recent_recovery_event_count": len(events),
+            "recommended_gates": gates,
+            "notes": [
+                "This is a local-first migration changelog baseline.",
+                "Hosted release notes, off-host backup custody, and alert delivery stay outside the local kernel.",
             ],
         }
 

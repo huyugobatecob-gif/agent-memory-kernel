@@ -266,6 +266,9 @@ class HermesMemoryProvider:
     def migration_status(self) -> dict:
         ...
 
+    def migration_changelog(self, limit: int = 20) -> dict:
+        ...
+
     def backup_database(self, out_path: str) -> dict:
         ...
 
@@ -323,8 +326,9 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_changes`, `memory_tree_pack`, `memory_capability_check`,
 `memory_derived_invalidations`, `memory_operational_status`,
 `memory_observability`, `memory_migration_status`, `memory_backup_database`,
-`memory_restore_database`, `memory_review_list`, `memory_graph_nodes`,
-`memory_graph_edges`, `memory_graph_browser`, `memory_export_control`, `memory_export_profile`,
+`memory_migration_changelog`, `memory_restore_database`,
+`memory_review_list`, `memory_graph_nodes`, `memory_graph_edges`,
+`memory_graph_browser`, `memory_export_control`, `memory_export_profile`,
 `memory_export_custody`, `memory_export_encrypted_profile`,
 `memory_import_encrypted_profile`, and
 `memory_notifications_list`, `memory_notification_assign`,

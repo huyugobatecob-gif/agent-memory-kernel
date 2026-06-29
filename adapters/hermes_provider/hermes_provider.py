@@ -403,6 +403,9 @@ class HermesMemoryProvider:
     def migration_status(self, *, integrity_check: bool = True) -> dict[str, Any]:
         return self.store.migration_status(integrity_check=integrity_check)
 
+    def migration_changelog(self, *, limit: int = 20) -> dict[str, Any]:
+        return self.store.migration_changelog(limit=limit)
+
     def backup_database(
         self,
         out_path: str | Path,

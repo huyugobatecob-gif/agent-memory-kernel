@@ -546,6 +546,14 @@ def cmd_migration_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_migration_changelog(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.migration_changelog(limit=args.limit))
+    store.close()
+    return 0
+
+
 def cmd_backup(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1981,6 +1989,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("--skip-integrity-check", action="store_true")
     p.set_defaults(func=cmd_migration_status)
+
+    p = sub.add_parser("migration-changelog", help="Summarize schema migrations and recent recovery events")
+    add_common_db(p)
+    p.add_argument("--limit", type=int, default=20, help="Maximum recent recovery audit events")
+    p.set_defaults(func=cmd_migration_changelog)
 
     p = sub.add_parser("backup", help="Create a SQLite backup of the memory database")
     add_common_db(p)

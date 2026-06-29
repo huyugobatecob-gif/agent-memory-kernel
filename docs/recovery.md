@@ -7,6 +7,9 @@ SQLite database file. The baseline recovery contract is:
   setup and sets the current SQLite `user_version`;
 - `migration-status` checks required tables, required columns, SQLite
   `quick_check`, and schema compatibility;
+- `migration-changelog` reports the current schema migration state, pending
+  migrations, recommended rollout gates, and recent local recovery audit
+  events;
 - `backup` creates a SQLite backup through the SQLite backup API;
 - `restore` copies a backup into a target database path, runs additive schema
   setup, records a restore audit event, and returns migration status.
@@ -18,6 +21,7 @@ Commands:
 
 ```bash
 agent-memory migration-status --db .memory/demo.db
+agent-memory migration-changelog --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "demo project"
@@ -25,12 +29,12 @@ agent-memory restore-drill --db .memory/demo.db --scope professional --probe-que
 
 The same surfaces are available through:
 
-- HTTP: `POST /migration/status`, `POST /backup`, `POST /restore`,
-  `POST /restore/drill`
-- MCP: `memory_migration_status`, `memory_backup_database`,
-  `memory_restore_database`, `memory_restore_drill`
-- Python adapter wrapper: `migration_status()`, `backup_database()`,
-  `restore_database()`, `restore_drill()`
+- HTTP: `POST /migration/status`, `POST /migration/changelog`,
+  `POST /backup`, `POST /restore`, `POST /restore/drill`
+- MCP: `memory_migration_status`, `memory_migration_changelog`,
+  `memory_backup_database`, `memory_restore_database`, `memory_restore_drill`
+- Python adapter wrapper: `migration_status()`, `migration_changelog()`,
+  `backup_database()`, `restore_database()`, `restore_drill()`
 
 Safety defaults:
 
@@ -44,5 +48,6 @@ Safety defaults:
 
 This is a local recovery baseline, not a hosted backup product. Production
 deployments should add encrypted off-host backups, hosted retention policies, restore
-artifact custody, migration changelogs, and alerting around failed backups,
-failed restore drills, or failed schema compatibility checks.
+artifact custody, hosted migration release-note publication, and alerting
+around failed backups, failed restore drills, or failed schema compatibility
+checks.

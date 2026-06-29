@@ -197,6 +197,8 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         return store.migration_status(
             integrity_check=bool(payload.get("integrity_check", True)),
         )
+    if path in {"/migration/changelog", "/migration-changelog"}:
+        return store.migration_changelog(limit=int(payload.get("limit", 20) or 20))
     if path == "/backup":
         return store.backup_database(
             payload.get("out_path") or payload.get("path"),

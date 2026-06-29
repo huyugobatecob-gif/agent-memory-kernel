@@ -411,6 +411,7 @@ agent-memory usage --db .memory/demo.db record --model gpt-4.1-mini --prompt-tok
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
 agent-memory billing-reconcile --db .memory/demo.db --thread-id seo-demo --max-cost-per-1k 0.05
 agent-memory migration-status --db .memory/demo.db
+agent-memory migration-changelog --db .memory/demo.db
 agent-memory backup --db .memory/demo.db --out .memory/backups/demo-backup.db
 agent-memory restore --backup .memory/backups/demo-backup.db --target-db .memory/restored.db
 agent-memory restore-drill --db .memory/demo.db --scope professional --probe-query "SEO projects"
@@ -845,7 +846,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_operational_status`, `memory_observability`,
 `memory_billing_reconcile`,
 `memory_embedding_certify`,
-`memory_migration_status`, `memory_backup_database`,
+`memory_migration_status`, `memory_migration_changelog`, `memory_backup_database`,
 `memory_restore_database`, `memory_restore_drill`, `memory_graph_nodes`, `memory_graph_edges`, and
 `memory_worker_run`, `memory_worker_status`.
 

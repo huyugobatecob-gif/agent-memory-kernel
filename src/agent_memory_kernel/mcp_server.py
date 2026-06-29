@@ -300,6 +300,15 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_migration_changelog": {
+        "endpoint": "/migration/changelog",
+        "description": "Summarize schema migration state and recent recovery audit events.",
+        "inputSchema": _schema(
+            {
+                "limit": _integer("Maximum recent recovery audit events.", 20),
+            }
+        ),
+    },
     "memory_outcome_compare": {
         "endpoint": "/outcome/compare",
         "description": "Compare success/failure outcome records and extract reusable loop lessons.",

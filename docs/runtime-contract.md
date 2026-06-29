@@ -394,14 +394,16 @@ Baseline implementation:
   `memory_observability` summarize Router token estimates, selected branches,
   Router/Keeper wall-clock duration, Keeper job status, warnings, and LLM usage
   tokens/cost, plus local latency SLO breach alerts.
-- `agent-memory migration-status`, `agent-memory backup`,
-  `agent-memory restore`, and `agent-memory restore-drill` provide local
-  SQLite schema checks, backup/restore recovery using the SQLite backup API,
+- `agent-memory migration-status`, `agent-memory migration-changelog`,
+  `agent-memory backup`, `agent-memory restore`, and
+  `agent-memory restore-drill` provide local SQLite schema checks, migration
+  changelog reporting, backup/restore recovery using the SQLite backup API,
   and drill verification against a restored database.
 
 Still production work: encrypted off-host backups, managed restore-drill
-schedules, migration changelogs, hosted health checks, deployment supervisor
-recipes, restart policies, dashboards, and managed alert delivery.
+schedules, hosted migration release-note publication, hosted health checks,
+deployment supervisor recipes, restart policies, dashboards, and managed alert
+delivery.
 
 ## End State
 
