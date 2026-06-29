@@ -353,6 +353,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             read_actions=payload.get("read_actions"),
             write_actions=payload.get("write_actions"),
         )
+    if path in {"/identity/delegation", "/identity-delegation"}:
+        return store.identity_delegation_report(
+            actor=str(payload.get("actor", "agent")),
+            scope=str(payload.get("scope", "professional")),
+            project=str(payload.get("project", "")),
+            tenant_id=str(payload.get("tenant_id", "local")),
+        )
     if path == "/export/control":
         return store.export_control_report(
             actor=str(payload.get("actor", "user")),

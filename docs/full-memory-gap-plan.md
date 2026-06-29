@@ -341,7 +341,8 @@ Remaining for full memory:
 - Production current-best heuristics for stale, conflicting, superseded, or
   equal-trust claims beyond explicit resolved conflicts.
 - Production hosted identity and delegation flows beyond the baseline local
-  capability/consent report for read/write/promote/inject/export/delete.
+  capability/consent and identity-delegation reports for
+  read/write/promote/inject/export/delete.
 - Broader inspection flows for batch correction and web UI review beyond the
   baseline Router explain, post-turn memory-change, review inbox/export-control,
   and export retention endpoints.
@@ -378,8 +379,9 @@ Remaining for full memory:
   and conflict pages, machine-readable review inbox with inline conflict
   warnings, notification queue, transport payload builder, approve/reject batch
   flow, and active-memory lifecycle batch correction flow.
-- Hosted identity, tenancy, and delegation rules beyond the local
-  agent/scope/action capability report and read/write policies.
+- Hosted identity, tenancy, and delegation enforcement beyond the local
+  agent/scope/action capability, read/write policy, and identity-delegation
+  audit reports.
 - Production current-best-answer resolution beyond the baseline explicit
   conflict resolver and active-memory conflict detector.
 - Broader live-provider certification and provider-specific prompt envelope

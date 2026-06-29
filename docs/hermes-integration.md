@@ -343,6 +343,7 @@ Useful endpoints:
 - `POST /contract/assert`
 - `POST /operational/status`
 - `POST /migration/status`
+- `POST /identity/delegation`
 - `POST /backup`
 - `POST /restore`
 - `POST /conformance/spec`

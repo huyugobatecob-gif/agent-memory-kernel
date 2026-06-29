@@ -53,6 +53,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_conflict_detect", names)
             self.assertIn("memory_changes", names)
             self.assertIn("memory_capability_check", names)
+            self.assertIn("memory_identity_delegation", names)
             self.assertIn("memory_export_control", names)
             self.assertIn("memory_export_custody", names)
             self.assertIn("memory_export_profile", names)

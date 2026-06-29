@@ -294,6 +294,31 @@ class MemoryStoreTests(unittest.TestCase):
             )
             self.assertEqual(api_report["read"]["export"]["decision"], "deny")
 
+            delegation = store.identity_delegation_report(
+                actor="blocked-export",
+                scope="professional",
+                project="consent-site",
+                tenant_id="tenant-a",
+            )
+            self.assertEqual(delegation["version"], "identity-delegation-v0.1")
+            self.assertEqual(delegation["tenant_id"], "tenant-a")
+            self.assertEqual(delegation["actor"], "blocked-export")
+            self.assertIn("read:read", delegation["delegations"]["implicit_allows"])
+            self.assertTrue(delegation["risk_flags"])
+            self.assertTrue(delegation["recommended_policy_commands"])
+            api_delegation = handle_api_request(
+                store,
+                "/identity/delegation",
+                {
+                    "actor": "blocked-export",
+                    "scope": "professional",
+                    "project": "consent-site",
+                    "tenant_id": "tenant-a",
+                },
+            )
+            self.assertEqual(api_delegation["status"], "warn")
+            self.assertEqual(api_delegation["capability"]["actor"], "blocked-export")
+
             export_control = store.export_control_report(
                 actor="blocked-export",
                 scope="professional",

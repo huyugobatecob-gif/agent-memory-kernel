@@ -158,6 +158,21 @@ def cmd_capability(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_identity_delegation(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.identity_delegation_report(
+            actor=args.actor,
+            scope=args.scope,
+            project=args.project,
+            tenant_id=args.tenant_id,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_review_list(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -1611,6 +1626,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--read-actions", default="", help="Comma-separated read actions; default: read,inject,export")
     p.add_argument("--write-actions", default="", help="Comma-separated write actions; default: all write actions")
     p.set_defaults(func=cmd_capability)
+
+    p = sub.add_parser("identity-delegation", help="Report hosted identity and explicit delegation posture")
+    add_common_db(p)
+    p.add_argument("--actor", default="agent")
+    p.add_argument("--scope", default="professional", choices=["*", "personal", "professional", "project", "agent", "session"])
+    p.add_argument("--project", default="")
+    p.add_argument("--tenant-id", default="local")
+    p.set_defaults(func=cmd_identity_delegation)
 
     p = sub.add_parser("review", help="Review candidate memories")
     add_common_db(p)

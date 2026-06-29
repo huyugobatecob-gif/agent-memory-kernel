@@ -182,8 +182,12 @@ through `agent-memory read-policy`, `/read-policy/set`, `/read-policy/list`, and
 `prompt_envelope.metadata.read_policy`.
 Baseline capability/consent reporting is implemented through `agent-memory
 capability`, `/capability/check`, Python adapter wrappers, and MCP
-`memory_capability_check`. Direct search/context/tree-pack and export surfaces
-can enforce read/export policy by actor.
+`memory_capability_check`. Baseline hosted delegation audit is implemented
+through `agent-memory identity-delegation`, `/identity/delegation`, and MCP
+`memory_identity_delegation`; it exposes tenant id, explicit allow/deny
+policies, implicit local allows, wildcard-policy risk, and recommended policy
+commands. Direct search/context/tree-pack and export surfaces can enforce
+read/export policy by actor.
 Baseline derived-memory invalidation is implemented through `agent-memory
 derived-invalidations`, `/derived-invalidations`, Python adapter wrappers,
 and MCP `memory_derived_invalidations`. Correction, rollback, delete, distrust,

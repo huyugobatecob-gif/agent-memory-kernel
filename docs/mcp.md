@@ -113,6 +113,8 @@ Operator and graph tools:
 - `memory_prompt_format_certify`: certify provider prompt formatters against
   prompt-boundary invariants for OpenAI, Anthropic, Gemini/Google, and local
   prompt shapes.
+- `memory_identity_delegation`: report tenant, actor, explicit delegation,
+  implicit local allow, wildcard-policy risk, and recommended policy commands.
 - `memory_export_control`: preview export policy, aggregate scope counts, and
   risk flags before memory leaves the store. Accepts `redaction_profile`
   (`full`, `safe`, or `metadata`) so operators can preview the intended export

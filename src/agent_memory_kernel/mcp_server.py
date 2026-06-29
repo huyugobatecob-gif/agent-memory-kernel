@@ -610,6 +610,18 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_identity_delegation": {
+        "endpoint": "/identity/delegation",
+        "description": "Report hosted identity, tenant, and explicit delegation posture for an agent.",
+        "inputSchema": _schema(
+            {
+                "actor": _string("Calling agent id.", "agent"),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "project": _string("Optional project id.", ""),
+                "tenant_id": _string("Hosted tenant id or local.", "local"),
+            }
+        ),
+    },
     "memory_export_control": {
         "endpoint": "/export/control",
         "description": "Preview export policy, scope counts, and aggregate risk before memory leaves the store.",

@@ -55,6 +55,9 @@ Included now:
   outcome, conflict, and supersession paths.
 - Capability/consent reports for read, inject, export, promote, lifecycle, and
   other write actions.
+- Identity delegation report for hosted/team adapters with tenant id, explicit
+  policies, implicit local allows, wildcard risk, and recommended policy
+  commands.
 - Correction revision history and rollback for active memories.
 - Derived-memory invalidation ledger for correction, rollback, delete,
   distrust, expire, and supersede lifecycle actions.

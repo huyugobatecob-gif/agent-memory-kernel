@@ -55,6 +55,10 @@ Implemented local runtime behavior:
   precedence;
 - `capability_report` and `/capability/check` expose the effective read/write
   matrix before an agent is delegated work;
+- `identity_delegation_report`, `/identity/delegation`, and MCP
+  `memory_identity_delegation` expose tenant id, explicit allow/deny policies,
+  implicit local allows, wildcard-policy risk, and recommended policy commands
+  for hosted or team deployments;
 - a denied active scope returns a no-memory prompt envelope;
 - denied scopes produce `access_decisions` and warnings;
 - the main model never receives profile notes, thread messages, graph branches,

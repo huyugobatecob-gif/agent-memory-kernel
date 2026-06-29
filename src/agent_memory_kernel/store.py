@@ -101,6 +101,7 @@ RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
+IDENTITY_DELEGATION_VERSION = "identity-delegation-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
@@ -748,6 +749,115 @@ class MemoryStore:
                     "should not inherit local default access."
                 ),
             },
+        }
+
+    def identity_delegation_report(
+        self,
+        *,
+        actor: str = "agent",
+        scope: str = "professional",
+        project: str = "",
+        tenant_id: str = "local",
+    ) -> dict[str, Any]:
+        """Explain hosted identity/delegation posture using local policy data."""
+        actor = (actor or "agent").strip() or "agent"
+        scope = "*" if scope == "*" else normalize_scope(scope)
+        tenant_id = (tenant_id or "local").strip() or "local"
+        capability = self.capability_report(actor=actor, scope=scope, project=project)
+        read_policies = self.list_read_policies(agent_id=actor, scope=scope, limit=500)
+        write_policies = self.list_write_policies(agent_id=actor, scope=scope, limit=500)
+        wildcard_read = self.list_read_policies(agent_id="*", scope=scope, limit=500)
+        wildcard_write = self.list_write_policies(agent_id="*", scope=scope, limit=500)
+        explicit_delegations = [
+            self._delegation_policy_item("read", item)
+            for item in read_policies
+            if item["decision"] == "allow"
+        ] + [
+            self._delegation_policy_item("write", item)
+            for item in write_policies
+            if item["decision"] == "allow"
+        ]
+        explicit_denials = [
+            self._delegation_policy_item("read", item)
+            for item in read_policies
+            if item["decision"] == "deny"
+        ] + [
+            self._delegation_policy_item("write", item)
+            for item in write_policies
+            if item["decision"] == "deny"
+        ]
+        implicit_allows = list(capability["consent"]["implicit_allow_actions"])
+        risk_flags = []
+        if implicit_allows:
+            risk_flags.append(
+                {
+                    "name": "implicit_allow",
+                    "severity": "medium",
+                    "detail": "actions are allowed by local default rather than explicit delegation",
+                    "actions": implicit_allows,
+                }
+            )
+        if wildcard_read or wildcard_write:
+            risk_flags.append(
+                {
+                    "name": "wildcard_policy",
+                    "severity": "high",
+                    "detail": "wildcard actor policies affect this scope",
+                    "read_policy_count": len(wildcard_read),
+                    "write_policy_count": len(wildcard_write),
+                }
+            )
+        if "read:export" in capability["allowed_actions"] and "read:export" in implicit_allows:
+            risk_flags.append(
+                {
+                    "name": "export_without_explicit_delegation",
+                    "severity": "high",
+                    "detail": "export is allowed without an explicit actor/scope delegation",
+                }
+            )
+        if any(action.startswith("write:") for action in implicit_allows):
+            risk_flags.append(
+                {
+                    "name": "write_without_explicit_delegation",
+                    "severity": "medium",
+                    "detail": "one or more write actions are allowed without explicit delegation",
+                }
+            )
+        recommended = [
+            {
+                "action": action,
+                "cli": (
+                    f"agent-memory read-policy set --agent-id {actor} --scope {scope} "
+                    f"--action {action.split(':', 1)[1]} --decision deny "
+                    "--reason \"hosted deployment requires explicit delegation\""
+                )
+                if action.startswith("read:")
+                else (
+                    f"agent-memory write-policy set --agent-id {actor} --scope {scope} "
+                    f"--action {action.split(':', 1)[1]} --decision deny "
+                    "--reason \"hosted deployment requires explicit delegation\""
+                ),
+            }
+            for action in implicit_allows
+        ]
+        return {
+            "version": IDENTITY_DELEGATION_VERSION,
+            "tenant_id": tenant_id,
+            "actor": actor,
+            "scope": scope,
+            "project": (project or "").strip(),
+            "hosted_stance": "explicit delegation recommended for hosted or team deployments",
+            "capability": capability,
+            "delegations": {
+                "explicit_allows": explicit_delegations,
+                "explicit_denies": explicit_denials,
+                "implicit_allows": implicit_allows,
+                "wildcard_read_policies": wildcard_read,
+                "wildcard_write_policies": wildcard_write,
+            },
+            "risk_flags": risk_flags,
+            "recommended_policy_commands": recommended,
+            "status": "warn" if risk_flags else "pass",
         }
 
     def remember(
@@ -10197,6 +10307,23 @@ class MemoryStore:
             return float(value)
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _delegation_policy_item(kind: str, policy: dict[str, Any]) -> dict[str, Any]:
+        metadata = dict(policy.get("metadata", {}) or {})
+        return {
+            "kind": kind,
+            "policy_id": policy.get("policy_id", ""),
+            "agent_id": policy.get("agent_id", ""),
+            "scope": policy.get("scope", ""),
+            "action": policy.get("action", ""),
+            "decision": policy.get("decision", ""),
+            "reason": policy.get("reason", ""),
+            "delegated_by": metadata.get("delegated_by", ""),
+            "tenant_id": metadata.get("tenant_id", ""),
+            "expires_at": metadata.get("expires_at", ""),
+            "metadata": metadata,
+        }
 
     def _resolve_write_policy(self, actor: str, scope: str, action: str) -> dict[str, Any]:
         actor = (actor or "user").strip() or "user"
