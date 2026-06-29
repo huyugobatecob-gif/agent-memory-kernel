@@ -67,6 +67,20 @@ the kernel default. `before_model_call` stores the resolved profile in
 `prompt_envelope.metadata.prompt_budget` and uses the effective budget for
 read-time policy and trimming.
 
+Adapters can also request a provider-specific prompt shape without changing the
+neutral envelope:
+
+```bash
+agent-memory before-model-call "plan work" --prompt-format openai
+agent-memory before-model-call "plan work" --prompt-format anthropic
+agent-memory before-model-call "plan work" --prompt-format gemini
+```
+
+`before_model_call(..., prompt_format=...)` returns the original
+`prompt_envelope` plus `formatted_prompt`. The baseline formatter supports
+OpenAI-style `messages`, Anthropic `system` plus `messages`, Google/Gemini
+`system_instruction` plus `contents`, and a local plain-text prompt.
+
 ## Memory Tree Supplement
 
 The supplement is a user-role context block because it is retrieved context, not
@@ -127,6 +141,7 @@ Runtime prompt calls can suppress this layer:
 
 ```bash
 agent-memory before-model-call "plan work" --disable-brain-style
+agent-memory before-model-call "plan work" --prompt-format openai
 ```
 
 ## Token Budget Adapters

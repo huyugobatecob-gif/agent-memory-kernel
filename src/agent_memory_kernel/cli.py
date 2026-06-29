@@ -359,6 +359,7 @@ def cmd_before_model_call(args: argparse.Namespace) -> int:
             limit=args.limit,
             recent_messages=args.recent_messages,
             enable_brain_style=not args.disable_brain_style,
+            prompt_format=args.prompt_format,
         )
     )
     store.close()
@@ -1734,6 +1735,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--denied-scopes", default="", help="Comma-separated scopes denied for retrieval")
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--recent-messages", type=int, default=6)
+    p.add_argument("--prompt-format", default="", choices=["", "openai", "anthropic", "google", "gemini", "local"])
     p.add_argument("--disable-brain-style", action="store_true", help="Omit graph-derived style hints")
     p.set_defaults(func=cmd_before_model_call)
 

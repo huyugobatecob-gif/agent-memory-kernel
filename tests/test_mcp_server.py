@@ -37,6 +37,10 @@ class MCPServerTests(unittest.TestCase):
             )
             names = {tool["name"] for tool in listed["result"]["tools"]}
             self.assertIn("memory_before_model_call", names)
+            before_tool = next(
+                tool for tool in listed["result"]["tools"] if tool["name"] == "memory_before_model_call"
+            )
+            self.assertIn("prompt_format", before_tool["inputSchema"]["properties"])
             self.assertIn("memory_prompt_budget", names)
             self.assertIn("memory_before_turn", names)
             self.assertIn("memory_after_turn", names)

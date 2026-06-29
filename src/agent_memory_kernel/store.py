@@ -106,6 +106,7 @@ OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
 MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
+PROMPT_FORMATTER_VERSION = "prompt-formatter-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
@@ -4609,6 +4610,7 @@ class MemoryStore:
         limit: int = 8,
         recent_messages: int = 6,
         enable_brain_style: bool = True,
+        prompt_format: str = "",
         fallback_on_error: bool = True,
     ) -> dict[str, Any]:
         """Build the provider-neutral memory envelope before a model call."""
@@ -4787,10 +4789,22 @@ class MemoryStore:
                 read_policy=read_policy,
                 exc=exc,
                 duration_ms=self._elapsed_ms(started_at),
+                prompt_format=prompt_format,
             )
         duration_ms = self._elapsed_ms(started_at)
         prompt_envelope["metadata"]["duration_ms"] = duration_ms
         prompt_envelope["metadata"]["duration_source"] = "before_model_call"
+        formatted_prompt = (
+            self.format_prompt_envelope(
+                prompt_envelope,
+                provider=prompt_format,
+                model_id=model_id,
+            )
+            if prompt_format
+            else {}
+        )
+        if formatted_prompt:
+            prompt_envelope["metadata"]["prompt_format"] = formatted_prompt["metadata"]
         router_run_id = new_id("router")
         self.conn.execute(
             """
@@ -4830,12 +4844,106 @@ class MemoryStore:
             },
         )
         self.conn.commit()
-        return {
+        result = {
             "prompt_envelope": prompt_envelope,
             "router_run_id": router_run_id,
             "selected_branch_ids": selected_branch_ids,
             "access_decisions": access_decisions,
             "warnings": warnings,
+        }
+        if formatted_prompt:
+            result["formatted_prompt"] = formatted_prompt
+        return result
+
+    def format_prompt_envelope(
+        self,
+        prompt_envelope: dict[str, Any],
+        *,
+        provider: str = "",
+        model_id: str = "",
+    ) -> dict[str, Any]:
+        """Format a provider-neutral prompt envelope for common model APIs."""
+        metadata = dict(prompt_envelope.get("metadata", {}))
+        prompt_budget = dict(metadata.get("prompt_budget", {}))
+        provider = (provider or prompt_budget.get("provider") or "").strip().lower()
+        if provider in {"", "unknown"} and model_id:
+            provider = str(self.prompt_budget_profile(model_id=model_id).get("provider", "unknown"))
+        if provider in {"gpt", "openai-compatible"}:
+            provider = "openai"
+        if provider in {"claude"}:
+            provider = "anthropic"
+        if provider not in {"openai", "anthropic", "google", "gemini", "local"}:
+            provider = "generic"
+        if provider == "gemini":
+            provider = "google"
+        system = str(prompt_envelope.get("system") or "")
+        messages = [
+            {
+                "role": str(message.get("role") or "user"),
+                "content": str(message.get("content") or ""),
+            }
+            for message in prompt_envelope.get("messages", [])
+        ]
+        formatter_metadata = {
+            "version": PROMPT_FORMATTER_VERSION,
+            "provider": provider,
+            "model_id": model_id or metadata.get("model_id", ""),
+            "source": "provider-neutral prompt_envelope",
+            "message_count": len(messages),
+        }
+        if provider in {"openai", "generic"}:
+            formatted_messages = []
+            if system:
+                formatted_messages.append({"role": "system", "content": system})
+            formatted_messages.extend(messages)
+            return {
+                "version": PROMPT_FORMATTER_VERSION,
+                "provider": provider,
+                "metadata": formatter_metadata,
+                "messages": formatted_messages,
+            }
+        if provider == "anthropic":
+            return {
+                "version": PROMPT_FORMATTER_VERSION,
+                "provider": provider,
+                "metadata": formatter_metadata,
+                "system": system,
+                "messages": [
+                    {
+                        "role": "assistant" if message["role"] == "assistant" else "user",
+                        "content": message["content"],
+                    }
+                    for message in messages
+                    if message["content"]
+                ],
+            }
+        if provider == "google":
+            return {
+                "version": PROMPT_FORMATTER_VERSION,
+                "provider": provider,
+                "metadata": formatter_metadata,
+                "system_instruction": {"parts": [{"text": system}]} if system else {},
+                "contents": [
+                    {
+                        "role": "model" if message["role"] == "assistant" else "user",
+                        "parts": [{"text": message["content"]}],
+                    }
+                    for message in messages
+                    if message["content"]
+                ],
+            }
+        prompt_lines = []
+        if system:
+            prompt_lines.extend(["System:", system, ""])
+        for message in messages:
+            role = message["role"].title()
+            prompt_lines.extend([f"{role}:", message["content"], ""])
+        return {
+            "version": PROMPT_FORMATTER_VERSION,
+            "provider": provider,
+            "metadata": formatter_metadata,
+            "prompt": "\n".join(prompt_lines).strip(),
+            "messages": messages,
         }
 
     def _before_model_call_failure(
@@ -4857,6 +4965,7 @@ class MemoryStore:
         read_policy: dict[str, Any],
         exc: Exception,
         duration_ms: float,
+        prompt_format: str = "",
     ) -> dict[str, Any]:
         failure = {
             "version": OPERATIONAL_FAILURE_VERSION,
@@ -4946,6 +5055,17 @@ class MemoryStore:
                 "duration_source": "before_model_call",
             },
         }
+        formatted_prompt = (
+            self.format_prompt_envelope(
+                prompt_envelope,
+                provider=prompt_format,
+                model_id=model_id,
+            )
+            if prompt_format
+            else {}
+        )
+        if formatted_prompt:
+            prompt_envelope["metadata"]["prompt_format"] = formatted_prompt["metadata"]
         router_run_id = new_id("router")
         self.conn.execute(
             """
@@ -4985,13 +5105,16 @@ class MemoryStore:
             },
         )
         self.conn.commit()
-        return {
+        result = {
             "prompt_envelope": prompt_envelope,
             "router_run_id": router_run_id,
             "selected_branch_ids": [],
             "access_decisions": failure_access_decisions,
             "warnings": combined_warnings,
         }
+        if formatted_prompt:
+            result["formatted_prompt"] = formatted_prompt
+        return result
 
     def after_saved_turn(
         self,

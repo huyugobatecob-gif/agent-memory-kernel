@@ -87,6 +87,8 @@ Included now:
   wall-clock duration, and local latency SLO alert telemetry.
 - Prompt-budget adapter for model-family memory budgets across OpenAI, Claude,
   Gemini, and local model families.
+- Provider prompt formatters for OpenAI, Anthropic, Google/Gemini, and local
+  runtimes through `before-model-call --prompt-format`.
 - Operator review inbox with source previews, risk flags, inline
   possible-conflict warnings, graph previews, audit trail, and CLI/HTTP/MCP
   action handles.

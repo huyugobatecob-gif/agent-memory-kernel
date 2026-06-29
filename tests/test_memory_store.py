@@ -1682,6 +1682,42 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(api_changes["keeper_job"]["keeper_job_id"], after["keeper_job_id"])
             store.close()
 
+    def test_before_model_call_can_format_provider_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            store.remember(
+                "Decision: provider-site keeps prompt envelopes portable across models.",
+                scope="professional",
+                auto_approve=True,
+            )
+
+            openai = store.before_model_call(
+                "Plan provider-site memory work.",
+                scope="professional",
+                model_id="gpt-4.1-mini",
+                prompt_format="openai",
+            )
+            self.assertEqual(openai["formatted_prompt"]["version"], "prompt-formatter-v0.1")
+            self.assertEqual(openai["formatted_prompt"]["provider"], "openai")
+            self.assertEqual(openai["formatted_prompt"]["messages"][0]["role"], "system")
+            self.assertEqual(
+                openai["prompt_envelope"]["metadata"]["prompt_format"]["provider"],
+                "openai",
+            )
+
+            google = store.before_model_call(
+                "Plan provider-site memory work.",
+                scope="professional",
+                model_id="gemini-2.5-pro",
+                prompt_format="gemini",
+            )
+            self.assertEqual(google["formatted_prompt"]["provider"], "google")
+            self.assertIn("system_instruction", google["formatted_prompt"])
+            self.assertTrue(google["formatted_prompt"]["contents"])
+            self.assertEqual(google["formatted_prompt"]["contents"][0]["role"], "user")
+            store.close()
+
     def test_router_feedback_adjusts_future_ranking(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

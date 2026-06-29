@@ -72,6 +72,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "token_budget": _integer("Prompt memory token budget.", 1200),
                 "limit": _integer("Maximum selected memory branches.", 8),
                 "recent_messages": _integer("Recent thread messages to include.", 8),
+                "prompt_format": _string("Optional provider prompt format: openai, anthropic, google, gemini, or local.", ""),
                 "enable_brain_style": _boolean("Include guarded graph-derived style hint.", True),
             },
             ["query"],
