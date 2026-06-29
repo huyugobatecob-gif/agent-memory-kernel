@@ -83,8 +83,8 @@ Included now:
 - Offline Keeper extraction eval harness: `keeper-eval`, `/keeper-eval/run`,
   MCP `memory_keeper_eval`, and adapter wrappers such as Hermes `keeper_eval()`.
 - Profile intro, profile rules, project profile metadata, and LLM usage stats.
-- Combined Router/Keeper/usage observability report with token, cost, and
-  wall-clock duration telemetry for memory operations.
+- Combined Router/Keeper/usage observability report with token, cost,
+  wall-clock duration, and local latency SLO alert telemetry.
 - Prompt-budget adapter for model-family memory budgets across OpenAI, Claude,
   Gemini, and local model families.
 - Operator review inbox with source previews, risk flags, inline

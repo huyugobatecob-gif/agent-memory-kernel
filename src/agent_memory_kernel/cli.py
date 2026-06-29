@@ -465,6 +465,8 @@ def cmd_observability(args: argparse.Namespace) -> int:
             scope=args.scope,
             thread_id=args.thread_id,
             limit=args.limit,
+            router_latency_slo_ms=args.router_latency_slo_ms,
+            keeper_latency_slo_ms=args.keeper_latency_slo_ms,
         )
     )
     store.close()
@@ -1784,6 +1786,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--thread-id")
     p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--router-latency-slo-ms", type=float, default=750.0)
+    p.add_argument("--keeper-latency-slo-ms", type=float, default=2500.0)
     p.set_defaults(func=cmd_observability)
 
     p = sub.add_parser("migration-status", help="Check local schema and migration compatibility")

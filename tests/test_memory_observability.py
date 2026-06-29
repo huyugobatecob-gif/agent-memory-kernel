@@ -57,6 +57,9 @@ class MemoryObservabilityTests(unittest.TestCase):
             )
 
             self.assertEqual(report["version"], "memory-observability-v0.1")
+            self.assertEqual(report["slo"]["version"], "memory-observability-slo-v0.1")
+            self.assertEqual(report["slo"]["status"], "pass")
+            self.assertEqual(report["slo"]["thresholds"]["router_latency_slo_ms"], 750.0)
             self.assertEqual(report["router"]["run_count"], 1)
             self.assertEqual(report["router"]["latest_runs"][0]["router_run_id"], before["router_run_id"])
             self.assertTrue(report["router"]["latest_runs"][0]["selected_branch_ids"])
@@ -80,12 +83,27 @@ class MemoryObservabilityTests(unittest.TestCase):
             endpoint = handle_api_request(
                 store,
                 "/observability",
-                {"scope": "professional", "thread_id": "obs-thread"},
+                {
+                    "scope": "professional",
+                    "thread_id": "obs-thread",
+                    "router_latency_slo_ms": 0,
+                    "keeper_latency_slo_ms": 0,
+                },
             )
             self.assertEqual(endpoint["usage"]["total_tokens"], 150)
+            self.assertEqual(endpoint["slo"]["status"], "warn")
+            self.assertGreaterEqual(endpoint["slo"]["alert_count"], 1)
+            self.assertGreaterEqual(endpoint["slo"]["router"]["breach_count"], 1)
 
             names = {tool["name"] for tool in list_mcp_tools()}
             self.assertIn("memory_observability", names)
+            observability_tool = next(
+                tool for tool in list_mcp_tools() if tool["name"] == "memory_observability"
+            )
+            self.assertIn(
+                "router_latency_slo_ms",
+                observability_tool["inputSchema"]["properties"],
+            )
             store.close()
 
     def test_observability_cli_outputs_report(self) -> None:
@@ -114,6 +132,8 @@ class MemoryObservabilityTests(unittest.TestCase):
                     "professional",
                     "--thread-id",
                     "cli-thread",
+                    "--router-latency-slo-ms",
+                    "100",
                 ]
             )
             stdout = io.StringIO()
@@ -123,6 +143,7 @@ class MemoryObservabilityTests(unittest.TestCase):
             self.assertEqual(code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["version"], "memory-observability-v0.1")
+            self.assertEqual(payload["slo"]["thresholds"]["router_latency_slo_ms"], 100.0)
             self.assertEqual(payload["usage"]["total_tokens"], 15)
 
 

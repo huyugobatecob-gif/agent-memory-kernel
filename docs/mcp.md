@@ -58,8 +58,8 @@ Runtime tools:
 - `memory_operational_status`: report local memory health, required table
   checks, storage size warning, and configured no-memory/failed-Keeper fallback
   behavior.
-- `memory_observability`: summarize Router runs, Keeper jobs, and LLM usage
-  tokens/cost for memory operations.
+- `memory_observability`: summarize Router runs, Keeper jobs, LLM usage
+  tokens/cost, and local latency SLO alerts for memory operations.
 - `memory_migration_status`: check SQLite schema version, required tables and
   columns, and migration compatibility.
 - `memory_backup_database`: create a SQLite backup of the memory database.

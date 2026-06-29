@@ -17,6 +17,7 @@ healthy enough to keep enabled for a live agent path:
 ```bash
 agent-memory observability --db .memory/demo.db --scope professional
 agent-memory observability --db .memory/demo.db --thread-id seo-demo
+agent-memory observability --db .memory/demo.db --router-latency-slo-ms 750 --keeper-latency-slo-ms 2500
 ```
 
 The same report is exposed through:
@@ -34,9 +35,11 @@ The report returns:
   `duration_ms`;
 - `keeper.status_counts`, warning jobs, candidate count, promoted memory count,
   `average_duration_ms`, and recent Keeper jobs;
+- `slo.status`, latency thresholds, breach counts, and local warning alerts for
+  Router or Keeper runs that exceed configured thresholds;
 - usage totals and cost grouped by provider/model and currency.
 
-This is a baseline local report. Production deployments should still add latency
-SLOs, supervisor metrics, provider billing reconciliation, dashboards, alerts,
-and hosted retention policy enforcement beyond the local export retention
-ledger.
+This is a baseline local report with local latency SLO checks. Production
+deployments should still add supervisor metrics, provider billing
+reconciliation, dashboards, managed alerts, and hosted retention policy
+enforcement beyond the local export retention ledger.

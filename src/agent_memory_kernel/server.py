@@ -133,10 +133,18 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             limit=int(payload.get("limit", 10) or 10),
         )
     if path in {"/observability", "/memory-observability"}:
+        router_latency_slo = payload.get("router_latency_slo_ms", 750.0)
+        keeper_latency_slo = payload.get("keeper_latency_slo_ms", 2500.0)
         return store.memory_observability_report(
             scope=payload.get("scope"),
             thread_id=payload.get("thread_id"),
             limit=int(payload.get("limit", 20) or 20),
+            router_latency_slo_ms=(
+                750.0 if router_latency_slo in {None, ""} else float(router_latency_slo)
+            ),
+            keeper_latency_slo_ms=(
+                2500.0 if keeper_latency_slo in {None, ""} else float(keeper_latency_slo)
+            ),
         )
     if path in {"/migration/status", "/migration-status"}:
         return store.migration_status(

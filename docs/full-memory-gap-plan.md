@@ -220,7 +220,7 @@ Already present:
   `agent-memory observability`, `/observability`, Python adapter wrappers,
   and MCP `memory_observability`; the report joins Router selected branches and
   prompt token estimates, Router/Keeper wall-clock durations, Keeper job
-  status/warnings, and LLM usage tokens/cost.
+  status/warnings, LLM usage tokens/cost, and local latency SLO alerts.
 - Baseline post-turn change inspection through `agent-memory memory-changes`
   and `/memory-changes`, including saved turns, Keeper event, candidates,
   promoted memories, affected surfaces, handles, and audit trail.
@@ -847,10 +847,10 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 **Result:** Baseline implemented. Users can inspect Router prompt token
 estimates, selected branches, Router/Keeper wall-clock duration, Keeper job
-health, and LLM usage tokens/cost through `agent-memory observability`,
-`/observability`, the Hermes provider example, and MCP
-`memory_observability`. Remaining work is latency SLOs, provider billing
-reconciliation, dashboards, retention policy, and alerts.
+health, LLM usage tokens/cost, and local latency SLO alerts through
+`agent-memory observability`, `/observability`, the Hermes provider example,
+and MCP `memory_observability`. Remaining work is provider billing
+reconciliation, dashboards, hosted retention policy, and managed alerts.
 
 ### Step 16: Add End-To-End Demos
 

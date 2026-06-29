@@ -237,6 +237,8 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "scope": _string("Optional memory scope/lane.", ""),
                 "thread_id": _string("Optional thread id.", ""),
                 "limit": _integer("Maximum recent Router/Keeper/usage rows.", 20),
+                "router_latency_slo_ms": _integer("Router latency SLO in milliseconds.", 750),
+                "keeper_latency_slo_ms": _integer("Keeper latency SLO in milliseconds.", 2500),
             }
         ),
     },

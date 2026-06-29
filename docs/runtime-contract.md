@@ -389,14 +389,14 @@ Baseline implementation:
 - `agent-memory observability`, `/observability`, and MCP
   `memory_observability` summarize Router token estimates, selected branches,
   Router/Keeper wall-clock duration, Keeper job status, warnings, and LLM usage
-  tokens/cost.
+  tokens/cost, plus local latency SLO breach alerts.
 - `agent-memory migration-status`, `agent-memory backup`, and
   `agent-memory restore` provide local SQLite schema checks and backup/restore
   recovery using the SQLite backup API.
 
-Still production work: latency SLOs, encrypted off-host backups, restore
-drills, migration changelogs, hosted health checks, deployment supervisor
-recipes, restart policies, and alerting.
+Still production work: encrypted off-host backups, restore drills, migration
+changelogs, hosted health checks, deployment supervisor recipes, restart
+policies, dashboards, and managed alert delivery.
 
 ## End State
 

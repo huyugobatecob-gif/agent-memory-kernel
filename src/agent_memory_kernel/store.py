@@ -104,6 +104,7 @@ CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
 OPERATIONAL_FAILURE_VERSION = "operational-failure-v0.1"
 MEMORY_OBSERVABILITY_VERSION = "memory-observability-v0.1"
+MEMORY_OBSERVABILITY_SLO_VERSION = "memory-observability-slo-v0.1"
 PROMPT_BUDGET_ADAPTER_VERSION = "prompt-budget-adapter-v0.1"
 REVIEW_INBOX_VERSION = "review-inbox-v0.1"
 REVIEW_BATCH_VERSION = "review-batch-v0.1"
@@ -3303,6 +3304,8 @@ class MemoryStore:
         scope: str | None = None,
         thread_id: str | None = None,
         limit: int = 20,
+        router_latency_slo_ms: float = 750.0,
+        keeper_latency_slo_ms: float = 2500.0,
     ) -> dict[str, Any]:
         """Summarize Router, Keeper, and LLM usage telemetry for memory ops."""
         scope = normalize_scope(scope) if scope else None
@@ -3378,11 +3381,19 @@ class MemoryStore:
             currency_bucket["calls"] += 1
             currency_bucket["cost"] = round(float(currency_bucket["cost"]) + cost, 6)
 
+        slo = self._observability_slo(
+            router_runs,
+            keeper_changes,
+            router_latency_slo_ms=router_latency_slo_ms,
+            keeper_latency_slo_ms=keeper_latency_slo_ms,
+        )
+
         return {
             "version": MEMORY_OBSERVABILITY_VERSION,
             "scope": scope or "all",
             "thread_id": thread_id or "",
             "limit": row_limit,
+            "slo": slo,
             "router": {
                 "run_count": len(router_runs),
                 "warning_run_count": router_warning_runs,
@@ -3445,6 +3456,86 @@ class MemoryStore:
                 "by_model": usage_by_model,
                 "by_currency": usage_by_currency,
                 "latest_usage": usage_rows,
+            },
+        }
+
+    def _observability_slo(
+        self,
+        router_runs: list[dict[str, Any]],
+        keeper_changes: list[dict[str, Any]],
+        *,
+        router_latency_slo_ms: float,
+        keeper_latency_slo_ms: float,
+    ) -> dict[str, Any]:
+        router_threshold = max(0.0, self._safe_float(router_latency_slo_ms, 750.0))
+        keeper_threshold = max(0.0, self._safe_float(keeper_latency_slo_ms, 2500.0))
+        router_breaches = []
+        for run in router_runs:
+            duration = self._safe_float(run.get("metadata", {}).get("duration_ms"))
+            if duration > router_threshold:
+                router_breaches.append(
+                    {
+                        "router_run_id": run["router_run_id"],
+                        "thread_id": run["thread_id"],
+                        "scope": run["scope"],
+                        "duration_ms": duration,
+                        "threshold_ms": router_threshold,
+                    }
+                )
+        keeper_breaches = []
+        for change in keeper_changes:
+            duration = self._safe_float(change.get("duration_ms"))
+            if duration > keeper_threshold:
+                keeper_breaches.append(
+                    {
+                        "keeper_job_id": change.get("keeper_job_id", ""),
+                        "thread_id": change.get("thread_id", ""),
+                        "scope": change.get("scope", ""),
+                        "duration_ms": duration,
+                        "threshold_ms": keeper_threshold,
+                    }
+                )
+        alerts = []
+        if router_breaches:
+            alerts.append(
+                {
+                    "severity": "warn",
+                    "surface": "router",
+                    "message": (
+                        f"{len(router_breaches)} Router run(s) exceeded "
+                        f"{router_threshold:g}ms latency SLO"
+                    ),
+                    "count": len(router_breaches),
+                }
+            )
+        if keeper_breaches:
+            alerts.append(
+                {
+                    "severity": "warn",
+                    "surface": "keeper",
+                    "message": (
+                        f"{len(keeper_breaches)} Keeper job(s) exceeded "
+                        f"{keeper_threshold:g}ms latency SLO"
+                    ),
+                    "count": len(keeper_breaches),
+                }
+            )
+        return {
+            "version": MEMORY_OBSERVABILITY_SLO_VERSION,
+            "status": "warn" if alerts else "pass",
+            "thresholds": {
+                "router_latency_slo_ms": router_threshold,
+                "keeper_latency_slo_ms": keeper_threshold,
+            },
+            "alert_count": len(alerts),
+            "alerts": alerts,
+            "router": {
+                "breach_count": len(router_breaches),
+                "breaches": router_breaches,
+            },
+            "keeper": {
+                "breach_count": len(keeper_breaches),
+                "breaches": keeper_breaches,
             },
         }
 
