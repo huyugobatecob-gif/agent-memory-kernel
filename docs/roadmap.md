@@ -7,6 +7,9 @@ The project should remain a local-first memory kernel. Adapters, packs,
 embeddings, hosted services, and domain rollouts are valuable only when they
 consume the kernel contract instead of redefining it.
 
+The public spec is [../SPEC.md](../SPEC.md), and the current implementation
+state is tracked in [core-status-audit.md](core-status-audit.md).
+
 ## v0.1: Local Kernel Baseline
 
 Status: implemented in this template.
@@ -39,9 +42,12 @@ Goal: make the repository read as a memory kernel, not a platform roadmap.
 
 Core work:
 
+- keep [../SPEC.md](../SPEC.md) as the public kernel behavior spec;
 - keep [kernel-charter.md](kernel-charter.md) as the governing boundary;
 - keep [backlog-cutover.md](backlog-cutover.md) as the classification rule for
   new work;
+- keep [core-status-audit.md](core-status-audit.md) current with `done`,
+  `partial`, `missing`, `extension`, and `later-hosted` status;
 - keep [implementation-plan.md](implementation-plan.md) scoped to local kernel
   completion;
 - move hosted/platform work to [hosted-roadmap.md](hosted-roadmap.md);
@@ -68,6 +74,8 @@ Core work:
 - exports preserve provenance, tombstones, trust state, policy metadata, review
   history, and evidence chains;
 - prompt envelopes contain selected memory only, never the full graph.
+- maintain an invariant matrix that maps each law to code paths and executable
+  proof.
 
 Evidence required:
 
@@ -99,16 +107,16 @@ Evidence required:
 - Router explainability tests;
 - no-memory fallback tests.
 
-## v0.5: Personal And Professional Packs
+## v0.5: Default Lanes And Beginner Templates
 
 Goal: make the default template valuable without domain-specific loops.
 
 Core/default work:
 
-- personal pack: preferences, stable facts, recurring context, relationships,
-  and private defaults;
-- professional pack: projects, decisions, constraints, collaborators, working
-  rules, gotchas, and professional patterns;
+- `personal` lane templates: preferences, stable facts, recurring context,
+  relationships, communication style, and private defaults;
+- `professional` lane templates: projects, decisions, constraints,
+  collaborators, working rules, gotchas, and professional patterns;
 - beginner examples for remember, review, retrieve, correct, delete, distrust,
   and export;
 - clear guidance for optional `project`, `agent`, and `session` lanes.

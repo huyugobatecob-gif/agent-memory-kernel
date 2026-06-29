@@ -3,9 +3,12 @@
 This is the working plan for turning Agent Memory Kernel into a stable,
 reusable memory kernel.
 
-The governing document is [kernel-charter.md](kernel-charter.md). Backlog items
-must be classified with [backlog-cutover.md](backlog-cutover.md) before they are
-treated as core work.
+The governing documents are [../SPEC.md](../SPEC.md),
+[kernel-charter.md](kernel-charter.md), and
+[backlog-cutover.md](backlog-cutover.md). Backlog items must be classified as
+`core`, `extension`, or `later-hosted` before they are treated as core work.
+Current implementation state is tracked in
+[core-status-audit.md](core-status-audit.md).
 
 ## Outcome
 
@@ -83,14 +86,34 @@ The repository can claim full local memory when:
   tombstones;
 - adapters can pass conformance without private project assumptions.
 
-## Phase 0: Scope Reset
+## Invariant Matrix
+
+Every kernel law must be mapped to a code path and a verifier before the kernel
+can claim completion.
+
+| Invariant | Core paths | Required verifier |
+| --- | --- | --- |
+| Deleted memory cannot reappear from retained evidence | lifecycle mutation, search, tree pack, context builder, graph/evidence export | unit test plus conformance golden trace |
+| Distrusted sources cannot influence retrieval, summary, or derived memory | distrust lifecycle, thread summaries, semantic analyses, graph/tree, export | unit test plus conformance golden trace |
+| Personal/private lanes cannot leak into professional prompts | read policy, scope filtering, summaries, graph/tree, prompt envelope, export | unit test plus prompt-envelope snapshot |
+| Correction/rollback/delete/distrust/expire/supersede invalidate derived memory | lifecycle engine, derived invalidation ledger, graph surfaces, summaries, exports | lifecycle report plus import/export round trip |
+| Export/import preserves provenance, tombstones, trust, review, policy, and evidence | profile export/import, vault export/import, lifecycle/policy state | round-trip test plus conformance trace |
+| Prompt envelopes contain selected filtered content only | Router, tree pack, context builder, prompt formatter | deterministic envelope snapshot |
+
+This matrix is an implementation gate. A feature is not considered done when it
+has a table or command; it is done when the relevant invariant has executable
+proof.
+
+## Phase 0: Scope And Status Lock
 
 Goal: make the project understandable as a kernel before adding more features.
 
 Files:
 
+- `SPEC.md`
 - `docs/kernel-charter.md`
 - `docs/backlog-cutover.md`
+- `docs/core-status-audit.md`
 - `docs/hosted-roadmap.md`
 - `README.md`
 - `docs/roadmap.md`
@@ -101,19 +124,21 @@ Tasks:
 2. Separate `core`, `extension`, and `later-hosted` backlog.
 3. Move hosted/platform/runtime/domain rollout language out of the core plan.
 4. Make adapter and domain examples visibly optional.
-5. Add a plain-language model: collect, extract, review, store, retrieve,
+5. Keep a `done`, `partial`, `missing`, `extension`, and `later-hosted` audit
+   so future work does not rebuild completed features.
+6. Add a plain-language model: collect, extract, review, store, retrieve,
    explain, correct.
 
 Done when:
 
 - new contributors can tell what belongs in the kernel;
 - hosted and domain-specific items are not listed as local v1 blockers;
-- docs link to the charter and backlog cutover.
+- docs link to the spec, charter, backlog cutover, and status audit.
 
 Verification:
 
 ```bash
-rg -n "kernel-charter|backlog-cutover|later-hosted|extension" README.md docs
+rg -n "SPEC.md|kernel-charter|backlog-cutover|core-status-audit|later-hosted|extension" README.md docs SPEC.md
 ```
 
 ## Phase 1: Kernel Schema And Laws
@@ -238,7 +263,7 @@ Verification:
 PYTHONPATH=src python3 -m unittest tests.test_review_inbox tests.test_server_ui tests.test_mcp_server
 ```
 
-## Phase 4: Personal And Professional Packs
+## Phase 4: Default Lanes And Beginner Templates
 
 Goal: make the default memory model useful without domain-specific loops.
 
@@ -252,9 +277,9 @@ Files:
 
 Tasks:
 
-1. Define the personal pack: preferences, stable facts, relationships,
-   recurring context, and private defaults.
-2. Define the professional pack: projects, decisions, constraints,
+1. Define the `personal` lane: preferences, stable facts, relationships,
+   recurring context, communication style, and private defaults.
+2. Define the `professional` lane: projects, decisions, constraints,
    collaborators, working rules, gotchas, and professional patterns.
 3. Keep project, agent, and session lanes documented as optional policy scopes.
 4. Provide a beginner workflow: remember, review, retrieve, correct, delete,
@@ -265,6 +290,8 @@ Done when:
 - a user who does not use agents or loops can still understand the template;
 - examples do not require domain-specific context;
 - personal memory is never returned to professional-only prompts by default.
+- docs do not describe personal/professional as domain packs that can bypass
+  lane policy.
 
 Verification:
 
