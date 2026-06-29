@@ -17,7 +17,8 @@ memory, SEO project memory, support memory, or any other domain-specific layer.
 Bundled templates and adapter examples are optional, not a requirement of the
 kernel.
 
-The project boundary is defined in
+For a plain-language overview, start with
+[docs/what-is-amk.md](docs/what-is-amk.md). The project boundary is defined in
 [docs/kernel-charter.md](docs/kernel-charter.md) and
 [docs/amk-000-kernel-invariants.md](docs/amk-000-kernel-invariants.md): the
 kernel owns local memory truth, lifecycle, policies, retrieval, prompt

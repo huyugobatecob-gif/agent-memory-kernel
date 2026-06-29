@@ -8,8 +8,8 @@ agent runtime. Runtime adapters, domain packs, hosted services, MCP/HTTP
 surfaces, dashboards, embeddings, and provider integrations can exist, but they
 must consume the kernel contract instead of defining it.
 
-The governing documents are [../SPEC.md](../SPEC.md),
-[kernel-charter.md](kernel-charter.md),
+The governing documents are [what-is-amk.md](what-is-amk.md),
+[../SPEC.md](../SPEC.md), [kernel-charter.md](kernel-charter.md),
 [amk-000-kernel-invariants.md](amk-000-kernel-invariants.md),
 [backlog-cutover.md](backlog-cutover.md), [threat-model.md](threat-model.md),
 and [invariant-verifier-map.md](invariant-verifier-map.md). Current evidence is
