@@ -117,6 +117,9 @@ Operator and graph tools:
 - `memory_expire`: expire active memory and suppress retrieval.
 - `memory_conformance_certify`: run public conformance scenarios and return an
   adapter compatibility badge report for CI or README output.
+- `memory_conformance_registry_entry`: emit a compact public adapter registry
+  entry with adapter metadata, badge, certification summary, and publication
+  readiness.
 - `memory_prompt_format_certify`: certify provider prompt formatters against
   prompt-boundary invariants for OpenAI, Anthropic, Gemini/Google, and local
   prompt shapes.

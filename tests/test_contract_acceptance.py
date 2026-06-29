@@ -14,6 +14,7 @@ from agent_memory_kernel.conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
     conformance_certification_report,
+    conformance_registry_entry,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -130,6 +131,22 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("migration_compatibility_trace", certification["summary"]["golden_trace_ids"])
             self.assertIn("security_red_team_trace", certification["summary"]["golden_trace_ids"])
             self.assertEqual(certification["summary"]["scenario_failed"], 0)
+
+            registry = conformance_registry_entry(
+                store,
+                adapter_name="Unit Test Adapter",
+                adapter_version="0.1",
+                runtime="python",
+                repository="https://example.test/unit-adapter",
+                notes="unit test registry entry",
+            )
+            self.assertEqual(registry["version"], "agent-memory-adapter-registry-entry-v0.1")
+            self.assertTrue(registry["compatible"])
+            self.assertEqual(registry["registry_id"], "unit-test-adapter-0-1")
+            self.assertEqual(registry["recommended_path"], "registry/adapters/unit-test-adapter-0-1.json")
+            self.assertEqual(registry["adapter"]["runtime"], "python")
+            self.assertEqual(registry["publication"]["ready_for_public_registry"], True)
+            self.assertEqual(registry["certification"]["summary"]["scenario_failed"], 0)
             store.close()
 
     def test_conformance_certification_fails_cleanly_without_fixture(self) -> None:
@@ -185,4 +202,17 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertEqual(certification["status"], "pass")
             self.assertEqual(certification["adapter"]["name"], "http-test-adapter")
             self.assertEqual(certification["badge"]["color"], "brightgreen")
+            registry = handle_api_request(
+                store,
+                "/conformance/registry-entry",
+                {
+                    "adapter_name": "http-test-adapter",
+                    "adapter_version": "0.1",
+                    "runtime": "http",
+                    "repository": "https://example.test/http-adapter",
+                },
+            )
+            self.assertEqual(registry["status"], "pass")
+            self.assertEqual(registry["adapter"]["runtime"], "http")
+            self.assertEqual(registry["recommended_path"], "registry/adapters/http-test-adapter-0-1.json")
             store.close()

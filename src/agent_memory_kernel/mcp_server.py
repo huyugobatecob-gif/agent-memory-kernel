@@ -313,6 +313,22 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_conformance_registry_entry": {
+        "endpoint": "/conformance/registry-entry",
+        "description": "Emit a compact public adapter registry entry from conformance certification.",
+        "inputSchema": _schema(
+            {
+                "adapter_name": _string("Adapter or runtime name.", "mcp-runtime"),
+                "adapter_version": _string("Adapter or runtime version.", ""),
+                "runtime": _string("Runtime family or host application.", ""),
+                "repository": _string("Adapter source repository URL.", ""),
+                "homepage": _string("Adapter homepage URL.", ""),
+                "maintainer": _string("Maintainer name or contact.", ""),
+                "notes": _string("Optional publication notes.", ""),
+                "seed_fixture": _boolean("Seed the public conformance fixture before generating the entry.", False),
+            }
+        ),
+    },
     "memory_prompt_format_certify": {
         "endpoint": "/prompt-format/certify",
         "description": "Certify provider prompt formatters against prompt-boundary invariants.",

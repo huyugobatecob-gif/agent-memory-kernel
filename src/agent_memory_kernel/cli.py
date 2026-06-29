@@ -14,6 +14,7 @@ from .conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
     conformance_certification_report,
+    conformance_registry_entry,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -1546,6 +1547,25 @@ def cmd_conformance_certify(args: argparse.Namespace) -> int:
     return 0 if result["status"] == "pass" else 1
 
 
+def cmd_conformance_registry_entry(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    result = conformance_registry_entry(
+        store,
+        adapter_name=args.adapter_name,
+        adapter_version=args.adapter_version,
+        seed_fixture=args.seed,
+        runtime=args.runtime,
+        repository=args.repository,
+        homepage=args.homepage,
+        maintainer=args.maintainer,
+        notes=args.notes,
+    )
+    store.close()
+    print_json(result)
+    return 0 if result["status"] == "pass" else 1
+
+
 def cmd_keeper_eval(args: argparse.Namespace) -> int:
     if args.spec:
         print_json(keeper_eval_spec())
@@ -2550,6 +2570,18 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_argument("--adapter-version", default="")
     cp.add_argument("--seed", action="store_true", help="Seed the public conformance fixture before certifying")
     cp.set_defaults(func=cmd_conformance_certify)
+
+    cp = conformance_sub.add_parser("registry-entry", help="Emit a compact public adapter registry entry")
+    add_common_db(cp)
+    cp.add_argument("--adapter-name", default="local-runtime")
+    cp.add_argument("--adapter-version", default="")
+    cp.add_argument("--runtime", default="")
+    cp.add_argument("--repository", default="")
+    cp.add_argument("--homepage", default="")
+    cp.add_argument("--maintainer", default="")
+    cp.add_argument("--notes", default="")
+    cp.add_argument("--seed", action="store_true", help="Seed the public conformance fixture before generating the entry")
+    cp.set_defaults(func=cmd_conformance_registry_entry)
 
     p = sub.add_parser("keeper-eval", help="Run offline Keeper extraction evals")
     p.add_argument("--spec", action="store_true")

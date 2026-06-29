@@ -17,9 +17,25 @@ from .store import MemoryStore, now_iso
 
 CONFORMANCE_VERSION = "agent-memory-conformance-v0"
 CERTIFICATION_VERSION = "agent-memory-adapter-certification-v0.1"
+ADAPTER_REGISTRY_ENTRY_VERSION = "agent-memory-adapter-registry-entry-v0.1"
 CONFORMANCE_SCOPE = "professional"
 CONFORMANCE_THREAD_ID = "conformance-thread"
 CONFORMANCE_PROJECT = "conformance-site"
+
+
+def _adapter_registry_id(adapter_name: str, adapter_version: str = "") -> str:
+    raw = f"{adapter_name}-{adapter_version}".strip("-").lower()
+    chars: list[str] = []
+    previous_dash = False
+    for char in raw:
+        if char.isalnum():
+            chars.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            chars.append("-")
+            previous_dash = True
+    registry_id = "".join(chars).strip("-")
+    return registry_id or "local-runtime"
 
 
 def conformance_spec() -> dict[str, Any]:
@@ -1039,6 +1055,66 @@ def conformance_certification_report(
         },
         "failed": suite.get("failed", []),
         "suite": suite,
+    }
+
+
+def conformance_registry_entry(
+    store: MemoryStore,
+    *,
+    adapter_name: str = "local-runtime",
+    adapter_version: str = "",
+    seed_fixture: bool = False,
+    runtime: str = "",
+    repository: str = "",
+    homepage: str = "",
+    maintainer: str = "",
+    notes: str = "",
+) -> dict[str, Any]:
+    """Emit a compact public registry entry from the conformance certification."""
+    certification = conformance_certification_report(
+        store,
+        adapter_name=adapter_name,
+        adapter_version=adapter_version,
+        seed_fixture=seed_fixture,
+    )
+    adapter = {
+        "name": certification["adapter"]["name"],
+        "version": certification["adapter"].get("version", ""),
+        "runtime": (runtime or "").strip(),
+        "repository": (repository or "").strip(),
+        "homepage": (homepage or "").strip(),
+        "maintainer": (maintainer or "").strip(),
+    }
+    registry_id = _adapter_registry_id(adapter["name"], adapter["version"])
+    status = certification["status"]
+    return {
+        "version": ADAPTER_REGISTRY_ENTRY_VERSION,
+        "generated_at": now_iso(),
+        "registry_id": registry_id,
+        "recommended_path": f"registry/adapters/{registry_id}.json",
+        "adapter": adapter,
+        "status": status,
+        "compatible": status == "pass",
+        "contract_version": certification["contract_version"],
+        "conformance_version": certification["conformance_version"],
+        "certification_version": certification["version"],
+        "badge": certification["badge"],
+        "certification": {
+            "issued_at": certification["issued_at"],
+            "status": status,
+            "summary": certification["summary"],
+            "failed": certification["failed"],
+            "seeded_fixture": certification.get("seeded_fixture") is not None,
+        },
+        "publication": {
+            "ready_for_public_registry": status == "pass",
+            "notes": (notes or "").strip(),
+            "requirements": [
+                "publish only after the current conformance suite passes",
+                "include adapter source or homepage metadata when available",
+                "re-run after contract or conformance version changes",
+            ],
+        },
     }
 
 

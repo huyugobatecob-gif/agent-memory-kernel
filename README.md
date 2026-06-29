@@ -50,6 +50,8 @@ Included now:
   `keeper_analyze_turn`, `ingest_graph`, and `after_turn`.
 - Formal machine-readable Memory Contract and acceptance harness.
 - Versioned public conformance scenarios for adapter compatibility.
+- Compact public adapter registry entry generation from conformance
+  certification.
 - Scope access enforcement for runtime memory retrieval.
 - Agent write-policy enforcement for record, auto-approve, review, lifecycle,
   outcome, conflict, and supersession paths.
@@ -364,6 +366,7 @@ agent-memory conformance spec
 agent-memory conformance seed --db .memory/conformance.db
 agent-memory conformance assert --db .memory/conformance.db
 agent-memory conformance certify --db .memory/conformance.db --adapter-name my-runtime
+agent-memory conformance registry-entry --db .memory/conformance.db --adapter-name my-runtime
 agent-memory prompt-format-certify --db .memory/conformance.db --providers openai,anthropic,gemini,local
 agent-memory embedding-certify --db .memory/conformance.db --provider local --dims 32
 ```
@@ -385,6 +388,9 @@ Adapters can use it as the first "does this behave like Agent Memory Kernel?"
 gate. `conformance certify` wraps the same suite in an adapter certification
 report with pass/fail status, scenario counts, golden trace coverage, and a
 local badge URL/Markdown snippet suitable for README or CI output.
+`conformance registry-entry` emits a compact `registry/adapters/<id>.json`
+payload with adapter metadata, badge, certification summary, and publication
+readiness for a public adapter catalog.
 `prompt-format-certify` separately checks provider prompt shapes and proves the
 memory supplement remains user-context instead of becoming hidden system text.
 

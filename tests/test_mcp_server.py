@@ -74,6 +74,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_outcome_compare", names)
             self.assertIn("memory_migration_status", names)
             self.assertIn("memory_conformance_certify", names)
+            self.assertIn("memory_conformance_registry_entry", names)
             self.assertIn("memory_prompt_format_certify", names)
             self.assertIn("memory_embedding_certify", names)
             self.assertIn("memory_brain_style_certify", names)
@@ -199,6 +200,33 @@ class MCPServerTests(unittest.TestCase):
                 "agent-memory-adapter-certification-v0.1",
             )
             self.assertEqual(certification["result"]["structuredContent"]["status"], "pass")
+
+            registry_entry = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 42,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_conformance_registry_entry",
+                        "arguments": {
+                            "adapter_name": "mcp-test-adapter",
+                            "adapter_version": "0.1",
+                            "runtime": "mcp",
+                            "repository": "https://example.test/mcp-adapter",
+                        },
+                    },
+                }
+            )
+            self.assertFalse(registry_entry["result"]["isError"])
+            self.assertEqual(
+                registry_entry["result"]["structuredContent"]["version"],
+                "agent-memory-adapter-registry-entry-v0.1",
+            )
+            self.assertTrue(registry_entry["result"]["structuredContent"]["compatible"])
+            self.assertEqual(
+                registry_entry["result"]["structuredContent"]["recommended_path"],
+                "registry/adapters/mcp-test-adapter-0-1.json",
+            )
 
             export_control = server.handle_message(
                 {

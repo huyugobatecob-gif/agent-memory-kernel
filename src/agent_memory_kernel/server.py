@@ -17,6 +17,7 @@ from .conformance import (
     assert_conformance_spec_shape,
     assert_conformance_suite,
     conformance_certification_report,
+    conformance_registry_entry,
     conformance_spec,
     run_conformance_suite,
     seed_conformance_fixture,
@@ -64,6 +65,18 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             store,
             adapter_name=str(payload.get("adapter_name", "local-runtime")),
             adapter_version=str(payload.get("adapter_version", "")),
+        )
+    if path in {"/conformance/registry-entry", "/conformance/registry"}:
+        return conformance_registry_entry(
+            store,
+            adapter_name=str(payload.get("adapter_name", "local-runtime")),
+            adapter_version=str(payload.get("adapter_version", "")),
+            seed_fixture=bool(payload.get("seed_fixture", False)),
+            runtime=str(payload.get("runtime", "")),
+            repository=str(payload.get("repository", "")),
+            homepage=str(payload.get("homepage", "")),
+            maintainer=str(payload.get("maintainer", "")),
+            notes=str(payload.get("notes", "")),
         )
     if path in {"/prompt-format/certify", "/prompt-format-certify"}:
         providers = payload.get("providers")

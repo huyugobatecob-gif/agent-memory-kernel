@@ -96,9 +96,10 @@ Must-have before claiming full memory:
     outcome planning, graph evidence inspection, safe profile export, and
     migration compatibility, plus security red-team cases for secrets,
     tool-output injection, untrusted tool claims, and assistant guesses. It also
-    includes a local adapter certification badge report; remaining work is
-    hosted badge publishing, public adapter registry entries, provider-specific
-    prompt-boundary fixtures, and broader real-world behavior traces.
+    includes a local adapter certification badge report and compact public
+    adapter registry entry output; remaining work is hosted badge publishing,
+    hosted registry publication, provider-specific prompt-boundary fixtures,
+    and broader real-world behavior traces.
 
 ## Additional Runtime Architecture Notes
 

@@ -341,8 +341,9 @@ secret-like text, tool-output prompt injection, untrusted tool claims, and
 assistant guesses, plus personal full-export approval and safe-export
 redaction.
 `conformance certify` emits the first adapter compatibility badge report for
-README and CI use. Hosted badge publishing and public adapter registry entries
-remain future work.
+README and CI use. `conformance registry-entry` emits a compact public adapter
+catalog payload with badge, summary, status, and recommended registry path.
+Hosted badge publishing and hosted registry publication remain future work.
 
 ## v0.3: Adapters
 

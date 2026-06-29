@@ -176,6 +176,11 @@ without approval.
 checks in an adapter certification report with pass/fail status, scenario
 counts, golden trace coverage, and a local Markdown badge for README or CI
 output.
+`agent-memory conformance registry-entry` and
+`POST /conformance/registry-entry` turn the same certification into a compact
+public registry payload with adapter metadata, badge, conformance versions,
+scenario summary, failed scenarios, and a recommended
+`registry/adapters/<id>.json` path.
 
 The machine-readable contract also names the completion gates for governed
 read-time policy, inspection and operator control, derived-memory invalidation,
