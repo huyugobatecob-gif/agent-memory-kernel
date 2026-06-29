@@ -351,8 +351,10 @@ unauthorized promotion.
 The conformance suite is the public compatibility layer. It checks named
 scenarios for professional memory injection, stored read-policy denial,
 personal-lane isolation, resolved conflict suppression, deleted-memory absence,
-unsafe-memory absence, and reviewable/idempotent Keeper writes. Adapters can use
-it as the first "does this behave like Agent Memory Kernel?" gate.
+unsafe-memory absence, reviewable/idempotent Keeper writes, and golden traces
+for outcome planning, graph evidence inspection, and safe profile export.
+Adapters can use it as the first "does this behave like Agent Memory Kernel?"
+gate.
 
 Record profile and usage metadata:
 

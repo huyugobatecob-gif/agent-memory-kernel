@@ -73,7 +73,8 @@ production layers around the local kernel:
 - production governed read-time ranking and current-best conflict resolution;
 - production memory quality evals beyond baseline usefulness feedback;
 - versioned conformance spec with golden conversation traces and adapter
-  compatibility tests;
+  compatibility tests, with baseline golden traces now covering outcome
+  planning, graph evidence inspection, and safe profile export;
 - derived-memory invalidation for summaries, graph surfaces, cached packs,
   outcome lessons, and graph-derived style;
 - capability and consent model for read/write/promote/inject/export/delete;
@@ -275,6 +276,9 @@ spec/seed/run/assert` and `/conformance/spec`, `/conformance/seed`,
 for professional memory injection, personal-lane isolation, current-best
 conflict suppression, stored read-policy denial, deleted-memory absence,
 unsafe-memory absence, and reviewable/idempotent Keeper writes.
+The suite also publishes and runs baseline golden traces for success/failure
+outcome planning, graph browser source previews, and safe redacted profile
+export.
 
 ## v0.3: Adapters
 

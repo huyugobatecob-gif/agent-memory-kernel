@@ -16,6 +16,7 @@ from .store import MemoryStore
 CONFORMANCE_VERSION = "agent-memory-conformance-v0"
 CONFORMANCE_SCOPE = "professional"
 CONFORMANCE_THREAD_ID = "conformance-thread"
+CONFORMANCE_PROJECT = "conformance-site"
 
 
 def conformance_spec() -> dict[str, Any]:
@@ -24,6 +25,41 @@ def conformance_spec() -> dict[str, Any]:
         "version": CONFORMANCE_VERSION,
         "contract_version": memory_contract()["version"],
         "purpose": "Public behavioral scenarios for compatible agent memory integrations.",
+        "golden_traces": [
+            {
+                "id": "runtime_outcome_planning_trace",
+                "steps": [
+                    "seed one successful and one failed outcome for the same project",
+                    "build an outcome pack before planning the next loop",
+                    "verify the pack includes both success and failure evidence with memory ids",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_outcome_pack_uses_success_and_failure"
+                ],
+            },
+            {
+                "id": "operator_graph_inspection_trace",
+                "steps": [
+                    "seed approved professional memory with graph nodes and evidence",
+                    "open graph browser data for the project",
+                    "verify nodes include source previews back to the originating event",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_graph_browser_shows_source_previews"
+                ],
+            },
+            {
+                "id": "safe_profile_export_trace",
+                "steps": [
+                    "seed active professional memory",
+                    "export the profile using the safe redaction profile",
+                    "verify memory-tree shape is preserved but content-bearing fields are redacted",
+                ],
+                "expected_scenarios": [
+                    "golden_trace_safe_export_redacts_memory_content"
+                ],
+            },
+        ],
         "scenarios": [
             {
                 "id": "professional_memory_injected_with_provenance",
@@ -110,6 +146,30 @@ def conformance_spec() -> dict[str, Any]:
                     "denied lifecycle mutation is policy-checkable",
                 ],
             },
+            {
+                "id": "golden_trace_outcome_pack_uses_success_and_failure",
+                "requires": [
+                    "the public fixture includes successful and failed outcomes for one project",
+                    "outcome pack shows both branches with lessons and memory ids",
+                    "active outcome records remain linked to approved memory provenance",
+                ],
+            },
+            {
+                "id": "golden_trace_graph_browser_shows_source_previews",
+                "requires": [
+                    "graph browser returns active nodes for the project",
+                    "node source previews include event-backed source references",
+                    "operators can inspect graph evidence without scanning the full database",
+                ],
+            },
+            {
+                "id": "golden_trace_safe_export_redacts_memory_content",
+                "requires": [
+                    "safe profile export preserves profile and graph shape",
+                    "content-bearing memory fields are redacted",
+                    "export metadata records redaction and retention policy",
+                ],
+            },
         ],
     }
 
@@ -160,6 +220,36 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
         source_ref="conformance://unsafe-memory",
         auto_approve=True,
     )["candidates"][0]
+    success_outcome = store.record_outcome(
+        project=CONFORMANCE_PROJECT,
+        loop_id="success-internal-links",
+        outcome_status="success",
+        hypothesis="Internal link hubs will improve crawl depth.",
+        action="Added internal link hubs to money pages.",
+        result="Crawl depth and indexed commercial pages improved.",
+        cause="Relevant internal links exposed deeper pages.",
+        lesson="Use link hubs before expanding new content.",
+        next_recommendation="Reuse link hubs when planning the next refresh loop.",
+        score=0.91,
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+        auto_approve=True,
+    )
+    failure_outcome = store.record_outcome(
+        project=CONFORMANCE_PROJECT,
+        loop_id="failure-stale-keywords",
+        outcome_status="failure",
+        hypothesis="Old ranking keywords still represent current demand.",
+        action="Planned page updates from stale keyword exports.",
+        result="The refresh missed current search intent.",
+        cause="Keyword data was stale before planning.",
+        lesson="Refresh keyword data before writing loop tasks.",
+        next_recommendation="Block planning when keyword evidence is older than the project policy.",
+        score=0.18,
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+        auto_approve=True,
+    )
     return {
         "status": "seeded",
         "version": CONFORMANCE_VERSION,
@@ -172,6 +262,10 @@ def seed_conformance_fixture(store: MemoryStore) -> dict[str, Any]:
             "deleted_memory_id": deleted["memory_id"],
             "unsafe_candidate_id": unsafe["candidate_id"],
             "unsafe_status": unsafe["status"],
+            "success_outcome_id": success_outcome["outcome_id"],
+            "success_outcome_memory_id": success_outcome["memory_id"],
+            "failure_outcome_id": failure_outcome["outcome_id"],
+            "failure_outcome_memory_id": failure_outcome["memory_id"],
         },
     }
 
@@ -459,6 +553,79 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
         },
     )
 
+    outcome_pack = store.outcome_pack(project=CONFORMANCE_PROJECT, scope=CONFORMANCE_SCOPE)
+    active_outcomes = store.list_outcomes(
+        project=CONFORMANCE_PROJECT,
+        scope=CONFORMANCE_SCOPE,
+        status="active",
+    )
+    active_outcome_statuses = {item["outcome_status"] for item in active_outcomes}
+    _append_result(
+        results,
+        "golden_trace_outcome_pack_uses_success_and_failure",
+        "### Successes" in outcome_pack
+        and "### Failures" in outcome_pack
+        and "Use link hubs before expanding new content." in outcome_pack
+        and "Refresh keyword data before writing loop tasks." in outcome_pack
+        and "Memory: mem_" in outcome_pack
+        and {"success", "failure"}.issubset(active_outcome_statuses),
+        {
+            "project": CONFORMANCE_PROJECT,
+            "active_outcome_statuses": sorted(active_outcome_statuses),
+            "active_outcome_count": len(active_outcomes),
+        },
+    )
+
+    graph = store.graph_browser(
+        scope=CONFORMANCE_SCOPE,
+        query=CONFORMANCE_PROJECT,
+        limit=25,
+        evidence_limit=3,
+    )
+    source_refs = [
+        preview.get("source_ref", "")
+        for node in graph.get("nodes", [])
+        for preview in node.get("source_previews", [])
+    ]
+    _append_result(
+        results,
+        "golden_trace_graph_browser_shows_source_previews",
+        bool(graph.get("nodes"))
+        and bool(graph.get("edges"))
+        and any(ref.startswith("conformance://") for ref in source_refs),
+        {
+            "node_count": len(graph.get("nodes", [])),
+            "edge_count": len(graph.get("edges", [])),
+            "source_refs": sorted(set(source_refs))[:8],
+        },
+    )
+
+    safe_export = store.export_profile(
+        scope=CONFORMANCE_SCOPE,
+        actor="conformance",
+        redaction_profile="safe",
+    )
+    safe_export_text = str(safe_export)
+    redaction = safe_export["export_metadata"]["redaction"]
+    retention = safe_export["export_metadata"]["retention"]
+    _append_result(
+        results,
+        "golden_trace_safe_export_redacts_memory_content",
+        redaction["profile"] == "safe"
+        and not redaction["content_included"]
+        and redaction["redaction_count"] > 0
+        and "Statamic" not in safe_export_text
+        and "Bob" not in safe_export_text
+        and safe_export["memory_tree"]["nodes"]
+        and retention["status"] == "active",
+        {
+            "redaction_count": redaction["redaction_count"],
+            "redacted_keys": redaction["redacted_keys"],
+            "retention_status": retention["status"],
+            "export_id": retention["export_id"],
+        },
+    )
+
     status = "pass" if all(item["passed"] for item in results) else "fail"
     return {
         "status": status,
@@ -493,12 +660,16 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "keeper_retry_is_idempotent",
         "keeper_change_is_inspectable",
         "capability_report_blocks_denied_actions",
+        "golden_trace_outcome_pack_uses_success_and_failure",
+        "golden_trace_graph_browser_shows_source_previews",
+        "golden_trace_safe_export_redacts_memory_content",
     }
     checks = {
         "version_present": bool(data.get("version")),
         "contract_version_present": bool(data.get("contract_version")),
         "contract_shape_passes": assert_contract_shape(memory_contract())["status"] == "pass",
         "required_scenarios_present": required.issubset(scenario_ids),
+        "golden_traces_present": bool(data.get("golden_traces")),
     }
     failed = [name for name, passed in checks.items() if not passed]
     return {

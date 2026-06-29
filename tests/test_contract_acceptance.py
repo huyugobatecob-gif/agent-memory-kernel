@@ -66,6 +66,10 @@ class ContractAcceptanceTests(unittest.TestCase):
         self.assertIn("keeper_retry_is_idempotent", scenario_ids)
         self.assertIn("keeper_change_is_inspectable", scenario_ids)
         self.assertIn("capability_report_blocks_denied_actions", scenario_ids)
+        self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", scenario_ids)
+        self.assertIn("golden_trace_graph_browser_shows_source_previews", scenario_ids)
+        self.assertIn("golden_trace_safe_export_redacts_memory_content", scenario_ids)
+        self.assertTrue(spec["golden_traces"])
 
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")
@@ -89,6 +93,9 @@ class ContractAcceptanceTests(unittest.TestCase):
             self.assertIn("keeper_retry_is_idempotent", passed)
             self.assertIn("keeper_change_is_inspectable", passed)
             self.assertIn("capability_report_blocks_denied_actions", passed)
+            self.assertIn("golden_trace_outcome_pack_uses_success_and_failure", passed)
+            self.assertIn("golden_trace_graph_browser_shows_source_previews", passed)
+            self.assertIn("golden_trace_safe_export_redacts_memory_content", passed)
 
             asserted = assert_conformance_suite(store)
             self.assertEqual(asserted["status"], "pass")
