@@ -325,6 +325,35 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             sla_status=payload.get("sla_status"),
             limit=int(payload.get("limit", 50) or 50),
         )
+    if path == "/notifications/delivery/enqueue":
+        return store.enqueue_notification_deliveries(
+            transport=str(payload.get("transport", "webhook")),
+            destination=str(payload.get("destination", "")),
+            status=str(payload.get("status", "open")),
+            scope=payload.get("scope"),
+            topic=payload.get("topic"),
+            severity=payload.get("severity"),
+            assigned_to=payload.get("assigned_to"),
+            sla_status=payload.get("sla_status"),
+            actor=str(payload.get("actor", "api")),
+            limit=int(payload.get("limit", 50) or 50),
+            dedupe=bool(payload.get("dedupe", True)),
+        )
+    if path == "/notifications/delivery/list":
+        return store.list_notification_deliveries(
+            status=str(payload.get("status", "queued")),
+            transport=payload.get("transport"),
+            notification_id=payload.get("notification_id"),
+            destination=payload.get("destination"),
+            limit=int(payload.get("limit", 50) or 50),
+        )
+    if path == "/notifications/delivery/mark":
+        return store.mark_notification_delivery(
+            str(payload.get("delivery_id", "")),
+            status=str(payload.get("status", "")),
+            actor=str(payload.get("actor", "api-sender")),
+            error=str(payload.get("error", "")),
+        )
     if path == "/notifications/assign":
         return store.assign_notification(
             str(payload.get("notification_id", "")),

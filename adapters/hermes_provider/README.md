@@ -70,6 +70,9 @@ The adapter should:
 - expose `operations_dashboard()` so operators and supervising agents can read
   one local health view across observability, billing, worker, recovery, and
   notifications;
+- expose `enqueue_notification_deliveries()`, `notification_deliveries()`, and
+  `mark_notification_delivery()` so external senders can use a durable local
+  alert delivery outbox;
 - expose `import_billing_invoice()` and `billing_invoice_items()` so runtime
   operators can reconcile recorded memory usage against imported provider
   invoices without live billing API access;

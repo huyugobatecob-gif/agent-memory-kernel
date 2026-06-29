@@ -406,10 +406,10 @@ Remaining for full memory:
   deterministic lesson extraction, including cross-project clustering and
   LLM-reviewed lesson quality.
 - Richer browser batch editing queues, deeper graph exploration views, and
-  managed push/email/web delivery beyond the baseline browser review, graph,
+  live push/email/web sender integrations beyond the baseline browser review, graph,
   and conflict pages, machine-readable review inbox with inline conflict
-  warnings, notification queue, transport payload builder, approve/reject batch
-  flow, and active-memory lifecycle batch correction flow.
+  warnings, notification queue, transport payload builder, delivery outbox,
+  approve/reject batch flow, and active-memory lifecycle batch correction flow.
 - Hosted identity, tenancy, and delegation enforcement beyond the local
   agent/scope/action capability, read/write policy, and identity-delegation
   audit reports.
@@ -847,14 +847,18 @@ notifications`, `/notifications/*`, Python adapter notification wrappers, and MC
 notification tools provide a baseline operator notification queue for review,
 export approval, retention cleanup, reviewer assignment/filtering, SLA status
 filtering, and policy-only escalation reports.
+`agent-memory notifications delivery-enqueue/list/mark`,
+`/notifications/delivery/*`, Python adapter wrappers, and MCP
+`memory_notification_delivery_*` provide a local delivery outbox for external
+senders.
 Remaining work is richer browser batch editing, richer graph navigation,
-managed notification delivery, and hosted KMS/off-host backup recipes beyond
-the local custody report.
+live notification sender integrations, and hosted KMS/off-host backup recipes
+beyond the local custody report.
 Export-control, redaction-profile, sensitive-export approval, export retention,
-encrypted profile export, notification transport payloads, local export
-custody, and file-based vault adapter baselines are implemented, but richer
-browser flows, managed notification delivery, and hosted KMS/off-host backup
-remain production backlog.
+encrypted profile export, notification transport payloads, notification
+delivery outbox, local export custody, and file-based vault adapter baselines
+are implemented, but richer browser flows, live notification sender
+integrations, and hosted KMS/off-host backup remain production backlog.
 
 ### Step 14: Harden Prompt Boundary And Source Trust
 

@@ -438,6 +438,23 @@ CREATE TABLE IF NOT EXISTS memory_notifications (
     resolve_reason  TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS memory_notification_deliveries (
+    delivery_id     TEXT PRIMARY KEY,
+    notification_id TEXT NOT NULL REFERENCES memory_notifications(notification_id),
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    transport       TEXT NOT NULL DEFAULT 'webhook',
+    destination     TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'queued',
+    payload_json    TEXT NOT NULL DEFAULT '{}',
+    attempt_count   INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TEXT,
+    delivered_at    TEXT,
+    actor           TEXT NOT NULL DEFAULT 'system',
+    error           TEXT NOT NULL DEFAULT '',
+    metadata_json   TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS restore_drill_schedules (
     schedule_id       TEXT PRIMARY KEY,
     created_at        TEXT NOT NULL,
@@ -628,6 +645,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_export_records_status ON memory_export_rec
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_status ON memory_notifications(status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_scope ON memory_notifications(scope, status);
 CREATE INDEX IF NOT EXISTS idx_memory_notifications_target ON memory_notifications(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_status ON memory_notification_deliveries(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_notification ON memory_notification_deliveries(notification_id);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_transport ON memory_notification_deliveries(transport, status);
 CREATE INDEX IF NOT EXISTS idx_restore_drill_schedules_due ON restore_drill_schedules(status, next_due_at);
 CREATE INDEX IF NOT EXISTS idx_restore_drill_schedules_scope ON restore_drill_schedules(scope, status);
 CREATE INDEX IF NOT EXISTS idx_events_scope ON events(scope);

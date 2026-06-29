@@ -131,6 +131,7 @@ REVIEW_BATCH_VERSION = "review-batch-v0.1"
 NOTIFICATION_QUEUE_VERSION = "notification-queue-v0.1"
 NOTIFICATION_ESCALATION_VERSION = "notification-escalation-v0.1"
 NOTIFICATION_TRANSPORT_VERSION = "notification-transport-v0.1"
+NOTIFICATION_DELIVERY_VERSION = "notification-delivery-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
@@ -1780,6 +1781,234 @@ class MemoryStore:
             "payloads": payloads,
         }
 
+    def enqueue_notification_deliveries(
+        self,
+        *,
+        transport: str = "webhook",
+        destination: str = "",
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        assigned_to: str | None = None,
+        sla_status: str | None = None,
+        actor: str = "system",
+        limit: int = 50,
+        dedupe: bool = True,
+    ) -> dict[str, Any]:
+        """Queue notification transport payloads for an external sender."""
+        transport_report = self.notification_transport_payloads(
+            transport=transport,
+            status=status,
+            scope=scope,
+            topic=topic,
+            severity=severity,
+            assigned_to=assigned_to,
+            sla_status=sla_status,
+            limit=limit,
+        )
+        destination = (destination or "").strip()
+        queued: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        ts = now_iso()
+        for payload in transport_report["payloads"]:
+            notification_id = str(payload.get("notification_id", ""))
+            existing = None
+            if dedupe:
+                existing = self.conn.execute(
+                    """
+                    SELECT *
+                    FROM memory_notification_deliveries
+                    WHERE notification_id = ?
+                      AND transport = ?
+                      AND destination = ?
+                      AND status IN ('queued', 'sending')
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (notification_id, transport_report["transport"], destination),
+                ).fetchone()
+            if existing is not None:
+                skipped.append(self._notification_delivery_to_dict(existing))
+                continue
+            delivery_id = new_id("deliv")
+            self.conn.execute(
+                """
+                INSERT INTO memory_notification_deliveries
+                  (delivery_id, notification_id, created_at, updated_at,
+                   transport, destination, status, payload_json, actor,
+                   metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+                """,
+                (
+                    delivery_id,
+                    notification_id,
+                    ts,
+                    ts,
+                    transport_report["transport"],
+                    destination,
+                    json.dumps(payload, sort_keys=True),
+                    actor,
+                    json.dumps(
+                        {
+                            "source": "enqueue_notification_deliveries",
+                            "status_filter": status,
+                            "topic_filter": topic or "",
+                            "sla_status_filter": sla_status or "",
+                        },
+                        sort_keys=True,
+                    ),
+                ),
+            )
+            self._audit(
+                "notification_delivery_queued",
+                "memory_notification_delivery",
+                delivery_id,
+                actor=actor,
+                details={
+                    "notification_id": notification_id,
+                    "transport": transport_report["transport"],
+                    "destination": destination,
+                },
+            )
+            queued.append(
+                self._notification_delivery_to_dict(
+                    self.conn.execute(
+                        "SELECT * FROM memory_notification_deliveries WHERE delivery_id = ?",
+                        (delivery_id,),
+                    ).fetchone()
+                )
+            )
+        self.conn.commit()
+        return {
+            "version": NOTIFICATION_DELIVERY_VERSION,
+            "status": "queued",
+            "transport": transport_report["transport"],
+            "destination": destination,
+            "requested_count": transport_report["count"],
+            "queued_count": len(queued),
+            "skipped_count": len(skipped),
+            "queued": queued,
+            "skipped": skipped,
+            "operator_handles": {
+                "list": {
+                    "cli": "agent-memory notifications delivery-list --status queued",
+                    "http": {"path": "/notifications/delivery/list"},
+                    "mcp": {"tool": "memory_notification_delivery_list"},
+                }
+            },
+        }
+
+    def list_notification_deliveries(
+        self,
+        *,
+        status: str = "queued",
+        transport: str | None = None,
+        notification_id: str | None = None,
+        destination: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """List queued or completed notification delivery outbox rows."""
+        status = (status or "queued").strip().lower()
+        if status not in {"queued", "sending", "delivered", "failed", "all"}:
+            raise ValueError("delivery status must be queued, sending, delivered, failed, or all")
+        transport = (transport or "").strip().lower() or None
+        if transport and transport not in {"webhook", "email", "push"}:
+            raise ValueError("notification transport must be webhook, email, or push")
+        notification_id = (notification_id or "").strip() or None
+        destination = (destination or "").strip() or None
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if status != "all":
+            clauses.append("status = ?")
+            params.append(status)
+        if transport:
+            clauses.append("transport = ?")
+            params.append(transport)
+        if notification_id:
+            clauses.append("notification_id = ?")
+            params.append(notification_id)
+        if destination:
+            clauses.append("destination = ?")
+            params.append(destination)
+        rows = self.conn.execute(
+            f"""
+            SELECT *
+            FROM memory_notification_deliveries
+            WHERE {' AND '.join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(int(limit or 50), 500))),
+        ).fetchall()
+        deliveries = [self._notification_delivery_to_dict(row) for row in rows]
+        summary: dict[str, int] = {}
+        for item in deliveries:
+            item_status = str(item["status"])
+            summary[item_status] = summary.get(item_status, 0) + 1
+        return {
+            "version": NOTIFICATION_DELIVERY_VERSION,
+            "status_filter": status,
+            "transport": transport or "all",
+            "notification_id": notification_id or "",
+            "destination": destination or "",
+            "count": len(deliveries),
+            "summary": summary,
+            "deliveries": deliveries,
+        }
+
+    def mark_notification_delivery(
+        self,
+        delivery_id: str,
+        *,
+        status: str,
+        actor: str = "sender",
+        error: str = "",
+    ) -> dict[str, Any]:
+        """Mark an outbox delivery as sending, delivered, or failed."""
+        delivery_id = (delivery_id or "").strip()
+        status = (status or "").strip().lower()
+        if status not in {"sending", "delivered", "failed"}:
+            raise ValueError("delivery status must be sending, delivered, or failed")
+        row = self._notification_delivery_row(delivery_id)
+        ts = now_iso()
+        current_attempts = int(row["attempt_count"] or 0)
+        attempt_count = current_attempts + (
+            1
+            if status in {"sending", "failed"} or (status == "delivered" and current_attempts == 0)
+            else 0
+        )
+        delivered_at = ts if status == "delivered" else row["delivered_at"]
+        self.conn.execute(
+            """
+            UPDATE memory_notification_deliveries
+            SET updated_at = ?, status = ?, attempt_count = ?,
+                last_attempt_at = ?, delivered_at = ?, actor = ?, error = ?
+            WHERE delivery_id = ?
+            """,
+            (
+                ts,
+                status,
+                attempt_count,
+                ts,
+                delivered_at,
+                actor,
+                error if status == "failed" else "",
+                delivery_id,
+            ),
+        )
+        self._audit(
+            "notification_delivery_marked",
+            "memory_notification_delivery",
+            delivery_id,
+            actor=actor,
+            details={"status": status, "error": error},
+        )
+        self.conn.commit()
+        return self._notification_delivery_to_dict(
+            self._notification_delivery_row(delivery_id)
+        )
+
     def ack_notification(
         self,
         notification_id: str,
@@ -2062,6 +2291,7 @@ class MemoryStore:
             "memory_export_records",
             "provider_invoice_items",
             "restore_drill_schedules",
+            "memory_notification_deliveries",
         }
         try:
             rows = self.conn.execute(
@@ -2228,6 +2458,14 @@ class MemoryStore:
                 "interval_hours",
                 "next_due_at",
                 "last_status",
+            ],
+            "memory_notification_deliveries": [
+                "delivery_id",
+                "notification_id",
+                "transport",
+                "destination",
+                "status",
+                "payload_json",
             ],
         }
         checks: list[dict[str, Any]] = []
@@ -5083,6 +5321,42 @@ class MemoryStore:
                 )
         except Exception as exc:  # pragma: no cover - dashboard boundary
             add_error_component("notifications", "Notifications", exc)
+
+        try:
+            deliveries = self.list_notification_deliveries(status="all", limit=row_limit)
+            delivery_summary = deliveries.get("summary", {})
+            delivery_status = "fail" if delivery_summary.get("failed", 0) else "pass"
+            report = {
+                "version": NOTIFICATION_DELIVERY_VERSION,
+                "status": delivery_status,
+                "deliveries": deliveries,
+            }
+            add_component(
+                "delivery",
+                title="Notification Delivery",
+                report=report,
+                summary={
+                    "queued": delivery_summary.get("queued", 0),
+                    "delivered": delivery_summary.get("delivered", 0),
+                    "failed": delivery_summary.get("failed", 0),
+                },
+                handles={
+                    "cli": "agent-memory notifications delivery-list --status queued",
+                    "http": {"path": "/notifications/delivery/list"},
+                    "mcp": {"tool": "memory_notification_delivery_list"},
+                },
+            )
+            if int(delivery_summary.get("failed", 0) or 0):
+                alerts.append(
+                    {
+                        "severity": "high",
+                        "component": "delivery",
+                        "name": "notification_delivery_failed",
+                        "detail": f"{delivery_summary.get('failed')} notification delivery row(s) failed",
+                    }
+                )
+        except Exception as exc:  # pragma: no cover - dashboard boundary
+            add_error_component("delivery", "Notification Delivery", exc)
 
         overall_status = "pass"
         if any(status_rank(item["status"]) == 2 for item in components.values()):
@@ -15624,6 +15898,62 @@ class MemoryStore:
                 "target_type": notification.get("target_type", ""),
                 "target_id": notification.get("target_id", ""),
                 "action_path": notification.get("action_path", ""),
+            },
+        }
+
+    def _notification_delivery_row(self, delivery_id: str) -> sqlite3.Row:
+        row = self.conn.execute(
+            "SELECT * FROM memory_notification_deliveries WHERE delivery_id = ?",
+            ((delivery_id or "").strip(),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"notification delivery not found: {delivery_id}")
+        return row
+
+    def _notification_delivery_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            raise KeyError("notification delivery not found")
+        return {
+            "version": NOTIFICATION_DELIVERY_VERSION,
+            "delivery_id": row["delivery_id"],
+            "notification_id": row["notification_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "transport": row["transport"],
+            "destination": row["destination"],
+            "status": row["status"],
+            "payload": self._loads_json(row["payload_json"], {}),
+            "attempt_count": int(row["attempt_count"] or 0),
+            "last_attempt_at": row["last_attempt_at"] or "",
+            "delivered_at": row["delivered_at"] or "",
+            "actor": row["actor"],
+            "error": row["error"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+            "operator_handles": {
+                "mark_delivered": {
+                    "cli": f"agent-memory notifications delivery-mark {row['delivery_id']} --status delivered",
+                    "http": {
+                        "path": "/notifications/delivery/mark",
+                        "delivery_id": row["delivery_id"],
+                        "status": "delivered",
+                    },
+                    "mcp": {
+                        "tool": "memory_notification_delivery_mark",
+                        "delivery_id": row["delivery_id"],
+                    },
+                },
+                "mark_failed": {
+                    "cli": f"agent-memory notifications delivery-mark {row['delivery_id']} --status failed",
+                    "http": {
+                        "path": "/notifications/delivery/mark",
+                        "delivery_id": row["delivery_id"],
+                        "status": "failed",
+                    },
+                    "mcp": {
+                        "tool": "memory_notification_delivery_mark",
+                        "delivery_id": row["delivery_id"],
+                    },
+                },
             },
         }
 

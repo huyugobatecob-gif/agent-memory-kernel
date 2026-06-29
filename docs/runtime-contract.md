@@ -398,6 +398,10 @@ Baseline implementation:
   `memory_operations_dashboard` aggregate local operational health,
   observability, billing, worker, recovery schedule, and notification status
   into one machine-readable operator report.
+- `agent-memory notifications delivery-enqueue/list/mark`,
+  `/notifications/delivery/*`, and MCP `memory_notification_delivery_*`
+  provide a local alert delivery outbox; external senders own real webhook,
+  email, or push delivery and report status back to the kernel.
 - `agent-memory migration-status`, `agent-memory migration-changelog`,
   `agent-memory backup`, `agent-memory restore`, and
   `agent-memory restore-drill` provide local SQLite schema checks, migration
@@ -410,8 +414,8 @@ Baseline implementation:
 
 Still production work: encrypted off-host backups, platform scheduler
 deployment recipes, hosted migration release-note publication, hosted health
-checks, restart policies, hosted dashboard publishing, and managed alert
-delivery.
+checks, restart policies, hosted dashboard publishing, and hosted sender
+delivery integrations.
 
 ## End State
 

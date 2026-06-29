@@ -639,6 +639,51 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_notification_delivery_enqueue": {
+        "endpoint": "/notifications/delivery/enqueue",
+        "description": "Queue notification transport payloads for an external sender.",
+        "inputSchema": _schema(
+            {
+                "transport": _string("Transport shape: webhook, email, or push.", "webhook"),
+                "destination": _string("Optional destination or routing key.", ""),
+                "status": _string("Notification status: open, acknowledged, resolved, or all.", "open"),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "topic": _string("Optional notification topic.", ""),
+                "severity": _string("Optional severity: info, warning, high, or critical.", ""),
+                "assigned_to": _string("Optional assigned operator filter.", ""),
+                "sla_status": _string("Optional SLA filter.", ""),
+                "actor": _string("Actor queuing deliveries.", "mcp"),
+                "limit": _integer("Maximum notifications to queue.", 50),
+                "dedupe": _boolean("Skip queued/sending duplicates for the same destination.", True),
+            }
+        ),
+    },
+    "memory_notification_delivery_list": {
+        "endpoint": "/notifications/delivery/list",
+        "description": "List notification delivery outbox rows.",
+        "inputSchema": _schema(
+            {
+                "status": _string("Delivery status: queued, sending, delivered, failed, or all.", "queued"),
+                "transport": _string("Optional transport filter.", ""),
+                "notification_id": _string("Optional notification id filter.", ""),
+                "destination": _string("Optional destination filter.", ""),
+                "limit": _integer("Maximum delivery rows.", 50),
+            }
+        ),
+    },
+    "memory_notification_delivery_mark": {
+        "endpoint": "/notifications/delivery/mark",
+        "description": "Mark a notification delivery row as sending, delivered, or failed.",
+        "inputSchema": _schema(
+            {
+                "delivery_id": _string("Delivery id."),
+                "status": _string("Delivery status: sending, delivered, or failed."),
+                "actor": _string("Actor marking the delivery.", "mcp-sender"),
+                "error": _string("Failure detail when status is failed.", ""),
+            },
+            ["delivery_id", "status"],
+        ),
+    },
     "memory_notification_assign": {
         "endpoint": "/notifications/assign",
         "description": "Assign an operator notification to a reviewer.",

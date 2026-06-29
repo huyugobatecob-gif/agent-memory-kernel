@@ -404,6 +404,67 @@ class HermesMemoryProvider:
             limit=limit,
         )
 
+    def enqueue_notification_deliveries(
+        self,
+        *,
+        transport: str = "webhook",
+        destination: str = "",
+        status: str = "open",
+        scope: str | None = None,
+        topic: str | None = None,
+        severity: str | None = None,
+        assigned_to: str | None = None,
+        sla_status: str | None = None,
+        actor: str = "provider",
+        limit: int = 50,
+        dedupe: bool = True,
+    ) -> dict[str, Any]:
+        return self.store.enqueue_notification_deliveries(
+            transport=transport,
+            destination=destination,
+            status=status,
+            scope=scope,
+            topic=topic,
+            severity=severity,
+            assigned_to=assigned_to,
+            sla_status=sla_status,
+            actor=actor,
+            limit=limit,
+            dedupe=dedupe,
+        )
+
+    def notification_deliveries(
+        self,
+        *,
+        status: str = "queued",
+        transport: str | None = None,
+        notification_id: str | None = None,
+        destination: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self.store.list_notification_deliveries(
+            status=status,
+            transport=transport,
+            notification_id=notification_id,
+            destination=destination,
+            limit=limit,
+        )
+
+    def mark_notification_delivery(
+        self,
+        delivery_id: str,
+        *,
+        status: str,
+        actor: str = "provider-sender",
+        error: str = "",
+    ) -> dict[str, Any]:
+        return self.store.mark_notification_delivery(
+            delivery_id,
+            status=status,
+            actor=actor,
+            error=error,
+        )
+
     def assign_notification(
         self,
         notification_id: str,

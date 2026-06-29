@@ -8,7 +8,7 @@ from pathlib import Path
 from adapters.hermes_provider.hermes_provider import HermesMemoryProvider
 from agent_memory_kernel import MemoryStore
 from agent_memory_kernel.extractors.base import ExtractedMemory
-from agent_memory_kernel.mcp_server import MCPMemoryServer
+from agent_memory_kernel.mcp_server import MCPMemoryServer, list_mcp_tools
 from agent_memory_kernel.server import handle_api_request
 
 
@@ -285,6 +285,49 @@ class ReviewInboxTests(unittest.TestCase):
             self.assertIn("subject", email_transport["payloads"][0])
             self.assertIn(notification["notification_id"], email_transport["payloads"][0]["body"])
 
+            delivery = handle_api_request(
+                store,
+                "/notifications/delivery/enqueue",
+                {
+                    "transport": "email",
+                    "destination": "ops@example.test",
+                    "assigned_to": "reviewer-a",
+                    "sla_status": "overdue",
+                    "actor": "lead",
+                },
+            )
+            self.assertEqual(delivery["version"], "notification-delivery-v0.1")
+            self.assertEqual(delivery["queued_count"], 1)
+            delivery_id = delivery["queued"][0]["delivery_id"]
+            self.assertEqual(delivery["queued"][0]["destination"], "ops@example.test")
+
+            duplicate_delivery = store.enqueue_notification_deliveries(
+                transport="email",
+                destination="ops@example.test",
+                assigned_to="reviewer-a",
+                sla_status="overdue",
+            )
+            self.assertEqual(duplicate_delivery["queued_count"], 0)
+            self.assertEqual(duplicate_delivery["skipped_count"], 1)
+
+            listed_delivery = handle_api_request(
+                store,
+                "/notifications/delivery/list",
+                {"status": "queued", "transport": "email"},
+            )
+            self.assertEqual(listed_delivery["count"], 1)
+            marked_delivery = handle_api_request(
+                store,
+                "/notifications/delivery/mark",
+                {
+                    "delivery_id": delivery_id,
+                    "status": "delivered",
+                    "actor": "sender",
+                },
+            )
+            self.assertEqual(marked_delivery["status"], "delivered")
+            self.assertEqual(marked_delivery["attempt_count"], 1)
+
             acknowledged = handle_api_request(
                 store,
                 "/notifications/ack",
@@ -337,6 +380,10 @@ class ReviewInboxTests(unittest.TestCase):
                 mcp_transport["result"]["structuredContent"]["transport"],
                 "push",
             )
+            names = {tool["name"] for tool in list_mcp_tools()}
+            self.assertIn("memory_notification_delivery_enqueue", names)
+            self.assertIn("memory_notification_delivery_list", names)
+            self.assertIn("memory_notification_delivery_mark", names)
 
             store.approve_candidate(candidate_id, actor="reviewer")
             open_after_approval = store.list_notifications(

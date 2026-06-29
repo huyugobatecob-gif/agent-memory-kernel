@@ -93,7 +93,8 @@ Invoice ingestion surfaces:
   `billing_invoice_items()`
 
 This is a baseline local report with local latency SLO checks, a machine-readable
-dashboard, and recorded-cost reconciliation. Production deployments should
-still add supervisor metrics, live provider invoice fetchers, hosted dashboard
-publishing, managed alerts, and hosted retention policy enforcement beyond the
-local export retention ledger.
+dashboard, a notification delivery outbox, and recorded-cost reconciliation.
+Production deployments should still add supervisor metrics, live provider
+invoice fetchers, hosted dashboard publishing, real webhook/email/push sender
+integrations, and hosted retention policy enforcement beyond the local export
+retention ledger.

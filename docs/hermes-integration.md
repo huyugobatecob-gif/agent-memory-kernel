@@ -119,6 +119,15 @@ class HermesMemoryProvider:
     def notification_escalations(self, scope: str | None = None, assigned_to: str | None = None, include_acknowledged: bool = True) -> dict:
         ...
 
+    def enqueue_notification_deliveries(self, transport: str = "webhook", destination: str = "") -> dict:
+        ...
+
+    def notification_deliveries(self, status: str = "queued") -> dict:
+        ...
+
+    def mark_notification_delivery(self, delivery_id: str, status: str) -> dict:
+        ...
+
     def assign_notification(self, notification_id: str, assigned_to: str, actor: str = "reviewer", due_at: str = "", reason: str = "") -> dict:
         ...
 
@@ -350,6 +359,8 @@ The MCP tools mirror the runtime API: `memory_before_model_call`,
 `memory_restore_database`,
 `memory_restore_drill_schedule_set`, `memory_restore_drill_schedules`,
 `memory_restore_drill_schedule_run_due`, `memory_review_list`,
+`memory_notification_delivery_enqueue`, `memory_notification_delivery_list`,
+`memory_notification_delivery_mark`,
 `memory_graph_nodes`, `memory_graph_edges`, `memory_graph_browser`,
 `memory_export_control`, `memory_export_profile`,
 `memory_export_custody`, `memory_export_encrypted_profile`,

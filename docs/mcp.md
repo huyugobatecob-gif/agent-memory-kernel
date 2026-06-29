@@ -71,6 +71,11 @@ Runtime tools:
 - `memory_billing_invoice_import`: import provider invoice line items for
   billing reconciliation.
 - `memory_billing_invoice_list`: list imported provider invoice line items.
+- `memory_notification_delivery_enqueue`: queue notification transport payloads
+  for an external sender.
+- `memory_notification_delivery_list`: list notification delivery outbox rows.
+- `memory_notification_delivery_mark`: mark delivery rows as sending,
+  delivered, or failed.
 - `memory_worker_status`: report queued, stale, and failed Keeper worker jobs
   for supervisors and operators.
 - `memory_outcome_compare`: compare success/failure outcome records and return

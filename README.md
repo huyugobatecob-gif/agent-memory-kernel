@@ -114,6 +114,8 @@ Included now:
 - Operator notification queue, reviewer assignment, SLA status filtering, and
   escalation reports plus webhook/email/push payload builders for review
   candidates, export approvals, and expired export artifacts.
+- Notification delivery outbox for queuing transport payloads and tracking
+  delivered/failed status from external senders.
 - Worker supervision status for queued Keeper jobs, stale queue alerts, failed
   job alerts, and operator run/inspect commands.
 - Digital Brain state: left/right counts, calibration, node hemisphere, visual
@@ -856,6 +858,8 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_operations_dashboard`,
 `memory_billing_reconcile`, `memory_billing_invoice_import`,
 `memory_billing_invoice_list`,
+`memory_notification_delivery_enqueue`, `memory_notification_delivery_list`,
+`memory_notification_delivery_mark`,
 `memory_embedding_certify`,
 `memory_migration_status`, `memory_migration_changelog`, `memory_backup_database`,
 `memory_restore_database`, `memory_restore_drill`,

@@ -264,6 +264,11 @@ resolved, surfaced in policy-only escalation reports, or converted into
 webhook/email/push payloads through `agent-memory notifications transport`,
 `/notifications/transport`, Python adapters, and MCP
 `memory_notifications_transport`.
+Baseline delivery outbox is implemented through `agent-memory notifications
+delivery-enqueue/list/mark`, `/notifications/delivery/*`, Python adapter
+wrappers, and MCP `memory_notification_delivery_*`; external senders can pull
+queued payloads and mark delivered or failed without storing provider secrets
+in SQLite.
 Baseline batch review is implemented through `agent-memory review batch`,
 `/review/batch`, Python adapter `review_batch()`, and MCP `memory_review_batch`.
 Approve/reject batches support dry-run and per-candidate results.
@@ -396,7 +401,7 @@ Planned:
 - deeper graph exploration views;
 - richer browser batch editing queues;
 - richer conflict-resolution workflows beyond scan/record;
-- managed push/email/web delivery beyond local transport payloads;
+- live push/email/web sender integrations beyond the local delivery outbox;
 - hosted KMS integrations and managed off-host backup recipes beyond the local
   export custody report.
 
