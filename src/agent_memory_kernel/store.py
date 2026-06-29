@@ -3796,25 +3796,47 @@ class MemoryStore:
         thread_id: str = "default",
         scope: str = "professional",
         summary_type: str = "rolling",
+        source_memory_ids: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         summary = (summary or "").strip()
         if not summary:
             raise ValueError("summary must not be empty")
         scope = normalize_scope(scope)
+        summary_metadata = dict(metadata or {})
+        if source_memory_ids:
+            summary_metadata["source_memory_ids"] = [
+                str(memory_id)
+                for memory_id in source_memory_ids
+                if str(memory_id or "").strip()
+            ]
         summary_id = new_id("sum")
         self.conn.execute(
             """
             INSERT INTO thread_summaries
               (summary_id, thread_id, created_at, scope, summary, summary_type, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?, '{}')
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (summary_id, thread_id, now_iso(), scope, summary, summary_type),
+            (
+                summary_id,
+                thread_id,
+                now_iso(),
+                scope,
+                summary,
+                summary_type,
+                json.dumps(summary_metadata, sort_keys=True),
+            ),
         )
         self._audit(
             "record",
             "thread_summary",
             summary_id,
-            details={"thread_id": thread_id, "scope": scope, "summary_type": summary_type},
+            details={
+                "thread_id": thread_id,
+                "scope": scope,
+                "summary_type": summary_type,
+                "source_memory_ids": summary_metadata.get("source_memory_ids", []),
+            },
         )
         self.conn.commit()
         return summary_id
@@ -4117,12 +4139,15 @@ class MemoryStore:
         scope = normalize_scope(scope) if scope else None
         rows = self.conn.execute(
             """
-            SELECT analysis_id, run_id, event_id, memory_id, created_at,
-                   analyzer, scope, facts_json, chronology_json, key_topics_json,
-                   people_json, events_json, verified_entities_json, metadata_json
-            FROM semantic_analyses
-            WHERE (? IS NULL OR scope = ?)
-            ORDER BY created_at DESC
+            SELECT sa.analysis_id, sa.run_id, sa.event_id, sa.memory_id,
+                   sa.created_at, sa.analyzer, sa.scope, sa.facts_json,
+                   sa.chronology_json, sa.key_topics_json, sa.people_json,
+                   sa.events_json, sa.verified_entities_json, sa.metadata_json
+            FROM semantic_analyses sa
+            LEFT JOIN memories m ON m.memory_id = sa.memory_id
+            WHERE (? IS NULL OR sa.scope = ?)
+              AND (sa.memory_id IS NULL OR m.status = 'active')
+            ORDER BY sa.created_at DESC
             LIMIT ?
             """,
             (scope, scope, max(1, min(int(limit or 50), 500))),
@@ -6828,15 +6853,20 @@ class MemoryStore:
         profile_nodes = self.list_graph_nodes(scope=scope, node_type="person", limit=8)
         summaries = self.conn.execute(
             """
-            SELECT summary, created_at, summary_type
+            SELECT summary, created_at, summary_type, metadata_json
             FROM thread_summaries
             WHERE thread_id = ?
               AND (? IS NULL OR scope = ?)
             ORDER BY created_at DESC
-            LIMIT 3
+            LIMIT 25
             """,
             (thread_id, scope, scope),
         ).fetchall()
+        summaries = [
+            row
+            for row in summaries
+            if self._thread_summary_sources_active(row["metadata_json"])
+        ][:3]
         messages = self.conn.execute(
             """
             SELECT role, actor, content, created_at
@@ -11648,6 +11678,13 @@ class MemoryStore:
         for scope in sorted(affected_scopes):
             self._refresh_graph_groups(scope)
             self._refresh_digital_brain_state(scope)
+        linked_thread_summaries = sum(
+            1
+            for row in self.conn.execute(
+                "SELECT metadata_json FROM thread_summaries"
+            ).fetchall()
+            if memory_id in self._thread_summary_source_memory_ids(row["metadata_json"])
+        )
         return self._derived_surface_report(
             memory_id=memory_id,
             mode="invalidated",
@@ -11666,7 +11703,11 @@ class MemoryStore:
                 "prompt_envelope": "rebuild_on_next_before_model_call",
                 "profile_export": "filtered_by_active_status",
                 "graph_derived_style": "refreshed_for_scopes",
-                "thread_summaries": "not_directly_linked_rebuild_or_review_manually",
+                "thread_summaries": (
+                    linked_thread_summaries
+                    if linked_thread_summaries
+                    else "not_directly_linked_rebuild_or_review_manually"
+                ),
                 "outcome_lessons": "status_filtered_on_retrieval",
             },
         )
@@ -13235,6 +13276,11 @@ class MemoryStore:
             """,
             (scope, scope),
         ).fetchall()
+        summary_rows = [
+            row
+            for row in summary_rows
+            if self._thread_summary_sources_active(row["metadata_json"])
+        ]
         return {
             "turns": [dict(row) for row in turn_rows],
             "summaries": [dict(row) for row in summary_rows],
@@ -13543,6 +13589,37 @@ class MemoryStore:
             return json.loads(value or "")
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    def _thread_summary_sources_active(self, metadata_json: Any) -> bool:
+        source_memory_ids = self._thread_summary_source_memory_ids(metadata_json)
+        if not source_memory_ids:
+            return True
+        placeholders = ",".join("?" for _ in source_memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT memory_id, status
+            FROM memories
+            WHERE memory_id IN ({placeholders})
+            """,
+            tuple(source_memory_ids),
+        ).fetchall()
+        statuses = {str(row["memory_id"]): str(row["status"]) for row in rows}
+        return all(statuses.get(memory_id) == "active" for memory_id in source_memory_ids)
+
+    def _thread_summary_source_memory_ids(self, metadata_json: Any) -> list[str]:
+        metadata = self._loads_json(metadata_json, {})
+        if not isinstance(metadata, dict):
+            return []
+        source_memory_ids = metadata.get("source_memory_ids", [])
+        if isinstance(source_memory_ids, str):
+            source_memory_ids = [source_memory_ids]
+        if not isinstance(source_memory_ids, list):
+            return []
+        return [
+            str(memory_id)
+            for memory_id in source_memory_ids
+            if str(memory_id or "").strip()
+        ]
 
     @staticmethod
     def _importable_rows(value: Any) -> list[dict[str, Any]]:

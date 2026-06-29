@@ -1074,11 +1074,55 @@ class MemoryStoreTests(unittest.TestCase):
                 auto_approve=True,
             )
             distrusted_id = distrusted["candidates"][0]["memory_id"]
+            store.add_thread_summary(
+                "Summary: distrust-site stale source data should guide planning.",
+                thread_id="distrust-thread",
+                scope="professional",
+                source_memory_ids=[distrusted_id],
+            )
+            before_context = store.context_builder_pack(
+                "distrust-site planning",
+                scope="professional",
+                thread_id="distrust-thread",
+            )
+            self.assertIn("stale source data", before_context)
+            self.assertIn(
+                "stale source data",
+                json.dumps(store.list_semantic_analyses(scope="professional"), sort_keys=True),
+            )
             store.distrust_memory(distrusted_id, reason="unreliable source")
 
             self.assertEqual(store.search("stale source data", scope="professional"), [])
             self.assertEqual(store.list_graph_nodes(scope="professional"), [])
             self.assertEqual(store.list_graph_edges(scope="professional"), [])
+            self.assertNotIn(
+                "stale source data",
+                json.dumps(store.list_semantic_analyses(scope="professional"), sort_keys=True),
+            )
+            after_context = store.context_builder_pack(
+                "distrust-site planning",
+                scope="professional",
+                thread_id="distrust-thread",
+            )
+            self.assertNotIn("stale source data", after_context)
+            profile = store.export_profile(scope="professional")
+            self.assertNotIn(
+                "stale source data",
+                json.dumps(profile["chat_history"], sort_keys=True),
+            )
+            self.assertNotIn(
+                "stale source data",
+                json.dumps(profile["semantic_analyses"], sort_keys=True),
+            )
+            self.assertIn(
+                "stale source data",
+                json.dumps(profile["memory_lifecycle"], sort_keys=True),
+            )
+            distrust_invalidations = store.derived_invalidations(memory_id=distrusted_id)
+            self.assertEqual(
+                distrust_invalidations["invalidations"][0]["surfaces"]["invalidated"]["thread_summaries"],
+                1,
+            )
 
             expired = store.remember(
                 "Rule: project expire-site refresh cadence is weekly.",

@@ -147,7 +147,11 @@ Required behavior:
 - suppress from default retrieval;
 - keep available for audit and conflict review;
 - record who distrusted it and why;
-- prevent derived rules from using it as a source.
+- prevent derived rules from using it as a source;
+- filter semantic analyses derived from the distrusted memory out of active
+  export and prompt-facing context surfaces;
+- filter thread summaries linked through `source_memory_ids` out of context
+  builder and profile export surfaces.
 
 ## Expire And Decay
 

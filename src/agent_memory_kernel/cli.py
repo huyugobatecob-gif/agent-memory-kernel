@@ -1021,6 +1021,7 @@ def cmd_summary(args: argparse.Namespace) -> int:
         thread_id=args.thread_id,
         scope=args.scope,
         summary_type=args.summary_type,
+        source_memory_ids=args.source_memory_id or None,
     )
     store.close()
     print_json({"summary_id": summary_id, "status": "recorded"})
@@ -2439,6 +2440,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thread-id", default="default")
     p.add_argument("--scope", default="professional", choices=["personal", "professional", "project", "agent", "session"])
     p.add_argument("--summary-type", default="rolling", choices=["rolling", "session", "project", "manual"])
+    p.add_argument("--source-memory-id", action="append", default=[], help="Memory id used as summary source; repeatable")
     p.set_defaults(func=cmd_summary)
 
     p = sub.add_parser("graph", help="Inspect the persistent memory graph tree")

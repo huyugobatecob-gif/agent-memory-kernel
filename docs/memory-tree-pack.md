@@ -58,6 +58,11 @@ The deterministic v0 implementation uses five layers:
    graph summaries/blobs.
 5. Optional graph neighbor expansion by depth.
 
+Thread summaries can carry `source_memory_ids`; context builder and profile
+export only expose those summaries while every linked memory remains active.
+Semantic analyses are likewise treated as active derived memory only while their
+source `memory_id` remains active.
+
 Future implementations can replace or enrich the local reranker with provider
 embeddings or an LLM extractor without changing the output contract.
 
