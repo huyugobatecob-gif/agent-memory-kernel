@@ -173,6 +173,9 @@ The harness checks:
 The public conformance suite additionally checks that post-turn Keeper changes
 are inspectable by Keeper job id and thread: saved turns, event, candidates,
 affected surfaces, and audit trail must be visible to adapters.
+It also checks that a durable memory can explain why it was remembered: source
+event, candidate, review or policy history, graph/evidence references, audit
+trail, and revocation handles must be visible.
 It also checks that capability reports expose denied read/write actions and
 that denied export or lifecycle mutation paths fail closed.
 The suite now includes first public golden traces for outcome planning,

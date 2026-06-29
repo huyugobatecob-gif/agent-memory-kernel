@@ -84,6 +84,7 @@ the batch unless `--stop-on-error` is set.
 Active memory lifecycle:
 
 ```bash
+agent-memory memory-explain --db .memory/demo.db mem_xxxxxxxxxxxxxxxx
 agent-memory correct --db .memory/demo.db mem_xxxxxxxxxxxxxxxx "Corrected memory text" --actor reviewer
 agent-memory delete --db .memory/demo.db mem_xxxxxxxxxxxxxxxx --actor reviewer
 agent-memory distrust --db .memory/demo.db mem_xxxxxxxxxxxxxxxx --actor reviewer
@@ -96,6 +97,7 @@ HTTP endpoints:
 - `POST /review/batch`
 - `POST /review/approve`
 - `POST /review/reject`
+- `POST /memory/explain`
 - `POST /memory/correct`
 - `POST /memory/lifecycle-batch`
 - `POST /memory/delete`
@@ -113,6 +115,7 @@ MCP tools:
 - `memory_review_batch`
 - `memory_review_approve`
 - `memory_review_reject`
+- `memory_explain`
 - `memory_correct`
 - `memory_lifecycle_batch`
 - `memory_delete`
@@ -145,7 +148,10 @@ After `after_saved_turn` or a background worker creates Keeper candidates:
 9. Reject quarantined or low-quality candidates.
 10. Use `lifecycle-batch --dry-run` or `memory_lifecycle_batch` dry-run when
    several active memories need correction, deletion, distrust, or expiry.
-11. Use correct/delete/distrust/expire on already active memories when the
+11. Use `memory-explain` or `memory_explain` to inspect source event, review
+   history, graph/evidence, derived invalidations, audit trail, and revocation
+   handles for an active memory.
+12. Use correct/delete/distrust/expire on already active memories when the
    source truth changes.
 
 This keeps the main agent out of memory maintenance. The agent gets selected

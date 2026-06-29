@@ -511,6 +511,14 @@ def cmd_router_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_memory_explain(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(store.explain_memory(args.memory_id))
+    store.close()
+    return 0
+
+
 def cmd_router_feedback_record(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2187,6 +2195,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_db(p)
     p.add_argument("router_run_id")
     p.set_defaults(func=cmd_router_explain)
+
+    p = sub.add_parser("memory-explain", help="Explain why one memory exists")
+    add_common_db(p)
+    p.add_argument("memory_id")
+    p.set_defaults(func=cmd_memory_explain)
 
     p = sub.add_parser("router-feedback", help="Record or list Router memory usefulness feedback")
     add_common_db(p)

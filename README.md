@@ -342,6 +342,17 @@ agent-memory router-runs --db .memory/demo.db --thread-id seo-demo
 agent-memory router-explain --db .memory/demo.db router_xxxxxxxxxxxxxxxx
 ```
 
+Inspect why a durable memory exists:
+
+```bash
+agent-memory memory-explain --db .memory/demo.db mem_xxxxxxxxxxxxxxxx
+```
+
+`memory-explain` shows the memory, candidate, source event, review or policy
+history, graph/evidence references, lifecycle revisions, derived invalidations,
+audit trail, and operator handles for correction, rollback, delete, distrust,
+or expiry.
+
 Inspect what changed after a saved turn:
 
 ```bash
@@ -883,6 +894,7 @@ The MCP server exposes the same orchestrator surface as the HTTP API, including
 `memory_before_model_call`, `memory_before_turn`,
 `memory_build_prompt_context`, `memory_after_saved_turn`, `memory_after_turn`,
 `memory_retrieve_context`, `memory_ingest_graph`, `memory_changes`,
+`memory_explain`,
 `memory_search`, `memory_tree_pack`, `memory_brain_style_certify`,
 `memory_review_list`,
 `memory_review_inbox`, `memory_review_batch`, `memory_review_approve`, `memory_review_reject`,

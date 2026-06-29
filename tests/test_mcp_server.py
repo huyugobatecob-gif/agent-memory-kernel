@@ -16,13 +16,14 @@ class MCPServerTests(unittest.TestCase):
             db = str(Path(tmp) / "memory.db")
             store = MemoryStore(db)
             store.init_db()
-            store.remember(
+            remembered = store.remember(
                 "Hermes SEO agents should retrieve the Memory Tree Supplement before answering.",
                 scope="professional",
                 actor="user",
                 source_type="manual",
                 auto_approve=True,
             )
+            memory_id = remembered["candidates"][0]["memory_id"]
             store.close()
 
             server = MCPMemoryServer(db)
@@ -52,6 +53,7 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_graph_optimize", names)
             self.assertIn("memory_conflict_detect", names)
             self.assertIn("memory_changes", names)
+            self.assertIn("memory_explain", names)
             self.assertIn("memory_capability_check", names)
             self.assertIn("memory_identity_delegation", names)
             self.assertIn("memory_export_control", names)
@@ -111,6 +113,26 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("structuredContent", result)
             self.assertIn("results", result["structuredContent"])
             self.assertIn("Hermes SEO agents", json.dumps(result["structuredContent"]))
+
+            explained_memory = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 33,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_explain",
+                        "arguments": {"memory_id": memory_id},
+                    },
+                }
+            )
+            self.assertFalse(explained_memory["result"]["isError"])
+            self.assertEqual(
+                explained_memory["result"]["structuredContent"]["memory"]["memory_id"],
+                memory_id,
+            )
+            self.assertTrue(
+                explained_memory["result"]["structuredContent"]["summary"]["why_exists"]
+            )
 
             prompt_budget = server.handle_message(
                 {

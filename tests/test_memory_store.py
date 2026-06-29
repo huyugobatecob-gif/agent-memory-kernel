@@ -2649,12 +2649,13 @@ class MemoryStoreTests(unittest.TestCase):
                 scope="professional",
                 note_type="rule",
             )
-            store.remember(
+            remembered = store.remember(
                 "Decision: project demo-site reuses successful SEO refresh loops.",
                 scope="professional",
                 source_ref="session://seo-success",
                 auto_approve=True,
             )
+            remembered_memory_id = remembered["candidates"][0]["memory_id"]
 
             before = store.before_model_call(
                 "Plan the next demo-site SEO refresh loop.",
@@ -2696,6 +2697,22 @@ class MemoryStoreTests(unittest.TestCase):
                 explained["selection_decisions"][0]["memory_id"],
                 envelope["metadata"]["selection_decisions"][0]["memory_id"],
             )
+            memory_explain = store.explain_memory(remembered_memory_id)
+            self.assertEqual(memory_explain["version"], "memory-explain-v0.1")
+            self.assertEqual(memory_explain["memory"]["memory_id"], remembered_memory_id)
+            self.assertEqual(memory_explain["memory"]["status"], "active")
+            self.assertEqual(memory_explain["candidate"]["status"], "approved")
+            self.assertEqual(memory_explain["source_event"]["source_ref"], "session://seo-success")
+            self.assertTrue(memory_explain["policy_history"])
+            self.assertTrue(memory_explain["summary"]["why_exists"])
+            self.assertGreaterEqual(memory_explain["summary"]["audit_count"], 1)
+            self.assertIn("lifecycle", memory_explain["operator_handles"])
+            api_memory_explain = handle_api_request(
+                store,
+                "/memory/explain",
+                {"memory_id": remembered_memory_id},
+            )
+            self.assertEqual(api_memory_explain["memory"]["memory_id"], remembered_memory_id)
             feedback = store.record_router_feedback(
                 before["router_run_id"],
                 memory_id=envelope["metadata"]["selection_decisions"][0]["memory_id"],
@@ -3669,6 +3686,11 @@ class MemoryStoreTests(unittest.TestCase):
                 "/router-explain",
                 {"router_run_id": before["router_run_id"]},
             )
+            memory_explain = handle_api_request(
+                store,
+                "/memory/explain",
+                {"memory_id": router_explain["selection_decisions"][0]["memory_id"]},
+            )
             router_feedback = handle_api_request(
                 store,
                 "/router-feedback/record",
@@ -3861,6 +3883,8 @@ class MemoryStoreTests(unittest.TestCase):
             self.assertEqual(len(router_runs["runs"]), 1)
             self.assertEqual(router_explain["router_run"]["router_run_id"], before["router_run_id"])
             self.assertIn("selection_decisions", router_explain)
+            self.assertEqual(memory_explain["version"], "memory-explain-v0.1")
+            self.assertTrue(memory_explain["summary"]["why_exists"])
             self.assertEqual(router_feedback["status"], "recorded")
             self.assertEqual(len(router_feedback_list["feedback"]), 1)
             self.assertGreaterEqual(memory_quality["feedback_count"], 1)

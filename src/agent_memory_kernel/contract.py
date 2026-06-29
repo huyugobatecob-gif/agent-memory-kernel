@@ -361,6 +361,7 @@ KERNEL_INVARIANTS = [
         "code_paths": [
             "MemoryStore.remember",
             "MemoryStore.before_model_call",
+            "MemoryStore.explain_memory",
             "MemoryStore.memory_changes",
             "MemoryStore.explain_router_run",
             "MemoryStore.export_profile",
@@ -368,6 +369,7 @@ KERNEL_INVARIANTS = [
         ],
         "verifiers": [
             "professional_memory_injected_with_provenance",
+            "memory_explain_shows_why_remembered",
             "keeper_change_is_inspectable",
             "golden_trace_graph_browser_shows_source_previews",
             "audit_log_integrity_detects_tampering",

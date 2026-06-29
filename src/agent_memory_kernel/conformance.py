@@ -237,6 +237,15 @@ def conformance_spec() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "memory_explain_shows_why_remembered",
+                "requires": [
+                    "active memory exposes candidate and source-event provenance",
+                    "review or policy history explains why the memory became durable",
+                    "operator handles show how to inspect, correct, distrust, delete, or expire the memory",
+                    "audit trail and graph/evidence references are visible when present",
+                ],
+            },
+            {
                 "id": "prompt_envelope_contains_selected_content_only",
                 "requires": [
                     "MEMORY_TREE_SUPPLEMENT contains expanded selected memory content",
@@ -927,6 +936,52 @@ def run_conformance_suite(store: MemoryStore) -> dict[str, Any]:
             "selected_branch_ids": professional["selected_branch_ids"],
             "source_ids": professional_source_ids,
         },
+    )
+    professional_memory_row = store.conn.execute(
+        """
+        SELECT memory_id
+        FROM sources
+        WHERE source_ref = ?
+        LIMIT 1
+        """,
+        ("conformance://professional-memory",),
+    ).fetchone()
+    if professional_memory_row:
+        professional_memory_id = str(professional_memory_row["memory_id"])
+        memory_explain = store.explain_memory(professional_memory_id)
+        explained_candidate = memory_explain.get("candidate") or {}
+        explained_source_event = memory_explain.get("source_event") or {}
+        explained_summary = memory_explain.get("summary") or {}
+        explained_handles = memory_explain.get("operator_handles") or {}
+        explained_review_or_policy = bool(
+            memory_explain.get("review_history") or memory_explain.get("policy_history")
+        )
+        memory_explain_passed = (
+            memory_explain.get("version") == "memory-explain-v0.1"
+            and explained_candidate.get("candidate_id")
+            and explained_source_event.get("source_ref") == "conformance://professional-memory"
+            and explained_review_or_policy
+            and explained_summary.get("why_exists")
+            and explained_handles.get("lifecycle", {}).get("delete_command")
+            and explained_summary.get("audit_count", 0) >= 1
+        )
+        memory_explain_evidence = {
+            "memory_id": professional_memory_id,
+            "candidate_id": explained_candidate.get("candidate_id", ""),
+            "source_ref": explained_source_event.get("source_ref", ""),
+            "why_exists": explained_summary.get("why_exists", []),
+            "has_review_or_policy": explained_review_or_policy,
+            "audit_count": explained_summary.get("audit_count", 0),
+            "operator_handles": sorted(explained_handles.keys()),
+        }
+    else:
+        memory_explain_passed = False
+        memory_explain_evidence = {"error": "professional fixture memory not found"}
+    _append_result(
+        results,
+        "memory_explain_shows_why_remembered",
+        bool(memory_explain_passed),
+        memory_explain_evidence,
     )
     prompt_snapshot = store.before_model_call(
         "canonical CMS Statamic",
@@ -2537,6 +2592,7 @@ def assert_conformance_spec_shape(spec: dict[str, Any] | None = None) -> dict[st
         "default_packs_are_published",
         "adapter_contract_is_published",
         "professional_memory_injected_with_provenance",
+        "memory_explain_shows_why_remembered",
         "prompt_envelope_contains_selected_content_only",
         "personal_lane_is_withheld",
         "personal_lane_absent_from_derived_surfaces",

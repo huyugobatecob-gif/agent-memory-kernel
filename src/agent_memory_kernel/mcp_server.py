@@ -215,6 +215,16 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "memory_explain": {
+        "endpoint": "/memory/explain",
+        "description": "Explain why a durable memory exists and how to audit or revoke it.",
+        "inputSchema": _schema(
+            {
+                "memory_id": _string("Memory id to explain."),
+            },
+            ["memory_id"],
+        ),
+    },
     "memory_derived_invalidations": {
         "endpoint": "/derived-invalidations",
         "description": "Inspect derived-memory invalidation records after correction or lifecycle changes.",

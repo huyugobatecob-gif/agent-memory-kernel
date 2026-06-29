@@ -50,6 +50,8 @@ Runtime tools:
   long-running polling process, run the CLI worker with `--daemon`.
 - `memory_keeper_eval`: run offline Keeper extraction regression evals.
 - `memory_changes`: inspect what Keeper changed after a saved turn.
+- `memory_explain`: explain why one durable memory exists and how to audit or
+  revoke it.
 - `memory_capability_check`: report effective read/write permissions before
   delegating work to an agent.
 - `memory_derived_invalidations`: inspect derived surfaces refreshed or
@@ -108,6 +110,9 @@ Retrieval tools:
 - `memory_conflict_detect`: detect likely active-memory conflicts and
   optionally record open conflict records.
 - `memory_router_explain`: explain a stored Router run.
+- `memory_explain`: explain source event, candidate, review history,
+  graph/evidence, lifecycle, derived invalidations, and audit trail for one
+  active memory.
 
 Operator and graph tools:
 
@@ -205,7 +210,8 @@ For a normal agent loop:
 4. After the model answers, call `memory_after_turn`.
 5. If Keeper was queued, call `memory_worker_run` out of band.
 6. Use `memory_changes` to audit what was saved or proposed.
-7. Use `memory_review_inbox` and `memory_review_batch` to approve, reject,
+7. Use `memory_explain` when reviewing or revoking an active memory.
+8. Use `memory_review_inbox` and `memory_review_batch` to approve, reject,
    correct, delete, distrust, or expire memory through explicit operator
    handles.
 

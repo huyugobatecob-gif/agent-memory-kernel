@@ -108,6 +108,7 @@ RIGHT_BRAIN_STYLE_SHARE = 0.40
 READ_TIME_POLICY_VERSION = "read-time-policy-v0.1"
 ROUTER_FEEDBACK_LEARNING_VERSION = "router-feedback-learning-v0.1"
 MEMORY_QUALITY_VERSION = "memory-quality-v0.2"
+MEMORY_EXPLAIN_VERSION = "memory-explain-v0.1"
 CAPABILITY_CONSENT_VERSION = "capability-consent-v0.1"
 IDENTITY_DELEGATION_VERSION = "identity-delegation-v0.1"
 DERIVED_INVALIDATION_VERSION = "derived-invalidation-v0.1"
@@ -9311,6 +9312,162 @@ class MemoryStore:
             "changes": changes,
         }
 
+    def explain_memory(self, memory_id: str) -> dict[str, Any]:
+        """Explain why one durable memory exists and where its evidence lives."""
+        memory_id = (memory_id or "").strip()
+        if not memory_id:
+            raise ValueError("memory_id is required")
+        row = self.conn.execute(
+            """
+            SELECT memory_id, candidate_id, created_at, updated_at, text, kind,
+                   scope, confidence, sensitivity, source_trust, status,
+                   expires_at
+            FROM memories
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"memory not found: {memory_id}")
+
+        candidate_id = str(row["candidate_id"] or "")
+        candidates = self._candidate_details([candidate_id]) if candidate_id else []
+        candidate = candidates[0] if candidates else None
+        event_id = str(candidate.get("event_id", "")) if candidate else ""
+        source_event = self._event_detail(event_id)
+        review_history = self._review_actions_for_candidate_ids([candidate_id]).get(candidate_id, [])
+        policy_history = self._memory_explain_policy_history(candidate)
+        source_rows = self.conn.execute(
+            """
+            SELECT source_id, event_id, source_type, source_ref
+            FROM sources
+            WHERE memory_id = ?
+            ORDER BY source_id ASC
+            """,
+            (memory_id,),
+        ).fetchall()
+        revision_rows = self.conn.execute(
+            """
+            SELECT revision_id, created_at, actor, previous_text, new_text,
+                   reason, rollback_of_revision_id, metadata_json
+            FROM memory_revisions
+            WHERE memory_id = ?
+            ORDER BY created_at ASC, revision_id ASC
+            """,
+            (memory_id,),
+        ).fetchall()
+        revisions = [
+            {
+                "revision_id": revision["revision_id"],
+                "created_at": revision["created_at"],
+                "actor": revision["actor"],
+                "previous_text_excerpt": self._excerpt(revision["previous_text"], 500),
+                "new_text_excerpt": self._excerpt(revision["new_text"], 500),
+                "reason": revision["reason"],
+                "rollback_of_revision_id": revision["rollback_of_revision_id"],
+                "metadata": self._loads_json(revision["metadata_json"], {}),
+            }
+            for revision in revision_rows
+        ]
+        invalidations = self.derived_invalidations(memory_id=memory_id, limit=50)["invalidations"]
+        graph_nodes = self._memory_explain_graph_nodes(memory_id)
+        node_evidence = self._memory_explain_node_evidence(memory_id)
+        graph_edges = self._memory_explain_graph_edges(memory_id)
+        edge_evidence = self._memory_explain_edge_evidence(memory_id)
+        target_ids = [
+            memory_id,
+            candidate_id,
+            event_id,
+            *[str(source["source_id"]) for source in source_rows],
+            *[str(revision["revision_id"]) for revision in revision_rows],
+            *[str(item.get("invalidation_id", "")) for item in invalidations],
+            *[str(item.get("graph_node_id", "")) for item in graph_nodes],
+            *[str(item.get("graph_edge_id", "")) for item in graph_edges],
+        ]
+        audit_trail = self._audit_entries_for_targets(target_ids)
+        why_exists = self._memory_explain_why_exists(
+            row,
+            candidate=candidate,
+            source_event=source_event,
+            review_history=review_history,
+            policy_history=policy_history,
+            graph_nodes=graph_nodes,
+            graph_edges=graph_edges,
+            revisions=revisions,
+            invalidations=invalidations,
+            audit_trail=audit_trail,
+        )
+        return {
+            "version": MEMORY_EXPLAIN_VERSION,
+            "memory": {
+                "memory_id": row["memory_id"],
+                "candidate_id": candidate_id,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "text_excerpt": self._excerpt(row["text"], 900),
+                "kind": row["kind"],
+                "scope": row["scope"],
+                "confidence": row["confidence"],
+                "sensitivity": row["sensitivity"],
+                "source_trust": row["source_trust"],
+                "status": row["status"],
+                "expires_at": row["expires_at"],
+            },
+            "candidate": candidate,
+            "source_event": source_event,
+            "sources": [
+                {
+                    "source_id": source["source_id"],
+                    "event_id": source["event_id"],
+                    "source_type": source["source_type"],
+                    "source_ref": source["source_ref"],
+                }
+                for source in source_rows
+            ],
+            "review_history": review_history,
+            "policy_history": policy_history,
+            "revisions": revisions,
+            "derived_invalidations": invalidations,
+            "graph": {
+                "nodes": graph_nodes,
+                "node_evidence": node_evidence,
+                "edges": graph_edges,
+                "edge_evidence": edge_evidence,
+            },
+            "audit_trail": audit_trail,
+            "operator_handles": {
+                "review": {
+                    "candidate_id": candidate_id,
+                    "review_command": "agent-memory review list --status all" if candidate_id else "",
+                    "review_inbox_command": "agent-memory review inbox --status all" if candidate_id else "",
+                },
+                "lifecycle": {
+                    "revisions_command": f"agent-memory revisions {memory_id}",
+                    "correct_command": f"agent-memory correct {memory_id} '<new text>'",
+                    "rollback_command": f"agent-memory rollback {memory_id} <revision_id>",
+                    "delete_command": f"agent-memory delete {memory_id}",
+                    "distrust_command": f"agent-memory distrust {memory_id}",
+                    "expire_command": f"agent-memory expire {memory_id}",
+                },
+                "api": {
+                    "http": "/memory/explain",
+                    "mcp_tool": "memory_explain",
+                },
+            },
+            "summary": {
+                "why_exists": why_exists,
+                "status": row["status"],
+                "has_source_event": source_event is not None,
+                "review_count": len(review_history),
+                "policy_count": len(policy_history),
+                "revision_count": len(revisions),
+                "derived_invalidation_count": len(invalidations),
+                "graph_node_count": len(graph_nodes),
+                "graph_edge_count": len(graph_edges),
+                "audit_count": len(audit_trail),
+            },
+        }
+
     def derived_invalidations(
         self,
         *,
@@ -15529,6 +15686,208 @@ class MemoryStore:
             }
             for row in rows
         ]
+
+    def _memory_explain_graph_nodes(self, memory_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT DISTINCT gn.graph_node_id, gn.created_at, gn.updated_at,
+                   gn.node_type, gn.label, gn.canonical_key, gn.scope,
+                   gn.group_label, gn.summary, gn.importance, gn.confidence,
+                   gn.status, gn.verified_status
+            FROM memory_graph_nodes gn
+            JOIN node_evidence ne ON ne.graph_node_id = gn.graph_node_id
+            WHERE ne.memory_id = ?
+            ORDER BY gn.updated_at DESC, gn.created_at DESC
+            LIMIT 50
+            """,
+            (memory_id,),
+        ).fetchall()
+        return [
+            {
+                "graph_node_id": row["graph_node_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "node_type": row["node_type"],
+                "label": row["label"],
+                "canonical_key": row["canonical_key"],
+                "scope": row["scope"],
+                "group_label": row["group_label"],
+                "summary_excerpt": self._excerpt(row["summary"], 500),
+                "importance": row["importance"],
+                "confidence": row["confidence"],
+                "status": row["status"],
+                "verified_status": row["verified_status"],
+            }
+            for row in rows
+        ]
+
+    def _memory_explain_node_evidence(self, memory_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT evidence_id, graph_node_id, item_id, memory_id, event_id,
+                   created_at, source_ref, quote, confidence
+            FROM node_evidence
+            WHERE memory_id = ?
+            ORDER BY created_at ASC, evidence_id ASC
+            LIMIT 100
+            """,
+            (memory_id,),
+        ).fetchall()
+        return [
+            {
+                "evidence_id": row["evidence_id"],
+                "graph_node_id": row["graph_node_id"],
+                "item_id": row["item_id"],
+                "memory_id": row["memory_id"],
+                "event_id": row["event_id"],
+                "created_at": row["created_at"],
+                "source_ref": row["source_ref"],
+                "quote_excerpt": self._excerpt(row["quote"], 500),
+                "confidence": row["confidence"],
+            }
+            for row in rows
+        ]
+
+    def _memory_explain_graph_edges(self, memory_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT DISTINCT ge.graph_edge_id, ge.created_at, ge.updated_at,
+                   ge.edge_type, ge.label, ge.weight, ge.confidence, ge.status,
+                   ge.source_memory_id, ge.source_event_id,
+                   src.graph_node_id AS source_graph_node_id,
+                   src.label AS source_label,
+                   dst.graph_node_id AS target_graph_node_id,
+                   dst.label AS target_label
+            FROM memory_graph_edges ge
+            JOIN memory_graph_nodes src ON src.graph_node_id = ge.source_graph_node_id
+            JOIN memory_graph_nodes dst ON dst.graph_node_id = ge.target_graph_node_id
+            LEFT JOIN edge_evidence ee ON ee.graph_edge_id = ge.graph_edge_id
+            WHERE ge.source_memory_id = ?
+               OR ee.memory_id = ?
+            ORDER BY ge.updated_at DESC, ge.created_at DESC
+            LIMIT 50
+            """,
+            (memory_id, memory_id),
+        ).fetchall()
+        return [
+            {
+                "graph_edge_id": row["graph_edge_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "edge_type": row["edge_type"],
+                "label": row["label"],
+                "weight": row["weight"],
+                "confidence": row["confidence"],
+                "status": row["status"],
+                "source_memory_id": row["source_memory_id"],
+                "source_event_id": row["source_event_id"],
+                "source_graph_node_id": row["source_graph_node_id"],
+                "source_label": row["source_label"],
+                "target_graph_node_id": row["target_graph_node_id"],
+                "target_label": row["target_label"],
+            }
+            for row in rows
+        ]
+
+    def _memory_explain_edge_evidence(self, memory_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT evidence_id, graph_edge_id, item_id, memory_id, event_id,
+                   created_at, source_ref, quote, confidence
+            FROM edge_evidence
+            WHERE memory_id = ?
+            ORDER BY created_at ASC, evidence_id ASC
+            LIMIT 100
+            """,
+            (memory_id,),
+        ).fetchall()
+        return [
+            {
+                "evidence_id": row["evidence_id"],
+                "graph_edge_id": row["graph_edge_id"],
+                "item_id": row["item_id"],
+                "memory_id": row["memory_id"],
+                "event_id": row["event_id"],
+                "created_at": row["created_at"],
+                "source_ref": row["source_ref"],
+                "quote_excerpt": self._excerpt(row["quote"], 500),
+                "confidence": row["confidence"],
+            }
+            for row in rows
+        ]
+
+    def _memory_explain_policy_history(
+        self,
+        candidate: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        if not candidate:
+            return []
+        return [
+            {
+                "candidate_id": candidate["candidate_id"],
+                "event_id": candidate["event_id"],
+                "created_at": candidate["created_at"],
+                "decision": candidate["status"],
+                "reason": candidate["reason"],
+                "source_trust": candidate["source_trust"],
+                "sensitivity": candidate["sensitivity"],
+                "confidence": candidate["confidence"],
+            }
+        ]
+
+    def _memory_explain_why_exists(
+        self,
+        row: sqlite3.Row,
+        *,
+        candidate: dict[str, Any] | None,
+        source_event: dict[str, Any] | None,
+        review_history: list[dict[str, Any]],
+        policy_history: list[dict[str, Any]],
+        graph_nodes: list[dict[str, Any]],
+        graph_edges: list[dict[str, Any]],
+        revisions: list[dict[str, Any]],
+        invalidations: list[dict[str, Any]],
+        audit_trail: list[dict[str, Any]],
+    ) -> list[str]:
+        reasons: list[str] = []
+        if candidate:
+            reasons.append(
+                "created from candidate "
+                f"{candidate['candidate_id']} with {candidate['source_trust']} source trust"
+            )
+        if source_event:
+            reasons.append(
+                "linked to source event "
+                f"{source_event['event_id']} ({source_event['source_type']})"
+            )
+        approve_actions = [item for item in review_history if item["action"] == "approve"]
+        if approve_actions:
+            action = approve_actions[-1]
+            reviewer = action["actor"] or "reviewer"
+            reason = action["reason"] or "no review reason recorded"
+            reasons.append(f"approved by {reviewer}: {reason}")
+        elif policy_history:
+            policy = policy_history[-1]
+            reason = policy["reason"] or "policy promotion or direct memory admission"
+            reasons.append(f"policy decision {policy['decision']}: {reason}")
+        elif str(row["status"]) == "active":
+            reasons.append("active by policy or direct memory import; inspect audit trail for promotion details")
+        else:
+            reasons.append(f"retained for audit with lifecycle status {row['status']}")
+        if graph_nodes or graph_edges:
+            reasons.append(
+                "linked to graph evidence "
+                f"({len(graph_nodes)} node(s), {len(graph_edges)} edge(s))"
+            )
+        if revisions:
+            reasons.append(f"has {len(revisions)} lifecycle revision(s)")
+        if invalidations:
+            reasons.append(f"has {len(invalidations)} derived-surface invalidation record(s)")
+        if audit_trail:
+            reasons.append(f"audit trail contains {len(audit_trail)} event(s)")
+        if not reasons:
+            reasons.append("memory exists in the durable store but lacks expanded provenance")
+        return reasons
 
     def _memory_feedback_rollup(
         self,
