@@ -1286,6 +1286,45 @@ class MemoryStoreTests(unittest.TestCase):
             )
             store.close()
 
+    def test_graph_decay_stale_reports_candidates_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "memory.db")
+            store.init_db()
+            store.remember(
+                "Fact: project decay-site has an old low-evidence CMS note.",
+                scope="professional",
+                source_ref="session://decay-site",
+                auto_approve=True,
+            )
+            before_nodes = store.list_graph_nodes(scope="professional")
+            self.assertTrue(before_nodes)
+            store.conn.execute(
+                """
+                UPDATE memory_graph_nodes
+                SET updated_at = ?, importance = 0.2, verified_status = 'unverified'
+                WHERE scope = 'professional'
+                """,
+                ("2020-01-01T00:00:00+00:00",),
+            )
+            store.conn.commit()
+
+            decay = store.optimize_graph("decay_stale", scope="professional")
+
+            self.assertEqual(decay["optimization_type"], "decay_stale")
+            self.assertEqual(decay["before"]["nodes"], decay["after"]["nodes"])
+            self.assertTrue(decay["findings"])
+            self.assertTrue(
+                all(item["status"] == "decay_candidate" for item in decay["findings"])
+            )
+            self.assertTrue(all(item["mutation"] == "none" for item in decay["findings"]))
+            self.assertIn(
+                "review_for_decay_refresh_or_merge",
+                {item["recommendation"] for item in decay["findings"]},
+            )
+            active_after = store.list_graph_nodes(scope="professional")
+            self.assertEqual(len(active_after), len(before_nodes))
+            store.close()
+
     def test_memory_tree_pack_returns_branches_and_raw_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp) / "memory.db")

@@ -2029,6 +2029,7 @@ def build_parser() -> argparse.ArgumentParser:
             "record_linkage",
             "consolidate_duplicates",
             "knowledge_consistency",
+            "decay_stale",
             "llm_check",
             "interests_reconnect",
             "hemisphere_markup",

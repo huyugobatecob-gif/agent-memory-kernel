@@ -348,8 +348,8 @@ Remaining for full memory:
 - Broader runnable reference loops across real external runtimes and hosted
   deployments beyond the baseline provider-neutral local loop.
 - Advanced graph consolidation/compaction behavior beyond the baseline
-  alias-node merge pass, including split, decay, semantic consistency, and
-  scheduled maintenance policies.
+  alias-node merge and stale-decay finding passes, including split, semantic
+  consistency, and scheduled maintenance policies.
 - Production LLM-backed Keeper eval suite, managed model configuration,
   provider-specific adapters, and reviewed extraction prompts for
   natural-language graph updates beyond the baseline schema contract.
@@ -559,8 +559,10 @@ or update graph nodes and edges, attach evidence, record `graph_commands`, and
 dedupe repeated node/edge writes. Baseline graph consolidation is implemented
 through `consolidate_duplicates`: alias-like duplicate nodes are merged,
 evidence is preserved, edges are rewired or merged, and the pass is auditable.
-Remaining work is richer split/decay heuristics, destructive command review UX,
-and broader graph consistency evals.
+Baseline stale-node decay review is implemented through `decay_stale`: old,
+low-evidence, low-importance nodes are reported for review without automatic
+mutation. Remaining work is richer split/decay heuristics, destructive command
+review UX, scheduled maintenance policies, and broader graph consistency evals.
 
 ### Step 6: Build The Memory Router
 

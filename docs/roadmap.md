@@ -165,7 +165,10 @@ through `agent-memory graph optimize --mode consolidate_duplicates`,
 `/graph/optimize`, Python adapter `optimize_graph()`, and MCP
 `memory_graph_optimize`; it compacts alias-like duplicate nodes, preserves
 evidence, rewires/merges edges, and records the pass in
-`graph_optimization_runs`. Advanced split/decay/semantic consistency
+`graph_optimization_runs`. Baseline stale-node decay review is implemented
+through `agent-memory graph optimize --mode decay_stale`; it reports old,
+low-evidence, low-importance nodes as review candidates without mutating active
+graph state. Advanced split, semantic consistency, and scheduled maintenance
 heuristics are still backlog.
 Agent write-policy enforcement is implemented for record, auto-approve,
 approve/reject, correct/delete/distrust/expire, outcome, conflict, and

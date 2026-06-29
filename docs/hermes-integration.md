@@ -777,6 +777,7 @@ Graph maintenance:
 ```bash
 agent-memory graph optimize --mode record_linkage --scope professional
 agent-memory graph optimize --mode knowledge_consistency --scope professional
+agent-memory graph optimize --mode decay_stale --scope professional
 agent-memory graph optimize --mode interests_reconnect --scope professional
 agent-memory graph optimize --mode brain_calibration --scope professional
 ```

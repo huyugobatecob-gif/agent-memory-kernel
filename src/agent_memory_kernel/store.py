@@ -3683,6 +3683,8 @@ class MemoryStore:
             findings = self._consolidate_duplicate_graph_nodes(scope)
         elif optimization_type == "knowledge_consistency":
             findings = self._find_graph_conflicts(scope)
+        elif optimization_type == "decay_stale":
+            findings = self._find_stale_graph_nodes(scope)
         elif optimization_type == "llm_check":
             findings = [{"status": "queued_for_model_review", "model": "external-gpt"}]
         elif optimization_type == "interests_reconnect":
@@ -8754,6 +8756,71 @@ class MemoryStore:
                     "canonical_keys": sorted({item["canonical_key"] for item in group}),
                     "labels": [item["label"] for item in group],
                     "graph_node_ids": [item["graph_node_id"] for item in group],
+                }
+            )
+        return findings
+
+    def _find_stale_graph_nodes(
+        self,
+        scope: str,
+        *,
+        stale_days: int = 90,
+        max_evidence_count: int = 1,
+        max_importance: float = 0.6,
+    ) -> list[dict[str, Any]]:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=stale_days)).replace(
+            microsecond=0
+        ).isoformat()
+        rows = self.conn.execute(
+            """
+            SELECT gn.graph_node_id, gn.node_type, gn.label, gn.group_label,
+                   gn.scope, gn.updated_at, gn.importance, gn.confidence,
+                   gn.verified_status, gn.summary,
+                   COUNT(DISTINCT ne.evidence_id) AS evidence_count,
+                   COUNT(DISTINCT ge.graph_edge_id) AS edge_count
+            FROM memory_graph_nodes gn
+            LEFT JOIN node_evidence ne ON ne.graph_node_id = gn.graph_node_id
+            LEFT JOIN memory_graph_edges ge
+              ON ge.status = 'active'
+             AND (ge.source_graph_node_id = gn.graph_node_id OR ge.target_graph_node_id = gn.graph_node_id)
+            WHERE gn.status = 'active'
+              AND gn.scope = ?
+              AND gn.updated_at < ?
+            GROUP BY gn.graph_node_id
+            HAVING evidence_count <= ?
+               AND gn.importance <= ?
+            ORDER BY gn.updated_at ASC, evidence_count ASC, gn.importance ASC
+            LIMIT 50
+            """,
+            (scope, cutoff, int(max_evidence_count), float(max_importance)),
+        ).fetchall()
+        findings = []
+        for row in rows:
+            reasons = [f"not refreshed since {row['updated_at']}"]
+            if int(row["evidence_count"] or 0) <= max_evidence_count:
+                reasons.append(f"low evidence count: {int(row['evidence_count'] or 0)}")
+            if float(row["importance"] or 0.0) <= max_importance:
+                reasons.append(f"low importance: {float(row['importance'] or 0.0):.2f}")
+            if str(row["verified_status"] or "") != "verified":
+                reasons.append(f"not verified: {row['verified_status'] or 'unknown'}")
+            findings.append(
+                {
+                    "status": "decay_candidate",
+                    "graph_node_id": row["graph_node_id"],
+                    "node_type": row["node_type"],
+                    "label": row["label"],
+                    "group_label": row["group_label"],
+                    "scope": row["scope"],
+                    "updated_at": row["updated_at"],
+                    "importance": row["importance"],
+                    "confidence": row["confidence"],
+                    "verified_status": row["verified_status"],
+                    "evidence_count": int(row["evidence_count"] or 0),
+                    "edge_count": int(row["edge_count"] or 0),
+                    "summary": self._excerpt(row["summary"] or "", 240),
+                    "reasons": reasons,
+                    "recommendation": "review_for_decay_refresh_or_merge",
+                    "mutation": "none",
                 }
             )
         return findings

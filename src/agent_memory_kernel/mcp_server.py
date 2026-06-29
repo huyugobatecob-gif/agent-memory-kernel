@@ -823,7 +823,7 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": _schema(
             {
                 "mode": _string(
-                    "Optimization mode: record_linkage, consolidate_duplicates, knowledge_consistency, llm_check, interests_reconnect, hemisphere_markup, or brain_calibration.",
+                    "Optimization mode: record_linkage, consolidate_duplicates, knowledge_consistency, decay_stale, llm_check, interests_reconnect, hemisphere_markup, or brain_calibration.",
                     "record_linkage",
                 ),
                 "scope": _string("Memory scope/lane.", "professional"),

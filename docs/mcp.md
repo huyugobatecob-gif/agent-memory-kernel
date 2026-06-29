@@ -147,7 +147,8 @@ Operator and graph tools:
 - `memory_graph_browser`: return graph nodes, edges, and source previews in one
   browser-ready payload.
 - `memory_graph_optimize`: run graph maintenance passes, including
-  `consolidate_duplicates` for safe alias-node compaction.
+  `consolidate_duplicates` for safe alias-node compaction and `decay_stale`
+  for non-mutating stale-node review findings.
 
 ## Agent Pattern
 

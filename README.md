@@ -336,6 +336,7 @@ agent-memory observability --db .memory/demo.db --scope professional
 agent-memory prompt-budget --db .memory/demo.db --model-id llama-3.1-8b --token-budget 12000
 agent-memory current-best --db .memory/demo.db --scope professional "planning an SEO loop"
 agent-memory graph --db .memory/demo.db optimize --mode consolidate_duplicates --scope professional
+agent-memory graph --db .memory/demo.db optimize --mode decay_stale --scope professional
 ```
 
 Inspect the formal memory contract and run the deterministic full-memory gate:
