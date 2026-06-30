@@ -46,6 +46,18 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:16]}"
 
 
+def stable_text_hash(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def slugify_path_part(value: str, *, fallback: str = "item", limit: int = 48) -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
+    value = value.strip("-")
+    if not value:
+        value = fallback
+    return value[:limit].strip("-") or fallback
+
+
 URL_RE = re.compile(r"https?://[^\s)]+")
 DOMAIN_RE = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b")
 DATE_HINT_RE = re.compile(r"\b(?:20\d{2}-\d{2}-\d{2}|20\d{6}|today|yesterday|tomorrow|сегодня|вчера|завтра)\b", re.I)
@@ -138,6 +150,16 @@ NOTIFICATION_DELIVERY_VERSION = "notification-delivery-v0.1"
 MEMORY_LIFECYCLE_BATCH_VERSION = "memory-lifecycle-batch-v0.1"
 GRAPH_BROWSER_VERSION = "graph-browser-v0.1"
 CONFLICT_DETECTION_VERSION = "conflict-detection-v0.1"
+MEMORY_REVISION_LAYER_VERSION = "memory-revision-layer-v0.1"
+BOUNDED_RECALL_VERSION = "bounded-recall-v0.1"
+WATCH_IMPORT_VERSION = "watch-import-v0.1"
+CONFLICT_POLICY_VALUES = {
+    "append",
+    "replace",
+    "confidence_gated",
+    "llm_merge_as_proposal",
+    "reject",
+}
 OUTCOME_COMPARISON_VERSION = "outcome-comparison-v0.1"
 CURRENT_BEST_HEURISTICS_VERSION = "current-best-heuristics-v0.1"
 EXPORT_CONTROL_VERSION = "export-control-v0.1"
@@ -358,6 +380,18 @@ class MemoryStore:
             "TEXT NOT NULL DEFAULT '{}'",
         )
         for column, declaration in [
+            ("parent_revision_id", "TEXT NOT NULL DEFAULT ''"),
+            ("branch_id", "TEXT NOT NULL DEFAULT ''"),
+            ("change_type", "TEXT NOT NULL DEFAULT 'correct'"),
+            ("evidence_id", "TEXT NOT NULL DEFAULT ''"),
+            ("review_id", "TEXT NOT NULL DEFAULT ''"),
+            ("policy_scope", "TEXT NOT NULL DEFAULT ''"),
+            ("taxonomy_path", "TEXT NOT NULL DEFAULT ''"),
+            ("conflict_policy", "TEXT NOT NULL DEFAULT ''"),
+            ("status", "TEXT NOT NULL DEFAULT 'active'"),
+        ]:
+            self._ensure_column("memory_revisions", column, declaration)
+        for column, declaration in [
             ("aliases_json", "TEXT NOT NULL DEFAULT '[]'"),
             ("topics_json", "TEXT NOT NULL DEFAULT '[]'"),
             ("chronology_json", "TEXT NOT NULL DEFAULT '[]'"),
@@ -396,6 +430,30 @@ class MemoryStore:
             """
             CREATE INDEX IF NOT EXISTS idx_derived_invalidations_memory
             ON derived_invalidations(memory_id, created_at)
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory
+            ON memory_revisions(memory_id, created_at)
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_taxonomy_alias_path
+            ON memory_taxonomy_aliases(scope, taxonomy_path, status)
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_draft_scopes_lookup
+            ON memory_draft_scopes(scope, draft_name, status)
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_import_chunks_source
+            ON memory_import_chunks(source_ref, source_hash)
             """
         )
         for column, declaration in [
@@ -2518,6 +2576,52 @@ class MemoryStore:
                 "extraction_json",
             ],
             "memories": ["memory_id", "candidate_id", "text", "scope", "status"],
+            "memory_revisions": [
+                "revision_id",
+                "memory_id",
+                "previous_text",
+                "new_text",
+                "change_type",
+                "evidence_id",
+                "review_id",
+                "policy_scope",
+                "taxonomy_path",
+                "conflict_policy",
+                "status",
+            ],
+            "memory_taxonomy_aliases": [
+                "alias_id",
+                "scope",
+                "taxonomy_path",
+                "target_type",
+                "target_id",
+                "status",
+            ],
+            "memory_draft_scopes": [
+                "draft_scope_id",
+                "scope",
+                "draft_name",
+                "actor",
+                "status",
+                "base_ref",
+            ],
+            "memory_draft_items": [
+                "draft_item_id",
+                "draft_scope_id",
+                "candidate_id",
+                "status",
+                "conflict_policy",
+            ],
+            "memory_import_chunks": [
+                "chunk_id",
+                "event_id",
+                "candidate_id",
+                "source_ref",
+                "source_hash",
+                "chunk_hash",
+                "chunk_index",
+                "status",
+            ],
             "memory_items": ["item_id", "memory_id", "text", "status", "metadata_json"],
             "memory_graph_nodes": [
                 "graph_node_id",
@@ -3477,6 +3581,471 @@ class MemoryStore:
                 if self._read_allowed(actor, str(row.get("scope", "professional")), "read")
             ]
         return results
+
+    def bounded_recall_summarize(
+        self,
+        query: str = "",
+        *,
+        scope: str | None = None,
+        prefix: str = "",
+        depth: int = 3,
+        limit: int = 50,
+        actor: str = "agent",
+    ) -> dict[str, Any]:
+        """Return read-only taxonomy buckets for caller-driven recall."""
+        scope = normalize_scope(scope) if scope else None
+        if scope:
+            self._enforce_read_policy(actor, scope, "read")
+        query = (query or "").strip()
+        prefix = (prefix or "").strip().lower()
+        depth = max(1, min(int(depth or 3), 8))
+        limit = max(1, min(int(limit or 50), 200))
+
+        if query:
+            search_rows = self.search(
+                query,
+                scope=scope,
+                limit=limit,
+                actor=actor,
+                enforce_read_policy=True,
+            )
+            memory_ids = [str(row["memory_id"]) for row in search_rows]
+            rows = self._active_memory_rows(memory_ids=memory_ids)
+        else:
+            rows = self._active_memory_rows(scope=scope, limit=limit)
+            if not scope:
+                rows = [
+                    row
+                    for row in rows
+                    if self._read_allowed(actor, str(row["scope"]), "read")
+                ]
+
+        aliases = self._taxonomy_aliases_for_memory_ids([str(row["memory_id"]) for row in rows])
+        buckets: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            memory_id = str(row["memory_id"])
+            paths = aliases.get(memory_id) or [
+                {
+                    "taxonomy_path": ".".join(
+                        [
+                            "memory",
+                            slugify_path_part(str(row["kind"]), fallback="fact", limit=24),
+                            memory_id.split("_")[-1][:8],
+                        ]
+                    ),
+                    "alias_kind": "fallback",
+                }
+            ]
+            for alias in paths:
+                path = str(alias["taxonomy_path"])
+                if prefix and not (path == prefix or path.startswith(prefix + ".")):
+                    continue
+                parts = [part for part in path.split(".") if part]
+                bucket_path = ".".join(parts[:depth]) if len(parts) >= depth else path
+                bucket = buckets.setdefault(
+                    bucket_path,
+                    {
+                        "path": bucket_path,
+                        "count": 0,
+                        "memory_ids": [],
+                        "exact_paths": [],
+                        "kinds": {},
+                        "scopes": {},
+                    },
+                )
+                bucket["count"] += 1
+                if memory_id not in bucket["memory_ids"]:
+                    bucket["memory_ids"].append(memory_id)
+                if path not in bucket["exact_paths"]:
+                    bucket["exact_paths"].append(path)
+                bucket["kinds"][row["kind"]] = int(bucket["kinds"].get(row["kind"], 0)) + 1
+                bucket["scopes"][row["scope"]] = int(bucket["scopes"].get(row["scope"], 0)) + 1
+
+        return {
+            "version": BOUNDED_RECALL_VERSION,
+            "mode": "summarize",
+            "query": query,
+            "scope": scope or "all",
+            "prefix": prefix,
+            "depth": depth,
+            "read_only": True,
+            "instructions": (
+                "Choose exact_paths or memory_ids from these buckets, then call "
+                "bounded_recall_get. This tool never writes memory."
+            ),
+            "buckets": sorted(
+                buckets.values(),
+                key=lambda item: (-int(item["count"]), str(item["path"])),
+            )[:limit],
+        }
+
+    def bounded_recall_get(
+        self,
+        *,
+        paths: list[str] | None = None,
+        memory_ids: list[str] | None = None,
+        scope: str | None = None,
+        actor: str = "agent",
+        include_evidence_text: bool = False,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Fetch exact active memories by alias path or memory id with provenance."""
+        scope = normalize_scope(scope) if scope else None
+        if scope:
+            self._enforce_read_policy(actor, scope, "read")
+        requested_paths = [
+            str(path).strip().lower() for path in (paths or []) if str(path).strip()
+        ]
+        requested_ids = [
+            str(memory_id).strip()
+            for memory_id in (memory_ids or [])
+            if str(memory_id).strip()
+        ]
+        limit = max(1, min(int(limit or 50), 200))
+        resolved_ids = set(requested_ids)
+
+        if requested_paths:
+            placeholders = ",".join("?" for _ in requested_paths)
+            params: list[Any] = [*requested_paths]
+            scope_clause = ""
+            if scope:
+                scope_clause = "AND scope = ?"
+                params.append(scope)
+            rows = self.conn.execute(
+                f"""
+                SELECT target_id
+                FROM memory_taxonomy_aliases
+                WHERE target_type = 'memory'
+                  AND status = 'active'
+                  AND taxonomy_path IN ({placeholders})
+                  {scope_clause}
+                """,
+                params,
+            ).fetchall()
+            resolved_ids.update(str(row["target_id"]) for row in rows)
+
+        rows = self._active_memory_rows(memory_ids=sorted(resolved_ids), scope=scope, limit=limit)
+        if not scope:
+            rows = [
+                row
+                for row in rows
+                if self._read_allowed(actor, str(row["scope"]), "read")
+            ]
+        aliases = self._taxonomy_aliases_for_memory_ids([str(row["memory_id"]) for row in rows])
+        sources = self._sources_for_memories([str(row["memory_id"]) for row in rows])
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            memory_id = str(row["memory_id"])
+            source_items = []
+            for source in sources.get(memory_id, []):
+                source_item = {
+                    "event_id": source["event_id"],
+                    "source_type": source["source_type"],
+                    "source_ref": source["source_ref"],
+                }
+                if include_evidence_text:
+                    source_item["event_excerpt"] = self._event_excerpt(str(source["event_id"]))
+                source_items.append(source_item)
+            items.append(
+                {
+                    "memory_id": memory_id,
+                    "scope": row["scope"],
+                    "kind": row["kind"],
+                    "confidence": row["confidence"],
+                    "source_trust": row["source_trust"],
+                    "status": row["status"],
+                    "text": row["text"],
+                    "taxonomy_paths": [
+                        alias["taxonomy_path"] for alias in aliases.get(memory_id, [])
+                    ],
+                    "sources": source_items,
+                }
+            )
+        return {
+            "version": BOUNDED_RECALL_VERSION,
+            "mode": "get",
+            "scope": scope or "all",
+            "read_only": True,
+            "requested_paths": requested_paths,
+            "requested_memory_ids": requested_ids,
+            "memories": items,
+        }
+
+    def create_draft_scope(
+        self,
+        draft_name: str,
+        *,
+        scope: str = "professional",
+        actor: str = "agent",
+        base_ref: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or return a branch-like proposal scope for candidates."""
+        scope = normalize_scope(scope)
+        draft_name = (draft_name or "").strip()
+        if not draft_name:
+            raise ValueError("draft_name is required")
+        self._enforce_write_policy(actor, scope, "record")
+        now = now_iso()
+        row = self.conn.execute(
+            """
+            SELECT *
+            FROM memory_draft_scopes
+            WHERE scope = ? AND draft_name = ?
+            """,
+            (scope, draft_name),
+        ).fetchone()
+        if row:
+            return self._draft_scope_to_dict(row)
+        draft_scope_id = new_id("draft")
+        self.conn.execute(
+            """
+            INSERT INTO memory_draft_scopes
+              (draft_scope_id, created_at, updated_at, scope, draft_name,
+               actor, status, base_ref, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)
+            """,
+            (
+                draft_scope_id,
+                now,
+                now,
+                scope,
+                draft_name,
+                actor,
+                base_ref,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self._audit(
+            "draft_create",
+            "memory_draft_scope",
+            draft_scope_id,
+            actor=actor,
+            details={"scope": scope, "draft_name": draft_name},
+        )
+        self.conn.commit()
+        return self._draft_scope_to_dict(
+            self.conn.execute(
+                "SELECT * FROM memory_draft_scopes WHERE draft_scope_id = ?",
+                (draft_scope_id,),
+            ).fetchone()
+        )
+
+    def add_candidate_to_draft(
+        self,
+        draft_scope_id: str,
+        candidate_id: str,
+        *,
+        conflict_policy: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if conflict_policy and conflict_policy not in CONFLICT_POLICY_VALUES:
+            raise ValueError(f"unsupported conflict policy: {conflict_policy}")
+        draft = self.conn.execute(
+            "SELECT * FROM memory_draft_scopes WHERE draft_scope_id = ?",
+            (draft_scope_id,),
+        ).fetchone()
+        if draft is None:
+            raise KeyError(f"draft scope not found: {draft_scope_id}")
+        candidate = self._candidate(candidate_id)
+        if candidate is None:
+            raise KeyError(f"candidate not found: {candidate_id}")
+        if normalize_scope(str(candidate["scope"])) != normalize_scope(str(draft["scope"])):
+            raise ValueError("candidate scope does not match draft scope")
+        draft_item_id = new_id("ditem")
+        self.conn.execute(
+            """
+            INSERT OR IGNORE INTO memory_draft_items
+              (draft_item_id, draft_scope_id, candidate_id, created_at, status,
+               conflict_policy, metadata_json)
+            VALUES (?, ?, ?, ?, 'proposed', ?, ?)
+            """,
+            (
+                draft_item_id,
+                draft_scope_id,
+                candidate_id,
+                now_iso(),
+                conflict_policy,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self.conn.commit()
+        row = self.conn.execute(
+            """
+            SELECT *
+            FROM memory_draft_items
+            WHERE draft_scope_id = ? AND candidate_id = ?
+            """,
+            (draft_scope_id, candidate_id),
+        ).fetchone()
+        return self._draft_item_to_dict(row)
+
+    def propose_memory_change(
+        self,
+        memory_id: str,
+        proposed_text: str,
+        *,
+        conflict_policy: str,
+        actor: str = "agent",
+        reason: str = "",
+        draft_name: str = "",
+    ) -> dict[str, Any]:
+        """Create a reviewable candidate for a conflict-policy-guided change."""
+        conflict_policy = (conflict_policy or "").strip().lower()
+        if conflict_policy not in CONFLICT_POLICY_VALUES:
+            raise ValueError(f"unsupported conflict policy: {conflict_policy}")
+        row = self._memory_row(memory_id)
+        if row is None:
+            raise KeyError(f"memory not found: {memory_id}")
+        scope = normalize_scope(str(row["scope"]))
+        self._enforce_write_policy(actor, scope, "record")
+        if conflict_policy == "reject":
+            return {
+                "version": MEMORY_REVISION_LAYER_VERSION,
+                "status": "rejected",
+                "memory_id": memory_id,
+                "conflict_policy": conflict_policy,
+                "reason": reason or "conflict policy rejected the write",
+                "candidate": None,
+            }
+        result = self._record_direct_candidate(
+            proposed_text,
+            scope=scope,
+            actor=actor,
+            source_type="conflict_policy",
+            source_ref=f"memory://{memory_id}",
+            kind=str(row["kind"]),
+            confidence=str(row["confidence"]),
+            sensitivity=str(row["sensitivity"]),
+            metadata={
+                "version": MEMORY_REVISION_LAYER_VERSION,
+                "base_memory_id": memory_id,
+                "conflict_policy": conflict_policy,
+                "reason": reason,
+                "proposal_only": conflict_policy == "llm_merge_as_proposal",
+                "taxonomy_path": self._primary_taxonomy_path(memory_id),
+            },
+        )
+        draft = None
+        if draft_name:
+            draft = self.create_draft_scope(
+                draft_name,
+                scope=scope,
+                actor=actor,
+                base_ref=memory_id,
+                metadata={"conflict_policy": conflict_policy},
+            )
+            self.add_candidate_to_draft(
+                draft["draft_scope_id"],
+                result["candidate_id"],
+                conflict_policy=conflict_policy,
+                metadata={"base_memory_id": memory_id},
+            )
+        return {
+            "version": MEMORY_REVISION_LAYER_VERSION,
+            "status": "proposed",
+            "memory_id": memory_id,
+            "conflict_policy": conflict_policy,
+            "candidate": result,
+            "draft": draft,
+        }
+
+    def watch_import_path(
+        self,
+        path: str | Path,
+        *,
+        scope: str = "professional",
+        actor: str = "watch-import",
+        chunk_chars: int = 4000,
+    ) -> dict[str, Any]:
+        """Import a local text file as quarantined/reviewable source chunks."""
+        source_path = Path(path).expanduser()
+        if not source_path.exists() or not source_path.is_file():
+            raise FileNotFoundError(str(source_path))
+        scope = normalize_scope(scope)
+        raw = source_path.read_text(encoding="utf-8")
+        source_hash = stable_text_hash(raw)
+        chunks = self._chunk_import_text(raw, max_chars=chunk_chars)
+        imported: list[dict[str, Any]] = []
+        counts: defaultdict[str, int] = defaultdict(int)
+        for index, chunk in enumerate(chunks, start=1):
+            chunk_hash = stable_text_hash(chunk)
+            source_ref = f"watch://{source_path.resolve().as_posix()}#chunk-{index}"
+            result = self.remember(
+                chunk,
+                scope=scope,
+                actor=actor,
+                source_type="watch_import",
+                source_ref=source_ref,
+                auto_approve=False,
+                metadata={
+                    "version": WATCH_IMPORT_VERSION,
+                    "path": source_path.resolve().as_posix(),
+                    "source_hash": source_hash,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": index,
+                    "chunk_count": len(chunks),
+                },
+            )
+            candidate_ids = [
+                str(candidate.get("candidate_id"))
+                for candidate in result.get("candidates", [])
+                if candidate.get("candidate_id")
+            ]
+            for candidate in result.get("candidates", []):
+                status = str(candidate.get("status", "pending"))
+                counts[status] += 1
+                self.conn.execute(
+                    """
+                    INSERT OR IGNORE INTO memory_import_chunks
+                      (chunk_id, event_id, candidate_id, created_at, scope,
+                       source_ref, source_hash, chunk_hash, chunk_index, text,
+                       status, metadata_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_id("chunk"),
+                        result["event_id"],
+                        candidate.get("candidate_id"),
+                        now_iso(),
+                        scope,
+                        source_ref,
+                        source_hash,
+                        chunk_hash,
+                        index,
+                        chunk,
+                        status,
+                        json.dumps(
+                            {
+                                "version": WATCH_IMPORT_VERSION,
+                                "path": source_path.resolve().as_posix(),
+                                "chunk_count": len(chunks),
+                            },
+                            sort_keys=True,
+                        ),
+                    ),
+                )
+            imported.append(
+                {
+                    "event_id": result["event_id"],
+                    "source_ref": source_ref,
+                    "chunk_index": index,
+                    "chunk_hash": chunk_hash,
+                    "candidate_ids": candidate_ids,
+                }
+            )
+        self.conn.commit()
+        return {
+            "version": WATCH_IMPORT_VERSION,
+            "status": "imported",
+            "path": source_path.resolve().as_posix(),
+            "scope": scope,
+            "source_hash": source_hash,
+            "chunk_count": len(chunks),
+            "counts": dict(counts),
+            "auto_approve": False,
+            "imported": imported,
+        }
 
     def context_pack(
         self,
@@ -6994,8 +7563,10 @@ class MemoryStore:
                 """
                 INSERT OR IGNORE INTO memory_revisions
                   (revision_id, memory_id, created_at, actor, previous_text,
-                   new_text, reason, rollback_of_revision_id, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   new_text, reason, parent_revision_id, branch_id, change_type,
+                   evidence_id, review_id, policy_scope, taxonomy_path,
+                   conflict_policy, status, rollback_of_revision_id, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     revision_id,
@@ -7005,11 +7576,142 @@ class MemoryStore:
                     str(revision.get("previous_text", "")),
                     str(revision.get("new_text", "")),
                     str(revision.get("reason", "")),
+                    str(revision.get("parent_revision_id", "")),
+                    str(revision.get("branch_id", "")),
+                    str(revision.get("change_type", "correct")),
+                    str(revision.get("evidence_id", "")),
+                    str(revision.get("review_id", "")),
+                    str(revision.get("policy_scope", "")),
+                    str(revision.get("taxonomy_path", "")),
+                    str(revision.get("conflict_policy", "")),
+                    str(revision.get("status", "active")),
                     str(revision.get("rollback_of_revision_id", "")),
                     self._json_text(revision.get("metadata_json"), "{}"),
                 ),
             )
             counts["memory_revisions"] += max(int(inserted.rowcount or 0), 0)
+
+        for alias in self._importable_rows(lifecycle.get("taxonomy_aliases")):
+            alias_id = str(alias.get("alias_id", ""))
+            target_id = str(alias.get("target_id", ""))
+            target_type = str(alias.get("target_type", "memory"))
+            if not alias_id or (
+                target_type == "memory"
+                and not self._row_exists("memories", "memory_id", target_id)
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_taxonomy_aliases
+                  (alias_id, created_at, updated_at, scope, taxonomy_path,
+                   target_type, target_id, alias_kind, status, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    alias_id,
+                    str(alias.get("created_at") or now_iso()),
+                    str(alias.get("updated_at") or alias.get("created_at") or now_iso()),
+                    normalize_scope(str(alias.get("scope", "professional"))),
+                    str(alias.get("taxonomy_path", "")),
+                    target_type,
+                    target_id,
+                    str(alias.get("alias_kind", "imported")),
+                    str(alias.get("status", "active")),
+                    self._json_text(alias.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["taxonomy_aliases"] += max(int(inserted.rowcount or 0), 0)
+
+        for draft in self._importable_rows(lifecycle.get("draft_scopes")):
+            draft_scope_id = str(draft.get("draft_scope_id", ""))
+            if not draft_scope_id:
+                counts["skipped_invalid"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_draft_scopes
+                  (draft_scope_id, created_at, updated_at, scope, draft_name,
+                   actor, status, base_ref, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    draft_scope_id,
+                    str(draft.get("created_at") or now_iso()),
+                    str(draft.get("updated_at") or draft.get("created_at") or now_iso()),
+                    normalize_scope(str(draft.get("scope", "professional"))),
+                    str(draft.get("draft_name", "")),
+                    str(draft.get("actor", "agent")),
+                    str(draft.get("status", "open")),
+                    str(draft.get("base_ref", "")),
+                    self._json_text(draft.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["draft_scopes"] += max(int(inserted.rowcount or 0), 0)
+
+        for draft_item in self._importable_rows(lifecycle.get("draft_items")):
+            draft_item_id = str(draft_item.get("draft_item_id", ""))
+            draft_scope_id = str(draft_item.get("draft_scope_id", ""))
+            candidate_id = str(draft_item.get("candidate_id", ""))
+            if (
+                not draft_item_id
+                or not self._row_exists("memory_draft_scopes", "draft_scope_id", draft_scope_id)
+                or not self._row_exists("candidate_memories", "candidate_id", candidate_id)
+            ):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_draft_items
+                  (draft_item_id, draft_scope_id, candidate_id, created_at,
+                   status, conflict_policy, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    draft_item_id,
+                    draft_scope_id,
+                    candidate_id,
+                    str(draft_item.get("created_at") or now_iso()),
+                    str(draft_item.get("status", "proposed")),
+                    str(draft_item.get("conflict_policy", "")),
+                    self._json_text(draft_item.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["draft_items"] += max(int(inserted.rowcount or 0), 0)
+
+        for chunk in self._importable_rows(lifecycle.get("import_chunks")):
+            chunk_id = str(chunk.get("chunk_id", ""))
+            event_id = str(chunk.get("event_id", ""))
+            candidate_id = str(chunk.get("candidate_id", ""))
+            if not chunk_id or not self._row_exists("events", "event_id", event_id):
+                counts["skipped_missing_provenance"] += 1
+                continue
+            if candidate_id and not self._row_exists("candidate_memories", "candidate_id", candidate_id):
+                candidate_id = ""
+            inserted = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_import_chunks
+                  (chunk_id, event_id, candidate_id, created_at, scope,
+                   source_ref, source_hash, chunk_hash, chunk_index, text,
+                   status, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk_id,
+                    event_id,
+                    candidate_id or None,
+                    str(chunk.get("created_at") or now_iso()),
+                    normalize_scope(str(chunk.get("scope", "professional"))),
+                    str(chunk.get("source_ref", "")),
+                    str(chunk.get("source_hash", "")),
+                    str(chunk.get("chunk_hash", "")),
+                    int(chunk.get("chunk_index", 0) or 0),
+                    str(chunk.get("text", "")),
+                    str(chunk.get("status", "candidate")),
+                    self._json_text(chunk.get("metadata_json"), "{}"),
+                ),
+            )
+            counts["import_chunks"] += max(int(inserted.rowcount or 0), 0)
 
         for invalidation in self._importable_rows(lifecycle.get("derived_invalidations")):
             invalidation_id = str(invalidation.get("invalidation_id", ""))
@@ -9351,7 +10053,9 @@ class MemoryStore:
         revision_rows = self.conn.execute(
             """
             SELECT revision_id, created_at, actor, previous_text, new_text,
-                   reason, rollback_of_revision_id, metadata_json
+                   reason, parent_revision_id, branch_id, change_type,
+                   evidence_id, review_id, policy_scope, taxonomy_path,
+                   conflict_policy, status, rollback_of_revision_id, metadata_json
             FROM memory_revisions
             WHERE memory_id = ?
             ORDER BY created_at ASC, revision_id ASC
@@ -9367,6 +10071,15 @@ class MemoryStore:
                 "new_text_excerpt": self._excerpt(revision["new_text"], 500),
                 "diff": self._memory_text_diff(revision["previous_text"], revision["new_text"]),
                 "reason": revision["reason"],
+                "parent_revision_id": revision["parent_revision_id"],
+                "branch_id": revision["branch_id"],
+                "change_type": revision["change_type"],
+                "evidence_id": revision["evidence_id"],
+                "review_id": revision["review_id"],
+                "policy_scope": revision["policy_scope"],
+                "taxonomy_path": revision["taxonomy_path"],
+                "conflict_policy": revision["conflict_policy"],
+                "status": revision["status"],
                 "rollback_of_revision_id": revision["rollback_of_revision_id"],
                 "metadata": self._loads_json(revision["metadata_json"], {}),
             }
@@ -10301,6 +11014,10 @@ class MemoryStore:
             new_text=text,
             actor=actor,
             reason=reason,
+            change_type="correct",
+            evidence_id=self._primary_source_event_id(memory_id),
+            policy_scope=str(row["scope"]),
+            taxonomy_path=self._primary_taxonomy_path(memory_id),
         )
         self.conn.execute(
             "UPDATE memories SET text = ?, updated_at = ? WHERE memory_id = ?",
@@ -10363,6 +11080,10 @@ class MemoryStore:
             new_text=restored_text,
             actor=actor,
             reason=reason or "rollback",
+            change_type="rollback",
+            evidence_id=self._primary_source_event_id(memory_id),
+            policy_scope=str(row["scope"]),
+            taxonomy_path=self._primary_taxonomy_path(memory_id),
             rollback_of_revision_id=str(revision["revision_id"]),
         )
         ts = now_iso()
@@ -10413,7 +11134,9 @@ class MemoryStore:
         rows = self.conn.execute(
             """
             SELECT revision_id, memory_id, created_at, actor, previous_text,
-                   new_text, reason, rollback_of_revision_id, metadata_json
+                   new_text, reason, parent_revision_id, branch_id, change_type,
+                   evidence_id, review_id, policy_scope, taxonomy_path,
+                   conflict_policy, status, rollback_of_revision_id, metadata_json
             FROM memory_revisions
             WHERE memory_id = ?
             ORDER BY created_at DESC, rowid DESC
@@ -10431,6 +11154,15 @@ class MemoryStore:
                 "new_text": row["new_text"],
                 "diff": self._memory_text_diff(row["previous_text"], row["new_text"]),
                 "reason": row["reason"],
+                "parent_revision_id": row["parent_revision_id"],
+                "branch_id": row["branch_id"],
+                "change_type": row["change_type"],
+                "evidence_id": row["evidence_id"],
+                "review_id": row["review_id"],
+                "policy_scope": row["policy_scope"],
+                "taxonomy_path": row["taxonomy_path"],
+                "conflict_policy": row["conflict_policy"],
+                "status": row["status"],
                 "rollback_of_revision_id": row["rollback_of_revision_id"],
                 "metadata": self._loads_json(row["metadata_json"], {}),
             }
@@ -11177,8 +11909,140 @@ class MemoryStore:
         self._create_graph_nodes(memory_id, candidate)
         if event:
             self._create_memory_graph(memory_id, candidate, event)
+        taxonomy_path = self._default_taxonomy_path(candidate, memory_id)
+        self._upsert_taxonomy_alias(
+            scope=str(candidate["scope"]),
+            taxonomy_path=taxonomy_path,
+            target_type="memory",
+            target_id=memory_id,
+            alias_kind="generated",
+            metadata={
+                "candidate_id": candidate_id,
+                "kind": candidate["kind"],
+                "source_event_id": str(candidate["event_id"]),
+                "version": MEMORY_REVISION_LAYER_VERSION,
+            },
+        )
         self._audit("approve", "candidate", candidate_id, actor=actor, details={"memory_id": memory_id})
         return memory_id
+
+    def _default_taxonomy_path(self, candidate: sqlite3.Row, memory_id: str) -> str:
+        extraction = self._loads_json(candidate["extraction_json"], {})
+        metadata = extraction.get("metadata") if isinstance(extraction, dict) else {}
+        if isinstance(metadata, dict):
+            explicit = str(metadata.get("taxonomy_path") or "").strip().lower()
+            if explicit:
+                return explicit
+        labels: list[str] = []
+        for node in extraction.get("nodes", []) if isinstance(extraction, dict) else []:
+            if isinstance(node, dict) and str(node.get("label") or "").strip():
+                labels.append(str(node["label"]))
+        label = labels[0] if labels else str(candidate["proposed_text"])
+        return ".".join(
+            [
+                "memory",
+                slugify_path_part(str(candidate["kind"]), fallback="fact", limit=24),
+                slugify_path_part(label, fallback="item", limit=40),
+                str(memory_id).split("_")[-1][:8],
+            ]
+        )
+
+    def _upsert_taxonomy_alias(
+        self,
+        *,
+        scope: str,
+        taxonomy_path: str,
+        target_type: str,
+        target_id: str,
+        alias_kind: str = "generated",
+        status: str = "active",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        scope = normalize_scope(scope)
+        taxonomy_path = (taxonomy_path or "").strip().lower()
+        target_type = (target_type or "memory").strip().lower()
+        target_id = (target_id or "").strip()
+        if not taxonomy_path or not target_id:
+            raise ValueError("taxonomy_path and target_id are required")
+        now = now_iso()
+        existing = self.conn.execute(
+            """
+            SELECT alias_id
+            FROM memory_taxonomy_aliases
+            WHERE scope = ? AND taxonomy_path = ? AND target_type = ? AND target_id = ?
+            """,
+            (scope, taxonomy_path, target_type, target_id),
+        ).fetchone()
+        if existing:
+            alias_id = str(existing["alias_id"])
+            self.conn.execute(
+                """
+                UPDATE memory_taxonomy_aliases
+                SET updated_at = ?, alias_kind = ?, status = ?, metadata_json = ?
+                WHERE alias_id = ?
+                """,
+                (
+                    now,
+                    alias_kind,
+                    status,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    alias_id,
+                ),
+            )
+            return alias_id
+        alias_id = new_id("alias")
+        self.conn.execute(
+            """
+            INSERT INTO memory_taxonomy_aliases
+              (alias_id, created_at, updated_at, scope, taxonomy_path,
+               target_type, target_id, alias_kind, status, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                alias_id,
+                now,
+                now,
+                scope,
+                taxonomy_path,
+                target_type,
+                target_id,
+                alias_kind,
+                status,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        return alias_id
+
+    def _taxonomy_aliases_for_memory_ids(self, memory_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        memory_ids = [str(item) for item in memory_ids if str(item or "").strip()]
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        rows = self.conn.execute(
+            f"""
+            SELECT alias_id, scope, taxonomy_path, target_id, alias_kind,
+                   status, metadata_json
+            FROM memory_taxonomy_aliases
+            WHERE target_type = 'memory'
+              AND status = 'active'
+              AND target_id IN ({placeholders})
+            ORDER BY taxonomy_path ASC
+            """,
+            memory_ids,
+        ).fetchall()
+        aliases: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            aliases[str(row["target_id"])].append(
+                {
+                    "alias_id": row["alias_id"],
+                    "scope": row["scope"],
+                    "taxonomy_path": row["taxonomy_path"],
+                    "alias_kind": row["alias_kind"],
+                    "status": row["status"],
+                    "metadata": self._loads_json(row["metadata_json"], {}),
+                }
+            )
+        return aliases
 
     def _create_graph_nodes(self, memory_id: str, candidate: sqlite3.Row) -> None:
         try:
@@ -14464,9 +15328,60 @@ class MemoryStore:
             memory_ids,
             """
             SELECT revision_id, memory_id, created_at, actor, previous_text,
-                   new_text, reason, rollback_of_revision_id, metadata_json
+                   new_text, reason, parent_revision_id, branch_id, change_type,
+                   evidence_id, review_id, policy_scope, taxonomy_path,
+                   conflict_policy, status, rollback_of_revision_id, metadata_json
             FROM memory_revisions
             WHERE memory_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        taxonomy_aliases = rows_for_values(
+            memory_ids,
+            """
+            SELECT alias_id, created_at, updated_at, scope, taxonomy_path,
+                   target_type, target_id, alias_kind, status, metadata_json
+            FROM memory_taxonomy_aliases
+            WHERE target_type = 'memory'
+              AND target_id IN ({placeholders})
+            ORDER BY taxonomy_path ASC
+            """,
+        )
+        import_chunks = rows_for_values(
+            event_ids,
+            """
+            SELECT chunk_id, event_id, candidate_id, created_at, scope,
+                   source_ref, source_hash, chunk_hash, chunk_index, text,
+                   status, metadata_json
+            FROM memory_import_chunks
+            WHERE event_id IN ({placeholders})
+            ORDER BY created_at ASC, chunk_index ASC
+            """,
+        )
+        draft_items = rows_for_values(
+            candidate_ids,
+            """
+            SELECT draft_item_id, draft_scope_id, candidate_id, created_at,
+                   status, conflict_policy, metadata_json
+            FROM memory_draft_items
+            WHERE candidate_id IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+        )
+        draft_scope_ids = sorted(
+            {
+                str(row.get("draft_scope_id") or "")
+                for row in draft_items
+                if str(row.get("draft_scope_id") or "")
+            }
+        )
+        draft_scopes = rows_for_values(
+            draft_scope_ids,
+            """
+            SELECT draft_scope_id, created_at, updated_at, scope, draft_name,
+                   actor, status, base_ref, metadata_json
+            FROM memory_draft_scopes
+            WHERE draft_scope_id IN ({placeholders})
             ORDER BY created_at ASC
             """,
         )
@@ -14528,6 +15443,10 @@ class MemoryStore:
                 "sources": len(sources),
                 "review_actions": len(review_actions),
                 "revisions": len(revisions),
+                "taxonomy_aliases": len(taxonomy_aliases),
+                "draft_scopes": len(draft_scopes),
+                "draft_items": len(draft_items),
+                "import_chunks": len(import_chunks),
                 "derived_invalidations": len(invalidations),
                 "audit_events": len(audit),
             },
@@ -14541,6 +15460,10 @@ class MemoryStore:
             "tombstones": tombstones,
             "review_actions": review_actions,
             "revisions": revisions,
+            "taxonomy_aliases": taxonomy_aliases,
+            "draft_scopes": draft_scopes,
+            "draft_items": draft_items,
+            "import_chunks": import_chunks,
             "derived_invalidations": invalidations,
             "audit": audit,
         }
@@ -14712,6 +15635,207 @@ class MemoryStore:
             (value,),
         ).fetchone()
         return row is not None
+
+    def _active_memory_rows(
+        self,
+        *,
+        memory_ids: list[str] | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        clauses = ["status = 'active'"]
+        params: list[Any] = []
+        if memory_ids is not None:
+            memory_ids = [str(item) for item in memory_ids if str(item or "").strip()]
+            if not memory_ids:
+                return []
+            placeholders = ",".join("?" for _ in memory_ids)
+            clauses.append(f"memory_id IN ({placeholders})")
+            params.extend(memory_ids)
+        if scope:
+            clauses.append("scope = ?")
+            params.append(normalize_scope(scope))
+        params.append(max(1, min(int(limit or 50), 500)))
+        where = " AND ".join(clauses)
+        return self.conn.execute(
+            f"""
+            SELECT memory_id, candidate_id, created_at, updated_at, text, kind,
+                   scope, confidence, sensitivity, source_trust, status
+            FROM memories
+            WHERE {where}
+            ORDER BY updated_at DESC, memory_id ASC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+
+    def _record_direct_candidate(
+        self,
+        text: str,
+        *,
+        scope: str,
+        actor: str,
+        source_type: str,
+        source_ref: str = "",
+        kind: str = "fact",
+        confidence: str = "medium",
+        sensitivity: str = "internal",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("text must not be empty")
+        scope = normalize_scope(scope)
+        policy = admission_policy(
+            text,
+            source_type=source_type,
+            sensitivity=sensitivity,
+            auto_approve=False,
+        )
+        ts = now_iso()
+        event_id = new_id("evt")
+        candidate_id = new_id("cand")
+        self.conn.execute(
+            """
+            INSERT INTO events
+              (event_id, created_at, actor, scope, source_type, source_ref,
+               content, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                ts,
+                actor,
+                scope,
+                source_type,
+                source_ref,
+                text,
+                json.dumps(metadata or {}, sort_keys=True),
+            ),
+        )
+        self.conn.execute(
+            """
+            INSERT INTO candidate_memories
+              (candidate_id, event_id, created_at, proposed_text, kind, scope,
+               confidence, sensitivity, source_trust, status, reason, extraction_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                candidate_id,
+                event_id,
+                ts,
+                text,
+                kind or "fact",
+                scope,
+                normalize_confidence(confidence),
+                policy.sensitivity,
+                policy.source_trust,
+                policy.status,
+                policy.reason,
+                json.dumps(
+                    {
+                        "nodes": [{"type": "memory", "label": kind or "fact"}],
+                        "edges": [],
+                        "metadata": metadata or {},
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        self._audit(
+            "candidate_created",
+            "candidate",
+            candidate_id,
+            actor=actor,
+            details={
+                "status": policy.status,
+                "source_trust": policy.source_trust,
+                "source_type": source_type,
+                "review_required": True,
+            },
+        )
+        self._notify_candidate_review_required(
+            candidate_id=candidate_id,
+            scope=scope,
+            status=policy.status,
+            reason=policy.reason,
+            actor=actor,
+            source_trust=policy.source_trust,
+            sensitivity=policy.sensitivity,
+        )
+        self.conn.commit()
+        return {
+            "event_id": event_id,
+            "candidate_id": candidate_id,
+            "status": policy.status,
+            "reason": policy.reason,
+            "memory_id": None,
+        }
+
+    def _event_excerpt(self, event_id: str, *, chars: int = 240) -> str:
+        row = self.conn.execute(
+            "SELECT content FROM events WHERE event_id = ?",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return ""
+        return self._excerpt(str(row["content"]), chars)
+
+    @staticmethod
+    def _chunk_import_text(text: str, *, max_chars: int) -> list[str]:
+        max_chars = max(500, min(int(max_chars or 4000), 12000))
+        clean = (text or "").strip()
+        if not clean:
+            raise ValueError("import file is empty")
+        chunks: list[str] = []
+        current = ""
+        for paragraph in re.split(r"\n\s*\n", clean):
+            paragraph = paragraph.strip()
+            if not paragraph:
+                continue
+            if len(paragraph) > max_chars:
+                if current:
+                    chunks.append(current.strip())
+                    current = ""
+                for idx in range(0, len(paragraph), max_chars):
+                    chunks.append(paragraph[idx : idx + max_chars].strip())
+                continue
+            if current and len(current) + len(paragraph) + 2 > max_chars:
+                chunks.append(current.strip())
+                current = paragraph
+            else:
+                current = "\n\n".join(part for part in [current, paragraph] if part)
+        if current.strip():
+            chunks.append(current.strip())
+        return chunks or [clean[:max_chars]]
+
+    def _draft_scope_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "draft_scope_id": row["draft_scope_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "scope": row["scope"],
+            "draft_name": row["draft_name"],
+            "actor": row["actor"],
+            "status": row["status"],
+            "base_ref": row["base_ref"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
+
+    def _draft_item_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "draft_item_id": row["draft_item_id"],
+            "draft_scope_id": row["draft_scope_id"],
+            "candidate_id": row["candidate_id"],
+            "created_at": row["created_at"],
+            "status": row["status"],
+            "conflict_policy": row["conflict_policy"],
+            "metadata": self._loads_json(row["metadata_json"], {}),
+        }
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> float:
@@ -16431,16 +17555,30 @@ class MemoryStore:
         new_text: str,
         actor: str,
         reason: str = "",
+        parent_revision_id: str = "",
+        branch_id: str = "",
+        change_type: str = "correct",
+        evidence_id: str = "",
+        review_id: str = "",
+        policy_scope: str = "",
+        taxonomy_path: str = "",
+        conflict_policy: str = "",
+        status: str = "active",
         rollback_of_revision_id: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> str:
+        if conflict_policy and conflict_policy not in CONFLICT_POLICY_VALUES:
+            raise ValueError(f"unsupported conflict policy: {conflict_policy}")
+        parent_revision_id = parent_revision_id or self._latest_revision_id(memory_id)
         revision_id = new_id("revn")
         self.conn.execute(
             """
             INSERT INTO memory_revisions
               (revision_id, memory_id, created_at, actor, previous_text,
-               new_text, reason, rollback_of_revision_id, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               new_text, reason, parent_revision_id, branch_id, change_type,
+               evidence_id, review_id, policy_scope, taxonomy_path,
+               conflict_policy, status, rollback_of_revision_id, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 revision_id,
@@ -16450,11 +17588,63 @@ class MemoryStore:
                 previous_text,
                 new_text,
                 reason,
+                parent_revision_id,
+                branch_id,
+                change_type,
+                evidence_id,
+                review_id,
+                policy_scope,
+                taxonomy_path,
+                conflict_policy,
+                status,
                 rollback_of_revision_id,
                 json.dumps(metadata or {}, sort_keys=True),
             ),
         )
         return revision_id
+
+    def _latest_revision_id(self, memory_id: str) -> str:
+        row = self.conn.execute(
+            """
+            SELECT revision_id
+            FROM memory_revisions
+            WHERE memory_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1
+            """,
+            (memory_id,),
+        ).fetchone()
+        return str(row["revision_id"]) if row else ""
+
+    def _primary_taxonomy_path(self, memory_id: str) -> str:
+        row = self.conn.execute(
+            """
+            SELECT taxonomy_path
+            FROM memory_taxonomy_aliases
+            WHERE target_type = 'memory'
+              AND target_id = ?
+              AND status = 'active'
+            ORDER BY
+              CASE alias_kind WHEN 'manual' THEN 0 ELSE 1 END,
+              taxonomy_path ASC
+            LIMIT 1
+            """,
+            (memory_id,),
+        ).fetchone()
+        return str(row["taxonomy_path"]) if row else ""
+
+    def _primary_source_event_id(self, memory_id: str) -> str:
+        row = self.conn.execute(
+            """
+            SELECT event_id
+            FROM sources
+            WHERE memory_id = ?
+            ORDER BY rowid ASC
+            LIMIT 1
+            """,
+            (memory_id,),
+        ).fetchone()
+        return str(row["event_id"]) if row else ""
 
     def _node_hits(
         self,

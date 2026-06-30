@@ -602,6 +602,21 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
     if path == "/search":
         query = str(payload.pop("query"))
         return {"results": store.search(query, **payload)}
+    if path == "/recall/summarize":
+        query = str(payload.pop("query", ""))
+        return store.bounded_recall_summarize(query, **payload)
+    if path == "/recall/get":
+        raw_paths = payload.pop("paths", [])
+        if isinstance(raw_paths, str):
+            paths = [item.strip() for item in raw_paths.split(",") if item.strip()]
+        else:
+            paths = [str(item) for item in raw_paths]
+        raw_ids = payload.pop("memory_ids", [])
+        if isinstance(raw_ids, str):
+            memory_ids = [item.strip() for item in raw_ids.split(",") if item.strip()]
+        else:
+            memory_ids = [str(item) for item in raw_ids]
+        return store.bounded_recall_get(paths=paths, memory_ids=memory_ids, **payload)
     if path == "/context-pack":
         query = str(payload.pop("query"))
         return {"context": store.context_pack(query, **payload)}
@@ -672,6 +687,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
         candidate_id = str(payload.pop("candidate_id"))
         store.reject_candidate(candidate_id, **payload)
         return {"candidate_id": candidate_id, "status": "rejected"}
+    if path == "/draft/create":
+        draft_name = str(payload.pop("draft_name"))
+        return store.create_draft_scope(draft_name, **payload)
+    if path == "/draft/add-candidate":
+        draft_scope_id = str(payload.pop("draft_scope_id"))
+        candidate_id = str(payload.pop("candidate_id"))
+        return store.add_candidate_to_draft(draft_scope_id, candidate_id, **payload)
     if path == "/memory/correct":
         memory_id = str(payload.pop("memory_id"))
         text = str(payload.pop("text"))
@@ -734,6 +756,13 @@ def handle_api_request(store: MemoryStore, path: str, payload: dict[str, Any]) -
             actor=str(payload.get("actor", "system")),
             reason=str(payload.get("reason", "")),
         )
+    if path == "/conflict/propose":
+        memory_id = str(payload.pop("memory_id"))
+        proposed_text = str(payload.pop("proposed_text"))
+        return store.propose_memory_change(memory_id, proposed_text, **payload)
+    if path == "/watch/import":
+        import_path = str(payload.pop("path"))
+        return store.watch_import_path(import_path, **payload)
     if path == "/slice/seed":
         return seed_vertical_slice(store)
     if path == "/slice/run":

@@ -96,6 +96,9 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("memory_delete", names)
             self.assertIn("memory_distrust", names)
             self.assertIn("memory_expire", names)
+            self.assertIn("memory_bounded_recall_summarize", names)
+            self.assertIn("memory_bounded_recall_get", names)
+            self.assertIn("memory_watch_import", names)
 
             called = server.handle_message(
                 {
@@ -113,6 +116,36 @@ class MCPServerTests(unittest.TestCase):
             self.assertIn("structuredContent", result)
             self.assertIn("results", result["structuredContent"])
             self.assertIn("Hermes SEO agents", json.dumps(result["structuredContent"]))
+
+            recall_summary = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 31,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_bounded_recall_summarize",
+                        "arguments": {"query": "Hermes Memory Tree", "scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(recall_summary["result"]["isError"])
+            exact_path = recall_summary["result"]["structuredContent"]["buckets"][0]["exact_paths"][0]
+            recall_get = server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 32,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_bounded_recall_get",
+                        "arguments": {"paths": [exact_path], "scope": "professional"},
+                    },
+                }
+            )
+            self.assertFalse(recall_get["result"]["isError"])
+            self.assertEqual(
+                recall_get["result"]["structuredContent"]["memories"][0]["memory_id"],
+                memory_id,
+            )
 
             explained_memory = server.handle_message(
                 {

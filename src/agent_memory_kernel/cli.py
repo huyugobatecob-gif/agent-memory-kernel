@@ -384,6 +384,55 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_recall_summarize(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.bounded_recall_summarize(
+            args.query,
+            scope=args.scope,
+            prefix=args.prefix,
+            depth=args.depth,
+            limit=args.limit,
+            actor=args.actor,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_recall_get(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.bounded_recall_get(
+            paths=parse_csv(args.paths) or [],
+            memory_ids=parse_csv(args.memory_ids) or [],
+            scope=args.scope,
+            actor=args.actor,
+            include_evidence_text=args.include_evidence_text,
+            limit=args.limit,
+        )
+    )
+    store.close()
+    return 0
+
+
+def cmd_watch_import(args: argparse.Namespace) -> int:
+    store = MemoryStore(args.db)
+    store.init_db()
+    print_json(
+        store.watch_import_path(
+            args.path,
+            scope=args.scope,
+            actor=args.actor,
+            chunk_chars=args.chunk_chars,
+        )
+    )
+    store.close()
+    return 0
+
+
 def cmd_context_pack(args: argparse.Namespace) -> int:
     store = MemoryStore(args.db)
     store.init_db()
@@ -2120,6 +2169,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=5)
     p.add_argument("--actor", default="agent")
     p.set_defaults(func=cmd_search)
+
+    p = sub.add_parser("recall", help="Caller-driven bounded recall")
+    recall_sub = p.add_subparsers(dest="recall_command", required=True)
+
+    rp = recall_sub.add_parser("summarize", help="Summarize exact taxonomy paths for bounded recall")
+    add_common_db(rp)
+    rp.add_argument("query", nargs="?", default="")
+    rp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--prefix", default="")
+    rp.add_argument("--depth", type=int, default=3)
+    rp.add_argument("--limit", type=int, default=50)
+    rp.add_argument("--actor", default="agent")
+    rp.set_defaults(func=cmd_recall_summarize)
+
+    rp = recall_sub.add_parser("get", help="Fetch exact active memories by taxonomy path or memory id")
+    add_common_db(rp)
+    rp.add_argument("--paths", default="", help="Comma-separated taxonomy paths")
+    rp.add_argument("--memory-ids", default="", help="Comma-separated memory ids")
+    rp.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"])
+    rp.add_argument("--actor", default="agent")
+    rp.add_argument("--include-evidence-text", action="store_true")
+    rp.add_argument("--limit", type=int, default=50)
+    rp.set_defaults(func=cmd_recall_get)
+
+    p = sub.add_parser("watch-import", help="Import a local text file as reviewable source chunks")
+    add_common_db(p)
+    p.add_argument("path")
+    p.add_argument("--scope", choices=["personal", "professional", "project", "agent", "session"], default="professional")
+    p.add_argument("--actor", default="watch-import")
+    p.add_argument("--chunk-chars", type=int, default=4000)
+    p.set_defaults(func=cmd_watch_import)
 
     p = sub.add_parser("context-pack", help="Build a cited context pack for an agent")
     add_common_db(p)

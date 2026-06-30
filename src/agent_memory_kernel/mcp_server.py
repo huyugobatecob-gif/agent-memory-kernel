@@ -542,6 +542,34 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
             ["query"],
         ),
     },
+    "memory_bounded_recall_summarize": {
+        "endpoint": "/recall/summarize",
+        "description": "Step 1 of caller-driven recall: summarize exact taxonomy paths without writing memory.",
+        "inputSchema": _schema(
+            {
+                "query": _string("Optional search query to narrow active memory.", ""),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "prefix": _string("Optional taxonomy path prefix.", ""),
+                "depth": _integer("Maximum taxonomy path depth to group by.", 3),
+                "limit": _integer("Maximum buckets.", 50),
+                "actor": _string("Calling agent id for read policy enforcement.", "agent"),
+            }
+        ),
+    },
+    "memory_bounded_recall_get": {
+        "endpoint": "/recall/get",
+        "description": "Step 2 of caller-driven recall: fetch exact active memories by path or id with provenance.",
+        "inputSchema": _schema(
+            {
+                "paths": _array("Exact taxonomy paths chosen from summarize.", {"type": "string"}),
+                "memory_ids": _array("Exact memory ids chosen from summarize.", {"type": "string"}),
+                "scope": _string("Optional memory scope/lane.", ""),
+                "actor": _string("Calling agent id for read policy enforcement.", "agent"),
+                "include_evidence_text": _boolean("Include source event excerpts. Defaults to IDs only.", False),
+                "limit": _integer("Maximum memories.", 50),
+            }
+        ),
+    },
     "memory_context_pack": {
         "endpoint": "/context-pack",
         "description": "Return compact context pack text for a query.",
@@ -952,6 +980,19 @@ MCP_TOOLS: dict[str, dict[str, Any]] = {
                 "actor": _string("Importing actor.", "vault-import"),
                 "auto_approve": _boolean("Auto-approve imported candidates when policy allows it.", False),
             }
+        ),
+    },
+    "memory_watch_import": {
+        "endpoint": "/watch/import",
+        "description": "Import a local text file as quarantined/reviewable source chunks; never writes active memory directly.",
+        "inputSchema": _schema(
+            {
+                "path": _string("Local text file path to import."),
+                "scope": _string("Memory scope/lane.", "professional"),
+                "actor": _string("Importing actor.", "watch-import"),
+                "chunk_chars": _integer("Maximum characters per chunk.", 4000),
+            },
+            ["path"],
         ),
     },
     "memory_export_encrypted_profile": {

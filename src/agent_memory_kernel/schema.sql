@@ -63,8 +63,71 @@ CREATE TABLE IF NOT EXISTS memory_revisions (
     previous_text           TEXT NOT NULL,
     new_text                TEXT NOT NULL,
     reason                  TEXT NOT NULL DEFAULT '',
+    parent_revision_id      TEXT NOT NULL DEFAULT '',
+    branch_id               TEXT NOT NULL DEFAULT '',
+    change_type             TEXT NOT NULL DEFAULT 'correct',
+    evidence_id             TEXT NOT NULL DEFAULT '',
+    review_id               TEXT NOT NULL DEFAULT '',
+    policy_scope            TEXT NOT NULL DEFAULT '',
+    taxonomy_path           TEXT NOT NULL DEFAULT '',
+    conflict_policy         TEXT NOT NULL DEFAULT '',
+    status                  TEXT NOT NULL DEFAULT 'active',
     rollback_of_revision_id TEXT NOT NULL DEFAULT '',
     metadata_json           TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS memory_taxonomy_aliases (
+    alias_id       TEXT PRIMARY KEY,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    scope          TEXT NOT NULL DEFAULT 'professional',
+    taxonomy_path  TEXT NOT NULL,
+    target_type    TEXT NOT NULL DEFAULT 'memory',
+    target_id      TEXT NOT NULL,
+    alias_kind     TEXT NOT NULL DEFAULT 'generated',
+    status         TEXT NOT NULL DEFAULT 'active',
+    metadata_json  TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(scope, taxonomy_path, target_type, target_id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_draft_scopes (
+    draft_scope_id TEXT PRIMARY KEY,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    scope          TEXT NOT NULL DEFAULT 'professional',
+    draft_name     TEXT NOT NULL,
+    actor          TEXT NOT NULL DEFAULT 'agent',
+    status         TEXT NOT NULL DEFAULT 'open',
+    base_ref       TEXT NOT NULL DEFAULT '',
+    metadata_json  TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(scope, draft_name)
+);
+
+CREATE TABLE IF NOT EXISTS memory_draft_items (
+    draft_item_id   TEXT PRIMARY KEY,
+    draft_scope_id  TEXT NOT NULL REFERENCES memory_draft_scopes(draft_scope_id),
+    candidate_id    TEXT NOT NULL REFERENCES candidate_memories(candidate_id),
+    created_at      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'proposed',
+    conflict_policy TEXT NOT NULL DEFAULT '',
+    metadata_json   TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(draft_scope_id, candidate_id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_import_chunks (
+    chunk_id       TEXT PRIMARY KEY,
+    event_id       TEXT NOT NULL REFERENCES events(event_id),
+    candidate_id   TEXT REFERENCES candidate_memories(candidate_id),
+    created_at     TEXT NOT NULL,
+    scope          TEXT NOT NULL DEFAULT 'professional',
+    source_ref     TEXT NOT NULL DEFAULT '',
+    source_hash    TEXT NOT NULL DEFAULT '',
+    chunk_hash     TEXT NOT NULL DEFAULT '',
+    chunk_index    INTEGER NOT NULL DEFAULT 0,
+    text           TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'candidate',
+    metadata_json  TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(source_ref, chunk_hash, chunk_index)
 );
 
 CREATE TABLE IF NOT EXISTS derived_invalidations (
@@ -638,6 +701,10 @@ CREATE INDEX IF NOT EXISTS idx_candidates_scope ON candidate_memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
 CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status ON memory_conflicts(status);
+CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_taxonomy_alias_path ON memory_taxonomy_aliases(scope, taxonomy_path, status);
+CREATE INDEX IF NOT EXISTS idx_draft_scopes_lookup ON memory_draft_scopes(scope, draft_name, status);
+CREATE INDEX IF NOT EXISTS idx_import_chunks_source ON memory_import_chunks(source_ref, source_hash);
 CREATE INDEX IF NOT EXISTS idx_memory_conflicts_scope ON memory_conflicts(scope);
 CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id);
 CREATE INDEX IF NOT EXISTS idx_memory_write_policies_lookup ON memory_write_policies(agent_id, scope, action);
